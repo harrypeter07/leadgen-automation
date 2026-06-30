@@ -1,0 +1,221 @@
+{
+  "name": "AI Personalise Leads",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "b2c3d4e5-0001-4000-8000-000000000001",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "status",               "value": "eq.new"   },
+            { "name": "ai_message_whatsapp",  "value": "is.null"  },
+            { "name": "select",               "value": "id,name,phone,email,city,category,website,rating,review_count,address" },
+            { "name": "limit",                "value": "10"        },
+            { "name": "order",                "value": "created_at.asc" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000002",
+      "name": "Get New Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "b2c3d4e5-0003-4000-8000-000000000003",
+      "name": "Process One by One",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const lead = $json;\n\nconst prompt = `You are a professional sales outreach expert for an Indian market.\n\nA business has been found via Google Maps. Generate personalised outreach messages.\n\nBusiness details:\n- Name: ${lead.name}\n- Category: ${lead.category || 'business'}\n- City: ${lead.city || 'India'}\n- Address: ${lead.address || 'not available'}\n- Rating: ${lead.rating ? lead.rating + '/5' : 'not available'}\n- Reviews: ${lead.review_count || 'unknown'}\n- Website: ${lead.website || 'no website'}\n\nGenerate exactly this JSON and nothing else (no markdown, no code blocks, raw JSON only):\n{\n  \"whatsapp_message\": \"A friendly 3-4 line WhatsApp message in a conversational tone. Mention their business name and city. Introduce our digital marketing / automation services. End with a soft call to action. Max 300 characters.\",\n  \"email_subject\": \"A compelling email subject line under 60 characters.\",\n  \"email_body\": \"A professional 4-5 paragraph email. Start with their business name. Explain how we help businesses like theirs grow online. Include one specific insight based on their category. End with a meeting invitation. Use plain text, no HTML.\"\n}`;\n\nreturn [{ json: { lead, prompt } }];"
+      },
+      "id": "b2c3d4e5-0004-4000-8000-000000000004",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\"parts\": [{\"text\": {{ JSON.stringify($json.prompt) }}}]}],\n  \"generationConfig\": {\n    \"temperature\": 0.7,\n    \"maxOutputTokens\": 1024,\n    \"responseMimeType\": \"application/json\"\n  }\n}",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0005-4000-8000-000000000005",
+      "name": "Call Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const geminiResponse = $json;\n\n// Extract the text from Gemini's response envelope\nconst text = geminiResponse.candidates[0].content.parts[0].text;\n\nlet parsed;\ntry {\n  parsed = JSON.parse(text);\n} catch (e) {\n  // Fallback: extract first {...} block in case Gemini wraps in markdown\n  const match = text.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    try { parsed = JSON.parse(match[0]); } catch (_) { parsed = {}; }\n  } else {\n    parsed = {};\n  }\n}\n\n// Pull the original lead from the Build Prompt node\nconst lead = $('Build Prompt').item.json.lead;\n\nreturn [{\n  json: {\n    id:                       lead.id,\n    ai_message_whatsapp:      parsed.whatsapp_message      || '',\n    ai_message_email_subject: parsed.email_subject          || '',\n    ai_message_email_body:    parsed.email_body             || '',\n    status:                   'new'\n  }\n}];"
+      },
+      "id": "b2c3d4e5-0006-4000-8000-000000000006",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads?id=eq.{{ $json.id }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ai_message_whatsapp\":      {{ JSON.stringify($json.ai_message_whatsapp) }},\n  \"ai_message_email_subject\": {{ JSON.stringify($json.ai_message_email_subject) }},\n  \"ai_message_email_body\":    {{ JSON.stringify($json.ai_message_email_body) }}\n}",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0007-4000-8000-000000000007",
+      "name": "Save AI Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "unit": "seconds",
+        "amount": 2
+      },
+      "id": "b2c3d4e5-0008-4000-8000-000000000008",
+      "name": "Rate Limit",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1780, 300],
+      "webhookId": "leadgen-rate-limit-wait"
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          { "node": "Get New Leads", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Get New Leads": {
+      "main": [
+        [
+          { "node": "Process One by One", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Process One by One": {
+      "main": [
+        [
+          { "node": "Build Prompt", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          { "node": "Call Gemini", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Call Gemini": {
+      "main": [
+        [
+          { "node": "Parse AI Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          { "node": "Save AI Messages", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Save AI Messages": {
+      "main": [
+        [
+          { "node": "Rate Limit", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Rate Limit": {
+      "main": [
+        [
+          { "node": "Process One by One", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "tag-leadgen-002",
+      "name": "leadgen"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "v1-leadgen-ai-personalise"
+}

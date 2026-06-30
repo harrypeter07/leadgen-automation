@@ -1,0 +1,281 @@
+{
+  "name": "Outreach Pipeline",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "c3d4e5f6-0001-4000-8000-000000000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 180]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 60
+            }
+          ]
+        }
+      },
+      "id": "c3d4e5f6-0002-4000-8000-000000000002",
+      "name": "Every 1 Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 420]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "status", "value": "eq.new" },
+            { "name": "ai_message_whatsapp", "value": "not.is.null" },
+            {
+              "name": "select",
+              "value": "id,name,phone,email,ai_message_whatsapp,ai_message_email_subject,ai_message_email_body"
+            },
+            { "name": "limit", "value": "20" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c3d4e5f6-0003-4000-8000-000000000003",
+      "name": "Fetch ready leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "c3d4e5f6-0004-4000-8000-000000000004",
+      "name": "Split leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHATSAPP_SERVICE_URL }}/send",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-api-secret", "value": "={{ $env.WHATSAPP_API_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"phone\": {{ JSON.stringify($json.phone) }},\n  \"message\": {{ JSON.stringify($json.ai_message_whatsapp) }}\n}",
+        "options": {}
+      },
+      "id": "c3d4e5f6-0005-4000-8000-000000000005",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads?id=eq.{{ $('Split leads').item.json.id }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"whatsapp_sent\",\n  \"whatsapp_sent_at\": \"{{ $now }}\",\n  \"last_contacted_at\": \"{{ $now }}\"\n}",
+        "options": {}
+      },
+      "id": "c3d4e5f6-0006-4000-8000-000000000006",
+      "name": "Update status to whatsapp_sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "unit": "seconds",
+        "amount": 30
+      },
+      "id": "c3d4e5f6-0007-4000-8000-000000000007",
+      "name": "Wait 30 seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1340, 300],
+      "webhookId": "leadgen-outreach-wait-30"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-email-001",
+              "leftValue": "={{ $('Split leads').item.json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c3d4e5f6-0008-4000-8000-000000000008",
+      "name": "Has Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RESEND_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"Your Name <onboarding@resend.dev>\",\n  \"to\": [{{ JSON.stringify($('Split leads').item.json.email) }}],\n  \"subject\": {{ JSON.stringify($('Split leads').item.json.ai_message_email_subject) }},\n  \"text\": {{ JSON.stringify($('Split leads').item.json.ai_message_email_body) }}\n}",
+        "options": {}
+      },
+      "id": "c3d4e5f6-0009-4000-8000-000000000009",
+      "name": "Send Email via Resend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 180]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/leads?id=eq.{{ $('Split leads').item.json.id }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"email_sent\",\n  \"email_sent_at\": \"{{ $now }}\"\n}",
+        "options": {}
+      },
+      "id": "c3d4e5f6-0010-4000-8000-000000000010",
+      "name": "Update status to email_sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 180]
+    },
+    {
+      "parameters": {
+        "unit": "seconds",
+        "amount": 5
+      },
+      "id": "c3d4e5f6-0011-4000-8000-000000000011",
+      "name": "Rate limit wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2220, 300],
+      "webhookId": "leadgen-outreach-rate-limit"
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Fetch ready leads", "type": "main", "index": 0 }]]
+    },
+    "Every 1 Hour": {
+      "main": [[{ "node": "Fetch ready leads", "type": "main", "index": 0 }]]
+    },
+    "Fetch ready leads": {
+      "main": [[{ "node": "Split leads", "type": "main", "index": 0 }]]
+    },
+    "Split leads": {
+      "main": [[{ "node": "Send WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Send WhatsApp": {
+      "main": [[{ "node": "Update status to whatsapp_sent", "type": "main", "index": 0 }]]
+    },
+    "Update status to whatsapp_sent": {
+      "main": [[{ "node": "Wait 30 seconds", "type": "main", "index": 0 }]]
+    },
+    "Wait 30 seconds": {
+      "main": [[{ "node": "Has Email?", "type": "main", "index": 0 }]]
+    },
+    "Has Email?": {
+      "main": [
+        [{ "node": "Send Email via Resend", "type": "main", "index": 0 }],
+        [{ "node": "Rate limit wait", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Email via Resend": {
+      "main": [[{ "node": "Update status to email_sent", "type": "main", "index": 0 }]]
+    },
+    "Update status to email_sent": {
+      "main": [[{ "node": "Rate limit wait", "type": "main", "index": 0 }]]
+    },
+    "Rate limit wait": {
+      "main": [[{ "node": "Split leads", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "tag-leadgen-003",
+      "name": "leadgen"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "v1-leadgen-outreach"
+}
