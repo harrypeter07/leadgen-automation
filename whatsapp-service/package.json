@@ -12,6 +12,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "pino": "^10.3.1",
+    "playwright": "^1.40.0",
     "qrcode": "^1.5.3",
     "qrcode-terminal": "^0.12.0"
   }
