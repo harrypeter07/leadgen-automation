@@ -18,6 +18,8 @@ const { Boom } = require('@hapi/boom');
 
 const QR_FILE = path.join(__dirname, 'qr.txt');
 
+// State Machine Variables
+let connectionState = 'idle'; // 'idle', 'connecting', 'qr_waiting', 'connected', 'disconnected'
 let isReady = false;
 let isStable = false;
 let sendInProgress = false;
@@ -106,15 +108,12 @@ function scheduleReconnect() {
     addLog('info', 'Executing scheduled reconnect...');
     await destroySocket();
     resetConnectionState();
+    connectionState = 'connecting';
     await startWhatsApp();
   }, 2000);
 }
 
 async function startWhatsApp() {
-  if (isInitializing) {
-    addLog('info', 'startWhatsApp called but initialization is already in progress. Skipping.');
-    return;
-  }
   isInitializing = true;
 
   if (!makeWASocket) {
@@ -122,13 +121,14 @@ async function startWhatsApp() {
       await loadBaileys();
     } catch (e) {
       isInitializing = false;
+      connectionState = 'disconnected';
       addLog('error', `Failed to load Baileys module: ${e.message}`);
       console.error('❌ Failed to load Baileys module:', e.message);
       return;
     }
   }
 
-  // PART 3: Prevent duplicate sockets - if one exists, destroy it first
+  // Prevent duplicate sockets - if one exists, destroy it first
   if (sock) {
     addLog('info', 'startWhatsApp detected duplicate socket. Running cleanup first.');
     await destroySocket();
@@ -136,7 +136,7 @@ async function startWhatsApp() {
 
   addLog('info', 'Creating new Baileys socket...');
 
-  // Watchdog setup (PART 8 & 10)
+  // Watchdog setup
   let reachedQR = false;
   let reachedCredsUpdate = false;
   let reachedOpenConnection = false;
@@ -184,6 +184,7 @@ async function startWhatsApp() {
       }
     } catch (err) {
       isInitializing = false;
+      connectionState = 'disconnected';
       clearTimeout(watchdogTimer);
       addLog('error', `useMultiFileAuthState failed: ${err.message}\nStack: ${err.stack}`);
       console.error('❌ [CRITICAL] useMultiFileAuthState failed:', err);
@@ -199,6 +200,7 @@ async function startWhatsApp() {
       console.log('✅ [DIAGNOSTIC] fetchLatestBaileysVersion returned version:', versionData);
     } catch (err) {
       isInitializing = false;
+      connectionState = 'disconnected';
       clearTimeout(watchdogTimer);
       addLog('error', `fetchLatestBaileysVersion failed: ${err.message}\nStack: ${err.stack}`);
       console.error('❌ [CRITICAL] fetchLatestBaileysVersion failed:', err);
@@ -218,6 +220,7 @@ async function startWhatsApp() {
       console.log('✅ [DIAGNOSTIC] makeWASocket created socket successfully.');
     } catch (err) {
       isInitializing = false;
+      connectionState = 'disconnected';
       clearTimeout(watchdogTimer);
       addLog('error', `makeWASocket failed: ${err.message}\nStack: ${err.stack}`);
       console.error('❌ [CRITICAL] makeWASocket failed:', err);
@@ -244,6 +247,7 @@ async function startWhatsApp() {
 
       if (qr) {
         reachedQR = true;
+        connectionState = 'qr_waiting';
         addLog('info', 'Waiting for QR...');
         if (fs.existsSync(QR_FILE)) {
           try {
@@ -264,6 +268,7 @@ async function startWhatsApp() {
         isReady = true;
         isStable = false;
         isInitializing = false;
+        connectionState = 'connected';
         sessionAuthenticatedAt = new Date().toISOString();
         addLog('success', 'Connected.');
         console.log('✅ WhatsApp client ready');
@@ -297,8 +302,10 @@ async function startWhatsApp() {
 
         const isLoggedOut = statusCode === DisconnectReason.loggedOut;
         if (isLoggedOut) {
+          connectionState = 'disconnected';
           addLog('warn', 'Logged out — will not auto-reconnect. Scan new QR via Connect WhatsApp after login restart.');
         } else {
+          connectionState = 'connecting';
           addLog('info', `Connection closed (status: ${statusCode}). Attempting auto-reconnect.`);
           scheduleReconnect();
         }
@@ -306,6 +313,7 @@ async function startWhatsApp() {
     });
   } catch (err) {
     isInitializing = false;
+    connectionState = 'disconnected';
     clearTimeout(watchdogTimer);
     addLog('error', `Initialization failed: ${err.message}\nStack: ${err.stack}`);
     console.error('❌ WhatsApp init failed with unexpected exception:', err);
@@ -343,6 +351,7 @@ app.get('/store-check', (_req, res) => {
 
 app.get('/status', (_req, res) => {
   res.json({
+    state: connectionState,
     whatsapp_ready: isReady,
     service_started_at: serviceStartedAt,
     qr_generated_at: qrGeneratedAt,
@@ -356,11 +365,37 @@ app.get('/logs', (_req, res) => {
   res.json({ logs: eventLog.slice().reverse() });
 });
 
+app.post('/connect', async (req, res) => {
+  const apiSecret = (req.headers['x-api-secret'] || '').trim();
+  const expectedSecret = (process.env.API_SECRET || '').trim();
+  if (apiSecret !== expectedSecret) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+  if (connectionState === 'connecting') {
+    return res.status(429).json({ success: false, error: 'Initialization is already in progress' });
+  }
+  addLog('warn', 'Manual connection boot triggered');
+  try {
+    if (sock) {
+      await destroySocket();
+    }
+    resetConnectionState();
+    connectionState = 'connecting';
+    startWhatsApp();
+    res.json({ success: true, message: 'Connect initiated' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/reconnect', async (req, res) => {
   const apiSecret = (req.headers['x-api-secret'] || '').trim();
   const expectedSecret = (process.env.API_SECRET || '').trim();
   if (apiSecret !== expectedSecret) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+  if (connectionState === 'connecting') {
+    return res.status(429).json({ success: false, error: 'Initialization is already in progress' });
   }
   
   addLog('warn', 'Manual reconnect triggered from dashboard');
@@ -379,6 +414,7 @@ app.post('/reconnect', async (req, res) => {
     // Reset connection state
     resetConnectionState();
 
+    connectionState = 'connecting';
     // Immediately start WhatsApp
     startWhatsApp();
 
@@ -410,6 +446,7 @@ app.post('/disconnect', async (req, res) => {
 
     // Reset connection state
     resetConnectionState();
+    connectionState = 'idle';
 
     res.json({ success: true, message: 'Disconnected. Scan a new QR to reconnect.' });
   } catch (err) {
@@ -542,8 +579,5 @@ app.get('/qr-scan', (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🌐 WhatsApp service running on port ${PORT}`);
-  console.log('🚀 Initializing WhatsApp client...');
-  if (!isInitializing) {
-    startWhatsApp();
-  }
+  console.log('🚀 Service is in IDLE state. Call POST /connect or POST /reconnect to initialize.');
 });
