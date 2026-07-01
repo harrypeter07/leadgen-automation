@@ -5,6 +5,7 @@ const path = require('path');
 const express = require('express');
 const qrcode = require('qrcode-terminal');
 const { Client, LocalAuth } = require('whatsapp-web.js');
+const { execSync } = require('child_process');
 
 const QR_FILE = path.join(__dirname, 'qr.txt');
 
@@ -16,7 +17,9 @@ const client = new Client({
     headless: true,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 
       (() => {
-        const { execSync } = require('child_process');
+        if (fs.existsSync('/root/.nix-profile/bin/chromium')) {
+          return '/root/.nix-profile/bin/chromium';
+        }
         try { return execSync('which chromium').toString().trim(); } catch(e) {}
         try { return execSync('which chromium-browser').toString().trim(); } catch(e) {}
         try { return execSync('which google-chrome-stable').toString().trim(); } catch(e) {}
@@ -73,34 +76,22 @@ client.on('disconnected', (reason) => {
   console.log('⚠️ WhatsApp disconnected:', reason);
 });
 
-// Clean up stale Chromium lock files before initializing
-const lockPaths = [
-  '/app/.wwebjs_auth/Default/SingletonLock',
-  '/app/.wwebjs_auth/Default/SingletonCookie',
-  '/app/.wwebjs_auth/Default/SingletonSocket',
-  '/app/.wwebjs_auth/session-session/Default/SingletonLock',
-  '/app/.wwebjs_auth/session-session/Default/SingletonCookie',
-  '/app/.wwebjs_auth/session-session/Default/SingletonSocket',
-  path.join(__dirname, '.wwebjs_auth', 'session-session', 'Default', 'SingletonLock'),
-  path.join(__dirname, '.wwebjs_auth', 'session-session', 'Default', 'SingletonCookie'),
-  path.join(__dirname, '.wwebjs_auth', 'session-session', 'Default', 'SingletonSocket'),
-  path.join(__dirname, '.wwebjs_auth', 'Default', 'SingletonLock'),
-  path.join(__dirname, '.wwebjs_auth', 'Default', 'SingletonCookie'),
-  path.join(__dirname, '.wwebjs_auth', 'Default', 'SingletonSocket'),
-];
-lockPaths.forEach(p => {
-  try {
-    if (fs.existsSync(p)) {
-      fs.unlinkSync(p);
-      console.log(`🧹 Cleared stale lock: ${p}`);
-    }
-  } catch (err) {
-    console.warn(`Could not delete stale lock at ${p}:`, err.message);
-  }
-});
+// Synchronously delete all Chromium lock files before init
+try {
+  execSync('find /app/.wwebjs_auth -name "Singleton*" -delete 2>/dev/null || true');
+  execSync('find /app/.wwebjs_auth -name "*.lock" -delete 2>/dev/null || true');
+  execSync('find /app/.wwebjs_auth -name "lockfile" -delete 2>/dev/null || true');
+  console.log('🧹 Cleared stale Chromium lock files');
+} catch(e) {
+  console.log('🧹 Lock cleanup skipped:', e.message);
+}
 
 console.log('🚀 Initializing WhatsApp client...');
-client.initialize();
+try {
+  client.initialize();
+} catch(err) {
+  console.error('❌ WhatsApp init failed:', err.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
