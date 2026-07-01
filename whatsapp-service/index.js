@@ -12,42 +12,16 @@ const QR_FILE = path.join(__dirname, 'qr.txt');
 let isReady = false;
 
 const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: '.wwebjs_auth' }),
+  authStrategy: new LocalAuth({ dataPath: '/app/.wwebjs_auth' }),
   puppeteer: {
     headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 
-      (() => {
-        if (fs.existsSync('/root/.nix-profile/bin/chromium')) {
-          return '/root/.nix-profile/bin/chromium';
-        }
-        try { return execSync('which chromium').toString().trim(); } catch(e) {}
-        try { return execSync('which chromium-browser').toString().trim(); } catch(e) {}
-        try { return execSync('which google-chrome-stable').toString().trim(); } catch(e) {}
-        return undefined;
-      })(),
-    timeout: 120000,
+    executablePath: '/root/.nix-profile/bin/chromium',
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--disable-software-rasterizer',
-      '--no-first-run',
-      '--disable-extensions',
-      '--disable-default-apps',
-      '--disable-translate',
-      '--disable-sync',
-      '--hide-scrollbars',
-      '--metrics-recording-only',
-      '--mute-audio',
-      '--no-default-browser-check',
-      '--safebrowsing-disable-auto-update',
-      '--shm-size=1gb',
     ],
-  },
-  webVersionCache: {
-    type: 'remote',
-    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1023994097-alpha.html',
   },
 });
 
