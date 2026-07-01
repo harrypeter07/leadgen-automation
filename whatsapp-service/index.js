@@ -11,6 +11,7 @@ const QR_FILE = path.join(__dirname, 'qr.txt');
 
 let isReady = false;
 let isStable = false;
+let sendInProgress = false;
 
 const MAX_LOGS = 200;
 const eventLog = [];
@@ -126,6 +127,21 @@ app.get('/diagnostics', async (_req, res) => {
   }
 });
 
+app.get('/store-check', async (_req, res) => {
+  try {
+    if (!client.pupPage) return res.json({ store_ready: false, reason: 'no page' });
+    const result = await Promise.race([
+      client.pupPage.evaluate(() => {
+        return typeof window.Store !== 'undefined' && typeof window.Store.Chat !== 'undefined';
+      }),
+      new Promise((resolve) => setTimeout(() => resolve('timeout'), 10000))
+    ]);
+    res.json({ store_ready: result === true, raw_result: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/status', (_req, res) => {
   res.json({
     whatsapp_ready: isReady,
@@ -199,6 +215,10 @@ app.post('/send', async (req, res) => {
     return res.status(400).json({ success: false, error: 'phone and message are required' });
   }
 
+  if (sendInProgress) {
+    return res.status(429).json({ success: false, error: 'Another send is already in progress, try again shortly' });
+  }
+
   if (!isReady) {
     return res.status(503).json({ success: false, error: 'WhatsApp not ready. Scan QR first.' });
   }
@@ -225,6 +245,7 @@ app.post('/send', async (req, res) => {
     addLog('warn', `Could not read client.info: ${e.message}`);
   }
 
+  sendInProgress = true;
   const sendStartTime = Date.now();
   try {
     const sendPromise = client.sendMessage(chatId, message);
@@ -245,6 +266,8 @@ app.post('/send', async (req, res) => {
       return res.status(504).json({ success: false, error: 'Send timed out after 45s' });
     }
     return res.status(500).json({ success: false, error: error.message });
+  } finally {
+    sendInProgress = false;
   }
 });
 
