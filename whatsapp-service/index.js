@@ -11,6 +11,18 @@ const QR_FILE = path.join(__dirname, 'qr.txt');
 
 let isReady = false;
 
+const MAX_LOGS = 200;
+const eventLog = [];
+let qrGeneratedAt = null;
+let sessionAuthenticatedAt = null;
+let lastDisconnectReason = null;
+const serviceStartedAt = new Date().toISOString();
+
+function addLog(level, message) {
+  eventLog.push({ timestamp: new Date().toISOString(), level, message });
+  if (eventLog.length > MAX_LOGS) eventLog.shift();
+}
+
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: '/app/.wwebjs_auth' }),
   puppeteer: {
@@ -26,20 +38,26 @@ const client = new Client({
 });
 
 client.on('qr', (qr) => {
+  qrGeneratedAt = new Date().toISOString();
+  addLog('info', 'QR code generated, saved to qr.txt');
   qrcode.generate(qr, { small: true });
   fs.writeFileSync(QR_FILE, qr, 'utf8');
   console.log('📱 QR code saved to qr.txt — scan with WhatsApp');
 });
 
 client.on('loading_screen', (percent, message) => {
+  addLog('info', `Loading WhatsApp: ${percent}% - ${message}`);
   console.log(`⏳ Loading WhatsApp: ${percent}% - ${message}`);
 });
 
 client.on('authenticated', () => {
+  sessionAuthenticatedAt = new Date().toISOString();
+  addLog('success', 'Authenticated — session saved');
   console.log('🔐 Authenticated — session saved');
 });
 
 client.on('ready', () => {
+  addLog('success', 'WhatsApp client ready');
   isReady = true;
   console.log('✅ WhatsApp client ready');
   if (fs.existsSync(QR_FILE)) {
@@ -48,11 +66,14 @@ client.on('ready', () => {
 });
 
 client.on('auth_failure', (msg) => {
+  addLog('error', `Auth failure: ${msg}`);
   console.error('❌ Auth failure:', msg);
   isReady = false;
 });
 
 client.on('disconnected', (reason) => {
+  lastDisconnectReason = reason;
+  addLog('warn', `Disconnected: ${reason}`);
   isReady = false;
   console.log('⚠️ WhatsApp disconnected:', reason);
 });
@@ -76,6 +97,41 @@ app.use(express.json());
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', whatsapp_ready: isReady });
+});
+
+app.get('/status', (_req, res) => {
+  res.json({
+    whatsapp_ready: isReady,
+    service_started_at: serviceStartedAt,
+    qr_generated_at: qrGeneratedAt,
+    qr_file_exists: fs.existsSync(QR_FILE),
+    session_authenticated_at: sessionAuthenticatedAt,
+    last_disconnect_reason: lastDisconnectReason,
+  });
+});
+
+app.get('/logs', (_req, res) => {
+  res.json({ logs: eventLog.slice().reverse() });
+});
+
+app.post('/reconnect', (req, res) => {
+  const apiSecret = (req.headers['x-api-secret'] || '').trim();
+  const expectedSecret = (process.env.API_SECRET || '').trim();
+  if (apiSecret !== expectedSecret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  addLog('warn', 'Manual reconnect triggered from dashboard');
+  try {
+    client.logout().catch(() => {}).finally(() => {
+      isReady = false;
+      sessionAuthenticatedAt = null;
+      setTimeout(() => client.initialize(), 1000);
+    });
+    res.json({ success: true, message: 'Reconnect initiated' });
+  } catch (err) {
+    addLog('error', `Reconnect failed: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/send', async (req, res) => {
