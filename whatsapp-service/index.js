@@ -161,11 +161,11 @@ app.get('/logs', (_req, res) => {
   res.json({ logs: eventLog.slice().reverse() });
 });
 
-app.post('/reconnect', (req, res) => {
+app.post('/reconnect', async (req, res) => {
   const apiSecret = (req.headers['x-api-secret'] || '').trim();
   const expectedSecret = (process.env.API_SECRET || '').trim();
   if (apiSecret !== expectedSecret) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
   if (isInitializing) {
     return res.status(429).json({ success: false, error: 'Initialization is already in progress' });
@@ -173,19 +173,18 @@ app.post('/reconnect', (req, res) => {
   addLog('warn', 'Manual reconnect triggered from dashboard');
   try {
     if (sock) {
-      sock.logout().catch(() => {}).finally(() => {
-        isReady = false;
-        isStable = false;
-        sessionAuthenticatedAt = null;
-        setTimeout(() => startWhatsApp(), 1000);
+      await sock.logout().catch((err) => {
+        addLog('info', `Logout skipped (likely already disconnected): ${err.message}`);
       });
-    } else {
-      setTimeout(() => startWhatsApp(), 1000);
     }
+    isReady = false;
+    isStable = false;
+    sessionAuthenticatedAt = null;
+    setTimeout(() => startWhatsApp(), 1000);
     res.json({ success: true, message: 'Reconnect initiated' });
   } catch (err) {
     addLog('error', `Reconnect failed: ${err.message}`);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
