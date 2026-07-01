@@ -193,19 +193,24 @@ app.post('/send', async (req, res) => {
   const chatId = `${cleanedPhone}@c.us`;
 
   console.log(`📤 Sending message to ${chatId}...`);
+  const sendStartTime = Date.now();
   try {
     const sendPromise = client.sendMessage(chatId, message);
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Send timed out after 20s')), 20000)
+      setTimeout(() => reject(new Error('Send timed out after 45s')), 45000)
     );
 
     await Promise.race([sendPromise, timeoutPromise]);
+    const sendDuration = Date.now() - sendStartTime;
+    addLog('info', `Message sent in ${sendDuration}ms to ${chatId}`);
     console.log(`✅ Message sent to ${chatId}`);
     return res.status(200).json({ success: true, chatId });
   } catch (error) {
     console.error('❌ Send failed:', error.message);
-    if (error.message === 'Send timed out after 20s') {
-      return res.status(504).json({ success: false, error: error.message });
+    if (error.message === 'Send timed out after 45s') {
+      const sendDuration = Date.now() - sendStartTime;
+      addLog('error', `Send timed out after ${sendDuration}ms to ${chatId}`);
+      return res.status(504).json({ success: false, error: 'Send timed out after 45s' });
     }
     return res.status(500).json({ success: false, error: error.message });
   }
