@@ -29,7 +29,7 @@ const client = new Client({
   authStrategy: new LocalAuth({ dataPath: '/app/.wwebjs_auth' }),
   puppeteer: {
     headless: true,
-    executablePath: '/root/.nix-profile/bin/chromium',
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/root/.nix-profile/bin/chromium',
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
