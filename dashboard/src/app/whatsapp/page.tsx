@@ -25,6 +25,7 @@ export default function WhatsappManagerPage() {
 
   // Disconnect state
   const [disconnecting, setDisconnecting] = useState(false)
+  const [connecting, setConnecting] = useState(false)
 
   // Recent messages state
   const [recentSent, setRecentSent] = useState<Lead[]>([])
@@ -275,6 +276,28 @@ export default function WhatsappManagerPage() {
     }
   }
 
+  // Connect handler
+  async function handleConnect() {
+    setConnecting(true)
+    const toastId = toast.loading('Connecting WhatsApp...')
+    try {
+      const res = await fetch('/api/whatsapp/reconnect', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to initiate connection')
+      }
+      toast.success('Connection initiated! Generating QR code...', { id: toastId })
+      fetchStatus()
+      fetchQrCode()
+      fetchSessionStatus()
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Connection failed'
+      toast.error(message, { id: toastId })
+    } finally {
+      setConnecting(false)
+    }
+  }
+
   // 4. Send Test Message
   async function sendTestMessage(e: React.FormEvent) {
     e.preventDefault()
@@ -385,6 +408,15 @@ export default function WhatsappManagerPage() {
             >
               Refresh Status
             </button>
+            {connected === false && !qrCode && (
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-sm font-semibold text-white py-2.5 transition-colors"
+              >
+                {connecting ? 'Connecting...' : 'Connect WhatsApp'}
+              </button>
+            )}
             {connected && (
               <button
                 onClick={handleDisconnect}
@@ -418,11 +450,24 @@ export default function WhatsappManagerPage() {
                 Refreshing QR in <strong className="text-purple-400">{qrCountdown}s</strong>
               </p>
             </div>
-          ) : (
+          ) : connecting ? (
             <div className="text-center py-6 max-w-xs space-y-2">
               <span className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin inline-block" />
               <h3 className="font-bold text-white text-sm">Generating QR Code...</h3>
               <p className="text-xs text-gray-400">{qrMessage || 'Connecting to WhatsApp microservice'}</p>
+            </div>
+          ) : (
+            <div className="text-center py-6 max-w-xs space-y-4">
+              <span className="text-4xl">🔌</span>
+              <h3 className="font-bold text-white text-sm">WhatsApp Disconnected</h3>
+              <p className="text-xs text-gray-400">Click the button below to initiate connection and generate a QR code.</p>
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-sm font-semibold text-white px-6 py-2.5 transition-colors inline-block"
+              >
+                Connect WhatsApp
+              </button>
             </div>
           )}
         </div>
