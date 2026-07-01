@@ -1,12 +1,18 @@
 // whatsapp-service/scraper/scraperEngine.js
 
 const GoogleMapsProvider = require('./providers/google_maps');
+const GoogleSearchProvider = require('./providers/google_search');
+const InstagramProvider = require('./providers/instagram');
+const DirectoryProvider = require('./providers/directory');
 const dbWriter = require('./dbWriter');
 
 class ScraperEngine {
   constructor() {
     this.providers = {
-      'google_maps': new GoogleMapsProvider()
+      'google_maps': new GoogleMapsProvider(),
+      'google_search': new GoogleSearchProvider(),
+      'instagram': new InstagramProvider(),
+      'directory': new DirectoryProvider()
     };
     this.activeRuns = new Map(); // jobId -> abort state
   }

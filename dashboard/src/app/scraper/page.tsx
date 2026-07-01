@@ -71,6 +71,7 @@ export default function ScraperPage() {
     fetchJobs()
     const interval = setInterval(fetchJobs, 5000)
     return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedJob?.id])
 
   // Queue a new job
@@ -126,7 +127,7 @@ export default function ScraperPage() {
       } else {
         toast.error(data.error || 'Failed to pause')
       }
-    } catch (err) {
+    } catch {
       toast.error('Error sending request')
     }
   }
@@ -146,7 +147,7 @@ export default function ScraperPage() {
       } else {
         toast.error(data.error || 'Failed to resume')
       }
-    } catch (err) {
+    } catch {
       toast.error('Error sending request')
     }
   }
@@ -166,7 +167,7 @@ export default function ScraperPage() {
       } else {
         toast.error(data.error || 'Failed to stop')
       }
-    } catch (err) {
+    } catch {
       toast.error('Error sending request')
     }
   }
@@ -186,7 +187,7 @@ export default function ScraperPage() {
       } else {
         toast.error(data.error || 'Failed to retry')
       }
-    } catch (err) {
+    } catch {
       toast.error('Error sending request')
     }
   }
@@ -237,7 +238,6 @@ export default function ScraperPage() {
   }
 
   const activeJob = jobs.find(j => j.status === 'running')
-  const completedJobs = jobs.filter(j => j.status === 'completed')
 
   return (
     <div className="space-y-8">

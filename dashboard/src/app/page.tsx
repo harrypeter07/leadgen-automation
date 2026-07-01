@@ -14,6 +14,9 @@ interface Stats {
   addedLast7Days: number
   topCities: { name: string; count: number }[]
   topCategories: { name: string; count: number }[]
+  providerComparison: { source: string; count: number }[]
+  dailyDistribution: { date: string; count: number }[]
+  conversionStats: { rate: number; sent: number; replied: number; converted: number }
 }
 
 export default function HomeDashboard() {
@@ -145,15 +148,92 @@ export default function HomeDashboard() {
         </div>
       </div>
 
-      {/* Main Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
+      {/* Main Stats Row & Conversion Widget */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 flex flex-col justify-between">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Leads</span>
           <h3 className="mt-2 text-3xl font-black text-white">{loadingStats ? '...' : stats?.total ?? 0}</h3>
         </div>
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 flex flex-col justify-between">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Added Last 7 Days</span>
           <h3 className="mt-2 text-3xl font-black text-purple-400">{loadingStats ? '...' : stats?.addedLast7Days ?? 0}</h3>
+        </div>
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 flex flex-col justify-between">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Outreach Conversion</span>
+          <div>
+            <h3 className="mt-2 text-3xl font-black text-green-400">
+              {loadingStats ? '...' : `${stats?.conversionStats?.rate ?? 0}%`}
+            </h3>
+            <span className="text-[10px] text-gray-400 block mt-1">
+              Positive response ratio: {stats?.conversionStats?.replied ?? 0} replied, {stats?.conversionStats?.converted ?? 0} converted
+            </span>
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 flex flex-col justify-between">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Channels</span>
+          <div className="flex gap-2 mt-2">
+            <span className="px-2 py-1 bg-green-950 text-green-400 border border-green-900 rounded text-[10px] font-bold">WhatsApp</span>
+            <span className="px-2 py-1 bg-purple-950 text-purple-400 border border-purple-900 rounded text-[10px] font-bold">Emails</span>
+            <span className="px-2 py-1 bg-blue-950 text-blue-400 border border-blue-900 rounded text-[10px] font-bold">n8n triggers</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Visual Analytics Row: Growth & Providers */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Leads Growth Chart (Daily distribution) */}
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
+          <h3 className="font-bold text-gray-200 mb-4 flex justify-between items-center text-sm">
+            <span>📈 Lead Growth Timeline</span>
+            <span className="text-[10px] text-gray-500">Last 7 Days</span>
+          </h3>
+          <div className="flex items-end justify-between h-32 pt-4">
+            {loadingStats ? (
+              <div className="w-full text-center text-xs text-gray-500">Loading growth chart...</div>
+            ) : !stats?.dailyDistribution || stats.dailyDistribution.length === 0 ? (
+              <div className="w-full text-center text-xs text-gray-500">No recent leads activity</div>
+            ) : (
+              stats.dailyDistribution.map((day) => {
+                const max = Math.max(...stats.dailyDistribution.map(d => d.count), 1)
+                const pct = (day.count / max) * 100
+                return (
+                  <div key={day.date} className="flex flex-col items-center gap-1.5 flex-1 group">
+                    <span className="text-[9px] text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{day.count}</span>
+                    <div className="w-6 sm:w-8 bg-purple-950/60 border border-purple-900/30 group-hover:bg-purple-600 rounded-t transition-all duration-300" style={{ height: `${Math.max(10, pct)}%` }} />
+                    <span className="text-[9px] text-gray-400 font-semibold">{day.date}</span>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Provider Distribution Card */}
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
+          <h3 className="font-bold text-gray-200 mb-4 text-sm">🌐 Leads by Provider Channel</h3>
+          <div className="space-y-4">
+            {loadingStats ? (
+              <div className="text-center text-xs text-gray-500 py-6">Loading channels...</div>
+            ) : !stats?.providerComparison || stats.providerComparison.length === 0 ? (
+              <div className="text-center text-xs text-gray-500 py-6">No channel data available</div>
+            ) : (
+              stats.providerComparison.map((p) => {
+                const max = stats.total || 1
+                const pct = Math.round((p.count / max) * 100)
+                return (
+                  <div key={p.source} className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-semibold text-gray-300">
+                      <span className="capitalize">{p.source.replace(/_/g, ' ')}</span>
+                      <span>{p.count} leads ({pct}%)</span>
+                    </div>
+                    <div className="w-full bg-gray-950 rounded-full h-2 border border-gray-850 p-0.5">
+                      <div className="bg-purple-600 h-1 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </div>
       </div>
 
