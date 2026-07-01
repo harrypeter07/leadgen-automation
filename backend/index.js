@@ -24,6 +24,7 @@ app.use('/api/jobs', require('./api/jobs'));
 app.use('/api/metrics', require('./api/metrics'));
 app.use('/api/providers', require('./api/providers'));
 app.use('/api/health', require('./api/health'));
+app.use('/api/test', require('./api/testing'));
 
 // Legacy direct health checks
 app.get('/health', (_req, res) => {
