@@ -25,6 +25,7 @@ const client = new Client({
         try { return execSync('which google-chrome-stable').toString().trim(); } catch(e) {}
         return undefined;
       })(),
+    timeout: 120000,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -32,10 +33,16 @@ const client = new Client({
       '--disable-gpu',
       '--disable-software-rasterizer',
       '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-      '--disable-profile-locking',
-      '--remote-debugging-port=0',
+      '--disable-extensions',
+      '--disable-default-apps',
+      '--disable-translate',
+      '--disable-sync',
+      '--hide-scrollbars',
+      '--metrics-recording-only',
+      '--mute-audio',
+      '--no-default-browser-check',
+      '--safebrowsing-disable-auto-update',
+      '--shm-size=1gb',
     ],
   },
   webVersionCache: {
