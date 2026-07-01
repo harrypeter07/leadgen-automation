@@ -135,28 +135,116 @@ async function startWhatsApp() {
   }
 
   addLog('info', 'Creating new Baileys socket...');
-  try {
-    const { state, saveCreds } = await useMultiFileAuthState('/app/.wwebjs_auth');
-    const { version } = await fetchLatestBaileysVersion();
 
-    sock = makeWASocket({
-      version,
-      auth: state,
-      logger: pino({ level: 'silent' }),
-      printQRInTerminal: false,
-    });
+  // Watchdog setup (PART 8 & 10)
+  let reachedQR = false;
+  let reachedCredsUpdate = false;
+  let reachedOpenConnection = false;
+
+  const watchdogTimer = setTimeout(() => {
+    const statusMsg = `[WATCHDOG 30s] Milestones: QR=${reachedQR}, creds.update=${reachedCredsUpdate}, open=${reachedOpenConnection}`;
+    addLog('warn', statusMsg);
+    console.log(statusMsg);
+    
+    if (!reachedQR) {
+      addLog('error', '[WATCHDOG FAIL] Milestone not reached: QR code generation (no qr event received)');
+      console.error('[WATCHDOG FAIL] Milestone not reached: QR code generation (no qr event received)');
+    }
+    if (!reachedCredsUpdate) {
+      addLog('error', '[WATCHDOG FAIL] Milestone not reached: creds.update (no credentials saved)');
+      console.error('[WATCHDOG FAIL] Milestone not reached: creds.update (no credentials saved)');
+    }
+    if (!reachedOpenConnection) {
+      addLog('error', '[WATCHDOG FAIL] Milestone not reached: Connection state open');
+      console.error('[WATCHDOG FAIL] Milestone not reached: Connection state open');
+    }
+  }, 30000);
+
+  try {
+    let authStateData = null;
+    try {
+      console.log('📂 [DIAGNOSTIC] Directory BEFORE useMultiFileAuthState:');
+      try {
+        const files = fs.readdirSync("/app/.wwebjs_auth");
+        console.log('   Files:', files);
+      } catch (e) {
+        console.error('   Failed to read directory:', e.message);
+      }
+
+      console.log('🔄 [DIAGNOSTIC] Calling useMultiFileAuthState("/app/.wwebjs_auth")...');
+      authStateData = await useMultiFileAuthState('/app/.wwebjs_auth');
+      console.log('✅ [DIAGNOSTIC] useMultiFileAuthState returned successfully');
+
+      console.log('📂 [DIAGNOSTIC] Directory AFTER useMultiFileAuthState:');
+      try {
+        const files = fs.readdirSync("/app/.wwebjs_auth");
+        console.log('   Files:', files);
+      } catch (e) {
+        console.error('   Failed to read directory:', e.message);
+      }
+    } catch (err) {
+      isInitializing = false;
+      clearTimeout(watchdogTimer);
+      addLog('error', `useMultiFileAuthState failed: ${err.message}\nStack: ${err.stack}`);
+      console.error('❌ [CRITICAL] useMultiFileAuthState failed:', err);
+      return;
+    }
+
+    const { state, saveCreds } = authStateData;
+
+    let versionData = null;
+    try {
+      console.log('🔄 [DIAGNOSTIC] Calling fetchLatestBaileysVersion()...');
+      versionData = await fetchLatestBaileysVersion();
+      console.log('✅ [DIAGNOSTIC] fetchLatestBaileysVersion returned version:', versionData);
+    } catch (err) {
+      isInitializing = false;
+      clearTimeout(watchdogTimer);
+      addLog('error', `fetchLatestBaileysVersion failed: ${err.message}\nStack: ${err.stack}`);
+      console.error('❌ [CRITICAL] fetchLatestBaileysVersion failed:', err);
+      return;
+    }
+
+    const { version } = versionData;
+
+    try {
+      console.log('🔄 [DIAGNOSTIC] Calling makeWASocket()...');
+      sock = makeWASocket({
+        version,
+        auth: state,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false,
+      });
+      console.log('✅ [DIAGNOSTIC] makeWASocket created socket successfully.');
+    } catch (err) {
+      isInitializing = false;
+      clearTimeout(watchdogTimer);
+      addLog('error', `makeWASocket failed: ${err.message}\nStack: ${err.stack}`);
+      console.error('❌ [CRITICAL] makeWASocket failed:', err);
+      return;
+    }
 
     sock.ev.on('creds.update', () => {
-      saveCreds();
-      addLog('info', 'Credentials updated.');
+      reachedCredsUpdate = true;
+      console.log('⚡ [EVENT] creds.update fired. Calling saveCreds()...');
+      try {
+        saveCreds();
+        addLog('info', 'Credentials updated.');
+      } catch (e) {
+        addLog('error', `saveCreds failed: ${e.message}\nStack: ${e.stack}`);
+        console.error('❌ saveCreds failed:', e);
+      }
     });
 
     sock.ev.on('connection.update', (update) => {
+      console.log('⚡ [EVENT] connection.update received:');
+      console.dir(update, { depth: null });
+
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
+        reachedQR = true;
         addLog('info', 'Waiting for QR...');
-        // Delete previous QR file if it exists first (PART 7)
         if (fs.existsSync(QR_FILE)) {
           try {
             fs.unlinkSync(QR_FILE);
@@ -171,6 +259,8 @@ async function startWhatsApp() {
       }
 
       if (connection === 'open') {
+        reachedOpenConnection = true;
+        clearTimeout(watchdogTimer);
         isReady = true;
         isStable = false;
         isInitializing = false;
@@ -192,21 +282,23 @@ async function startWhatsApp() {
         isReady = false;
         isStable = false;
         isInitializing = false;
+        clearTimeout(watchdogTimer);
 
         const statusCode = lastDisconnect?.error instanceof Boom 
           ? lastDisconnect.error.output.statusCode 
           : null;
+
+        console.log('⚠️ [EVENT] connection closed. lastDisconnect dump:');
+        console.dir(lastDisconnect, { depth: null });
+
         const reason = lastDisconnect?.error?.message || 'unknown';
         lastDisconnectReason = reason;
         addLog('warn', `Disconnected: ${reason}`);
-        console.log(`⚠️ WhatsApp disconnected: ${reason}`);
 
-        // PART 5: Handle each disconnect reason separately
         const isLoggedOut = statusCode === DisconnectReason.loggedOut;
         if (isLoggedOut) {
           addLog('warn', 'Logged out — will not auto-reconnect. Scan new QR via Connect WhatsApp after login restart.');
         } else {
-          // Automatic reconnect on connection loss / network drop / restart
           addLog('info', `Connection closed (status: ${statusCode}). Attempting auto-reconnect.`);
           scheduleReconnect();
         }
@@ -214,8 +306,9 @@ async function startWhatsApp() {
     });
   } catch (err) {
     isInitializing = false;
-    addLog('error', `Initialization failed: ${err.message}`);
-    console.error('❌ WhatsApp init failed:', err.message);
+    clearTimeout(watchdogTimer);
+    addLog('error', `Initialization failed: ${err.message}\nStack: ${err.stack}`);
+    console.error('❌ WhatsApp init failed with unexpected exception:', err);
   }
 }
 
