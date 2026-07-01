@@ -57,6 +57,8 @@ client.on('disconnected', (reason) => {
   console.log('⚠️ WhatsApp disconnected:', reason);
 });
 
+const QRCode = require('qrcode');
+
 // Synchronously delete all Chromium lock files before init
 try {
   execSync('find /app/.wwebjs_auth -name "Singleton*" -delete 2>/dev/null || true');
@@ -65,13 +67,6 @@ try {
   console.log('🧹 Cleared stale Chromium lock files');
 } catch(e) {
   console.log('🧹 Lock cleanup skipped:', e.message);
-}
-
-console.log('🚀 Initializing WhatsApp client...');
-try {
-  client.initialize();
-} catch(err) {
-  console.error('❌ WhatsApp init failed:', err.message);
 }
 
 const app = express();
@@ -132,6 +127,21 @@ app.get('/qr', (_req, res) => {
   res.type('text/plain').send(qrContent);
 });
 
+app.get('/qr-image', async (_req, res) => {
+  if (!fs.existsSync(QR_FILE)) {
+    return res.status(404).send('<h2>No QR available — already authenticated or not ready yet</h2>');
+  }
+  try {
+    const qrText = fs.readFileSync(QR_FILE, 'utf8').trim();
+    const qrDataUrl = await QRCode.toDataURL(qrText);
+    res.send(`<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#000">
+      <img src="${qrDataUrl}" style="width:300px;height:300px"/>
+    </body></html>`);
+  } catch (err) {
+    res.status(500).send('<h2>Error generating QR image</h2>');
+  }
+});
+
 app.get('/qr-scan', (_req, res) => {
   if (!fs.existsSync(QR_FILE)) {
     return res.send(`<html><body style="background:#111;color:#fff;font-family:sans-serif;text-align:center;padding:50px">
@@ -163,4 +173,10 @@ app.get('/qr-scan', (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🌐 WhatsApp service running on port ${PORT}`);
+  console.log('🚀 Initializing WhatsApp client...');
+  try {
+    client.initialize();
+  } catch(err) {
+    console.error('❌ WhatsApp init failed:', err.message);
+  }
 });
