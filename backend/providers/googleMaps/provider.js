@@ -8,6 +8,7 @@ const parser = require('./parser');
 class GoogleMapsProvider {
   constructor() {
     this.name = 'google_maps';
+    this.searchUrl = '';
   }
 
   async search(page, query) {
@@ -15,6 +16,7 @@ class GoogleMapsProvider {
     const encoded = encodeURIComponent(searchTerm);
     const mapsUrl = `https://www.google.com/maps/search/${encoded}`;
     
+    this.searchUrl = mapsUrl;
     logger.info(`[Google Maps Provider] Navigating to search: ${mapsUrl}`);
     await page.goto(mapsUrl, { timeout: 30000, waitUntil: 'domcontentloaded' });
 
@@ -35,8 +37,8 @@ class GoogleMapsProvider {
     return await collector.collect(page, maxLeads);
   }
 
-  async extract(page, cardIndex) {
-    return await details.extract(page, cardIndex);
+  async extract(page, cardIndex, version = 'v2') {
+    return await details.extract(page, cardIndex, version, this.searchUrl);
   }
 
   normalize(raw, city) {

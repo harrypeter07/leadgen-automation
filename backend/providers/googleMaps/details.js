@@ -3,26 +3,38 @@
 const logger = require('../../worker/logger');
 
 class GoogleMapsDetails {
-  async extract(page, cardIndex) {
+  async extract(page, cardIndex, version = 'v2', searchUrl = '') {
     const cards = page.locator('a[href*="/maps/place/"]');
     const card = cards.nth(cardIndex);
 
-    await card.scrollIntoViewIfNeeded().catch(() => {});
-    await card.click({ force: true }).catch(() => {});
+    if (version === 'v1') {
+      logger.info(`[Google Maps Details] [Legacy V1] Extracting via full page navigation on index ${cardIndex}...`);
+      const href = await card.getAttribute('href').catch(() => null);
+      if (!href) {
+        logger.warn(`[Google Maps Details] [Legacy V1] Could not retrieve href on index ${cardIndex}.`);
+        return null;
+      }
+
+      await page.goto(href, { timeout: 15000, waitUntil: 'domcontentloaded' }).catch(() => {});
+    } else {
+      logger.info(`[Google Maps Details] [Playwright V2] Extracting via sidebar click on index ${cardIndex}...`);
+      await card.scrollIntoViewIfNeeded().catch(() => {});
+      await card.click({ force: true }).catch(() => {});
+    }
 
     try {
       await page.waitForSelector('h1.DUwDvf, [data-item-id="address"]', { timeout: 8000 });
     } catch (e) {
-      logger.warn(`[Google Maps Details] Pane timeout on item ${cardIndex}.`);
+      logger.warn(`[Google Maps Details] Details pane timeout on item ${cardIndex}.`);
     }
 
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const raw = {};
 
-    // 1. Business Name
+    // 1. Name
     raw.name = null;
-    for (const sel of ['h1.DUwDvf', '.DUwDvf', '.fontHeadlineLarge', '.lMbq3e h1', 'h1']) {
+    for (const sel of ['h1.DUwDvf', '.DUwDvf', '.fontHeadlineLarge', 'h1']) {
       try {
         const text = await page.locator(sel).first().innerText({ timeout: 1500 });
         if (text && text.trim() && !['results', 'google maps'].includes(text.toLowerCase())) {
@@ -104,6 +116,14 @@ class GoogleMapsDetails {
           break;
         }
       } catch (err) {}
+    }
+
+    if (version === 'v1' && searchUrl) {
+      logger.info(`[Google Maps Details] [Legacy V1] Navigating back to search list: ${searchUrl}`);
+      await page.goto(searchUrl, { timeout: 15000, waitUntil: 'domcontentloaded' }).catch(() => {});
+      try {
+        await page.waitForSelector('div[role="feed"]', { timeout: 8000 });
+      } catch (e) {}
     }
 
     return raw;

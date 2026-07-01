@@ -6,79 +6,95 @@ const browserManager = require('./browserManager');
 const eventBus = require('./eventBus');
 const logger = require('./logger');
 
+const GoogleMapsProvider = require('../providers/googleMaps/provider');
+const GoogleSearchProvider = require('../providers/googleSearch/provider');
+
 class JobManager {
   constructor() {
     this.activeAborts = new Map(); // jobId -> boolean flag
+    this.providers = {
+      'google_maps': new GoogleMapsProvider(),
+      'google_search': new GoogleSearchProvider()
+    };
   }
 
   async executeJob(job, workerId) {
     const startTime = Date.now();
-    logger.info(`[JobManager] Starting job ${job.id} on worker #${workerId}`);
-    
-    // Register cancel token
+    const providerName = job.current_provider || 'google_maps';
+    const provider = this.providers[providerName];
+
+    if (!provider) {
+      throw new Error(`PROVIDER_NOT_REGISTERED: ${providerName}`);
+    }
+
+    logger.info(`[JobManager] Initiating job ${job.id} on worker #${workerId} using provider ${providerName}`);
     this.activeAborts.set(job.id, false);
 
-    // Context & Page requested through BrowserManager
     const { context, contextId } = await browserManager.newContext();
     const { page, pageId } = await browserManager.newPage(contextId, context);
 
     try {
-      // Mock provider logic since provider plugins are implemented in Phase 4
-      const maxLeads = job.max_leads || 10;
-      for (let i = 1; i <= maxLeads; i++) {
-        // Check for cancel / stop aborts
+      // 1. Search Query phase
+      const freshJob = await scrapeJobRepository.getById(job.id);
+      const logs = freshJob.logs || [];
+      logs.push(`[${new Date().toISOString()}] Initiating provider search query...`);
+      await scrapeJobRepository.update(job.id, { logs });
+
+      await provider.search(page, { keyword: job.keyword, city: job.city });
+
+      // 2. Collection Scroll phase
+      logs.push(`[${new Date().toISOString()}] Scrolling list for listings elements...`);
+      await scrapeJobRepository.update(job.id, { logs });
+
+      const totalItems = await provider.collect(page, job.max_leads || 10);
+      const limit = Math.min(totalItems, job.max_leads || 10);
+
+      logs.push(`[${new Date().toISOString()}] Found ${totalItems} elements. Extracting ${limit} leads...`);
+      await scrapeJobRepository.update(job.id, { logs });
+
+      // 3. Details Extraction Loop
+      for (let i = 0; i < limit; i++) {
         if (this.activeAborts.get(job.id) === true) {
           throw new Error('JOB_ABORTED');
         }
 
-        // Simulate page actions & dynamic waits
-        await page.goto('about:blank');
-        await new Promise(resolve => setTimeout(resolve, 500)); // rate limiting simulate
+        const raw = await provider.extract(page, i, job.version || 'v2');
+        if (!raw) continue;
 
-        // Add log & progress
-        const name = `Mock Business ${i} (${job.keyword})`;
-        const mockLead = {
-          name,
-          phone: `+9198765${Math.floor(10000 + Math.random() * 90000)}`,
-          email: `contact@mockbusiness${i}.com`,
-          city: job.city,
-          category: job.keyword,
-          source: job.current_provider,
-          status: 'new'
-        };
+        const lead = provider.normalize(raw, job.city);
+        
+        // Write to Supabase via Repository
+        await leadsRepository.upsert(lead);
 
-        // Write directly via Repository
-        await leadsRepository.upsert(mockLead);
-
-        // Update Job progress in Supabase
-        const freshJob = await scrapeJobRepository.getById(job.id);
-        const logs = freshJob.logs || [];
-        logs.push(`[${new Date().toISOString()}] Scraped: ${name}`);
+        // Update Job progress
+        const currentFresh = await scrapeJobRepository.getById(job.id);
+        const loopLogs = currentFresh.logs || [];
+        loopLogs.push(`[${new Date().toISOString()}] Extracted: ${lead.name}`);
 
         const elapsed = (Date.now() - startTime) / 1000;
-        const avg = elapsed / i;
-        const estRemaining = Math.round(avg * (maxLeads - i));
+        const avg = elapsed / (i + 1);
+        const estRemaining = Math.round(avg * (limit - (i + 1)));
 
         await scrapeJobRepository.update(job.id, {
-          progress: i,
-          current_business: name,
+          progress: i + 1,
+          current_business: lead.name,
           estimated_remaining_seconds: estRemaining,
           duration_seconds: Math.round(elapsed),
-          logs
+          logs: loopLogs
         });
 
-        eventBus.publish('job.progress', { jobId: job.id, progress: i, maxLeads });
+        eventBus.publish('job.progress', { jobId: job.id, progress: i + 1, maxLeads: limit });
       }
 
-      // Mark completed
-      const freshJob = await scrapeJobRepository.getById(job.id);
-      const logs = freshJob.logs || [];
-      logs.push(`[${new Date().toISOString()}] Job completed successfully.`);
-      
+      // Mark Job completed
+      const finalFresh = await scrapeJobRepository.getById(job.id);
+      const finalLogs = finalFresh.logs || [];
+      finalLogs.push(`[${new Date().toISOString()}] Job completed successfully.`);
+
       await scrapeJobRepository.update(job.id, {
         status: 'completed',
         completed_at: new Date().toISOString(),
-        logs
+        logs: finalLogs
       });
 
       eventBus.publish('job.completed', { jobId: job.id, status: 'completed' });
@@ -87,7 +103,7 @@ class JobManager {
       const logs = freshJob ? (freshJob.logs || []) : [];
       
       if (err.message === 'JOB_ABORTED') {
-        logs.push(`[${new Date().toISOString()}] Job aborted by user.`);
+        logs.push(`[${new Date().toISOString()}] Job stopped/cancelled by user.`);
         await scrapeJobRepository.update(job.id, {
           status: 'stopped',
           completed_at: new Date().toISOString(),
@@ -95,7 +111,7 @@ class JobManager {
         });
         eventBus.publish('job.completed', { jobId: job.id, status: 'stopped' });
       } else {
-        logs.push(`[${new Date().toISOString()}] Error: ${err.message}`);
+        logs.push(`[${new Date().toISOString()}] Execution Error: ${err.message}`);
         await scrapeJobRepository.update(job.id, {
           status: 'failed',
           completed_at: new Date().toISOString(),
@@ -106,7 +122,6 @@ class JobManager {
         throw err;
       }
     } finally {
-      // Release resources via BrowserManager
       await browserManager.releasePage(pageId);
       await browserManager.releaseContext(contextId);
       this.activeAborts.delete(job.id);
