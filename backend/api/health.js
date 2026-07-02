@@ -3,6 +3,7 @@
 const express = require('express');
 const browserManager = require('../worker/browserManager');
 const supabase = require('../database/connection');
+const bootstrapManager = require('../worker/bootstrapManager');
 
 const router = express.Router();
 
@@ -13,11 +14,15 @@ router.use((req, res, next) => {
 
 router.get('/', async (req, res) => {
   let dbStatus = 'healthy';
-  try {
-    const { error } = await supabase.from('scrape_jobs').select('id').limit(1);
-    if (error) throw error;
-  } catch (e) {
-    dbStatus = 'degraded';
+  if (!supabase) {
+    dbStatus = 'offline';
+  } else {
+    try {
+      const { error } = await supabase.from('scrape_jobs').select('count').limit(1);
+      if (error) throw error;
+    } catch (e) {
+      dbStatus = 'degraded';
+    }
   }
 
   const browserHealth = browserManager.health();
@@ -34,6 +39,10 @@ router.get('/', async (req, res) => {
       active_pages: browserHealth.openPages
     }
   });
+});
+
+router.get('/system', (req, res) => {
+  res.json(bootstrapManager.getSystemStatus());
 });
 
 module.exports = router;

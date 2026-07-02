@@ -3,6 +3,9 @@
   "version": "3.0.0",
   "description": "Lead Intelligence SaaS Backend V3",
   "main": "index.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",

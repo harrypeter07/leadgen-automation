@@ -6,7 +6,7 @@ const express = require('express');
 const logger = require('./worker/logger');
 const browserManager = require('./worker/browserManager');
 const workerManager = require('./worker/workerManager');
-const queueManager = require('./worker/queueManager');
+const bootstrapManager = require('./worker/bootstrapManager');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -28,20 +28,29 @@ app.use('/api/test', require('./api/testing'));
 app.use('/api/discovery', require('./api/discovery'));
 app.use('/api/logs', require('./api/logs'));
 
-// Legacy direct health checks
+// System diagnostic health endpoints
 app.get('/health', (_req, res) => {
+  const status = bootstrapManager.getSystemStatus();
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    service: 'lead-intelligence-backend-v3'
+    service: 'lead-intelligence-backend-v3',
+    database: status.status.database.status,
+    browser: status.status.browser.status,
+    workers: status.status.workers.status
   });
+});
+
+app.get('/health/system', (_req, res) => {
+  res.json(bootstrapManager.getSystemStatus());
 });
 
 app.get('/', (_req, res) => {
   res.json({
     name: 'Lead Intelligence SaaS Backend V3',
     version: '3.0.0',
-    status: 'online'
+    status: 'online',
+    system: `/health/system`
   });
 });
 
@@ -61,13 +70,13 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-app.listen(PORT, () => {
-  logger.info(`🌐 V3 Backend Service running on port ${PORT}`);
+// Start Express server immediately, THEN run bootstrap sequence.
+// This guarantees that the HTTP port is bound instantly and health endpoints respond even if database is offline.
+app.listen(PORT, async () => {
+  logger.info(`🌐 V3 Backend Service listening on port ${PORT}`);
   
-  // Initialize worker pool (4 tabs pool concurrency) pulling from queueManager
-  workerManager.initialize(async () => {
-    return await queueManager.dequeue();
+  // Run bootstrap sequence asynchronously so that it doesn't block the Express event loop binding
+  bootstrapManager.runBootstrap(app).catch(err => {
+    logger.error(`❌ [Bootstrap] Startup sequence encountered an unhandled error: ${err.message}`);
   });
-  
-  logger.info('🚀 Core engine worker loop active and running.');
 });
