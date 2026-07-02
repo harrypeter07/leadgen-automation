@@ -458,7 +458,8 @@ export default function LeadsPage() {
                     className="rounded border-gray-800 bg-gray-950 text-purple-600 focus:ring-purple-500/20 w-4 h-4 cursor-pointer"
                     aria-label="Select all leads"
                   />
-                     <th className="px-5 py-3.5 font-bold">Name</th>
+                </th>
+                <th className="px-5 py-3.5 font-bold">Name</th>
                 <th className="px-5 py-3.5 font-bold">Phone</th>
                 <th className="px-5 py-3.5 font-bold">Email</th>
                 <th className="px-5 py-3.5 font-bold">Website</th>
