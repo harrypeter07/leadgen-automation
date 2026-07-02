@@ -58,6 +58,7 @@ export default function ScraperPage() {
   const [jobs, setJobs] = useState<ScrapeJob[]>([])
   const [loadingJobs, setLoadingJobs] = useState(true)
   const [selectedJob, setSelectedJob] = useState<ScrapeJob | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [recentLeads, setRecentLeads] = useState<any[]>([])
 
   // Fetch all jobs
