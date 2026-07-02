@@ -16,22 +16,51 @@ class InstagramAnalyzer {
     logger.info(`[Instagram Analyzer] Modular Profile Audit: @${username}`);
     const profileUrl = `https://www.instagram.com/${username}/`;
 
+    const sessionManager = require('../../worker/sessionManager');
+    const crawlerUser = process.env.INSTAGRAM_ACCOUNT_USER;
+
     try {
+      // 1. Load active session cookies from database if crawler account is defined
+      if (crawlerUser) {
+        logger.info(`[Instagram Analyzer] Loading cookies for scraper account: ${crawlerUser}...`);
+        const sessionLoaded = await sessionManager.loadSession(page.context(), 'instagram', crawlerUser);
+        if (sessionLoaded) {
+          logger.info(`[Instagram Analyzer] Active session applied to browser context.`);
+        }
+      }
+
       logger.info(`[Instagram Analyzer] Navigating to Instagram profile page: ${profileUrl}`);
       await page.goto(profileUrl, { timeout: 20000, waitUntil: 'domcontentloaded' });
 
-      // Check if redirected to login wall
-      const currentUrl = page.url();
+      // 2. Detect login wall redirect
+      let currentUrl = page.url();
       logger.info(`[Instagram Analyzer] Loaded page URL: ${currentUrl}`);
       
       if (currentUrl.includes('accounts/login')) {
-        logger.warn(`[Instagram Analyzer] Redirected to Instagram login wall on @${username}. Initiating fallback data generator...`);
+        logger.warn(`[Instagram Analyzer] Scraper encountered Instagram login wall.`);
+        
+        if (crawlerUser) {
+          logger.info(`[Instagram Analyzer] Initiating automated login sequence...`);
+          const loginSuccess = await this.login(page);
+          
+          if (loginSuccess) {
+            logger.info(`[Instagram Analyzer] Login verified. Returning to profile page...`);
+            await page.goto(profileUrl, { timeout: 20000, waitUntil: 'domcontentloaded' });
+            currentUrl = page.url();
+            logger.info(`[Instagram Analyzer] Re-loaded profile page URL: ${currentUrl}`);
+          }
+        }
+      }
+
+      // 3. Fallback check
+      if (currentUrl.includes('accounts/login')) {
+        logger.warn(`[Instagram Analyzer] Profile still blocked by login wall. Returning structured fallback...`);
         return this.getFallbackPayload(username);
       }
 
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Invoke modules
+      // Invoke scraper modules
       logger.info(`[Instagram Analyzer] Fetching profile metadata (followers, following, bio)...`);
       const profile = await profileFetcher.fetch(page);
       if (!profile || !profile.display_name) {
@@ -73,6 +102,54 @@ class InstagramAnalyzer {
     } catch (err) {
       logger.error(`[Instagram Analyzer] Modular Profile Audit failed on ${username}: ${err.message}`);
       return this.getFallbackPayload(username);
+    }
+  }
+
+  async login(page) {
+    const username = process.env.INSTAGRAM_ACCOUNT_USER;
+    const password = process.env.INSTAGRAM_ACCOUNT_PASS;
+
+    if (!username || !password) {
+      logger.warn('[Instagram Analyzer] Scraper credentials missing. Skipping automated login.');
+      return false;
+    }
+
+    try {
+      logger.info(`[Instagram Analyzer] Loading Instagram Login Page...`);
+      await page.goto('https://www.instagram.com/accounts/login/', { timeout: 20000, waitUntil: 'domcontentloaded' });
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const isLoginInputPresent = await page.$('input[name="username"]');
+      if (!isLoginInputPresent) {
+        logger.info('[Instagram Analyzer] Session already authenticated.');
+        return true;
+      }
+
+      logger.info(`[Instagram Analyzer] Entering credentials for account: ${username}...`);
+      await page.fill('input[name="username"]', username);
+      await page.fill('input[name="password"]', password);
+      
+      logger.info(`[Instagram Analyzer] Submitting login form...`);
+      await Promise.all([
+        page.click('button[type="submit"]'),
+        page.waitForNavigation({ timeout: 20000, waitUntil: 'networkidle' }).catch(() => {})
+      ]);
+
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      const currentUrl = page.url();
+      if (currentUrl.includes('accounts/login')) {
+        logger.error('[Instagram Analyzer] Automated login submission failed. Page remained on login URL.');
+        return false;
+      }
+
+      logger.info('[Instagram Analyzer] Authentication succeeded. Saving session back to database...');
+      const sessionManager = require('../../worker/sessionManager');
+      await sessionManager.saveSession(page.context(), 'instagram', username);
+      return true;
+    } catch (err) {
+      logger.error(`[Instagram Analyzer] Dynamic login sequence exception: ${err.message}`);
+      return false;
     }
   }
 
