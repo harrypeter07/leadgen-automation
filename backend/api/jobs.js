@@ -107,13 +107,63 @@ router.post('/retry', async (req, res, next) => {
   }
 });
 
-// Fetch leads for a specific job
+// Get scraped_leads preview for a job (no DB save yet)
 router.get('/:jobId/leads', async (req, res, next) => {
   const { jobId } = req.params;
   try {
     const leadsRepository = require('../repositories/leadsRepository');
     const leads = await leadsRepository.getByJobId(jobId);
     formatResponse(res, req, { leads, count: leads.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Save selected scraped_leads from job record into the leads table
+// Body: { indices: [0,1,2,...] } — optional, saves all if omitted
+router.post('/:jobId/save-leads', async (req, res, next) => {
+  const { jobId } = req.params;
+  const { indices } = req.body || {}; // optional array of lead indices to save
+
+  try {
+    const job = await scrapeJobRepository.getById(jobId);
+    if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
+
+    const allLeads = job.scraped_leads || [];
+    if (allLeads.length === 0) {
+      return res.status(400).json({ success: false, error: 'No scraped leads found on this job.' });
+    }
+
+    // Pick subset if indices provided, else all
+    const toSave = Array.isArray(indices)
+      ? indices.map(i => allLeads[i]).filter(Boolean)
+      : allLeads;
+
+    const leadsRepository = require('../repositories/leadsRepository');
+    const results = { saved: 0, merged: 0, errors: 0, warnings: [] };
+
+    for (const lead of toSave) {
+      try {
+        const result = await leadsRepository.upsert({ ...lead, job_id: jobId });
+        if (result._was_duplicate) {
+          results.merged++;
+          results.warnings.push(`Merged duplicate: ${lead.name} (${lead.phone})`);
+        } else {
+          results.saved++;
+        }
+      } catch (err) {
+        results.errors++;
+        results.warnings.push(`Failed to save ${lead.name}: ${err.message}`);
+      }
+    }
+
+    // Clear scraped_leads from job record now that they are saved
+    await scrapeJobRepository.update(jobId, { scraped_leads: [] });
+
+    formatResponse(res, req, {
+      message: `Saved ${results.saved} new leads. Merged ${results.merged} duplicates.`,
+      ...results
+    });
   } catch (err) {
     next(err);
   }

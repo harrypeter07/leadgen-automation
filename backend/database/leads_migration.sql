@@ -3,6 +3,9 @@
 -- Run this in Supabase SQL Editor (Project > SQL Editor)
 -- ============================================================
 
+-- 0. Add scraped_leads JSONB column to scrape_jobs (JSONB approach: temp cache before user saves)
+ALTER TABLE scrape_jobs ADD COLUMN IF NOT EXISTS scraped_leads jsonb DEFAULT '[]'::jsonb;
+
 -- 1. Create leads table with full schema
 CREATE TABLE IF NOT EXISTS leads (
   id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,

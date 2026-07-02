@@ -5,6 +5,20 @@ import toast from 'react-hot-toast'
 
 import { supabaseBrowser } from '@/lib/supabase'
 
+interface ScrapedLead {
+  name: string
+  phone: string | null
+  email: string | null
+  address: string | null
+  city: string | null
+  category: string | null
+  website: string | null
+  rating: number | null
+  review_count: number | null
+  source: string
+  status: string
+}
+
 interface ScrapeJob {
   id: string
   created_at: string
@@ -23,6 +37,7 @@ interface ScrapeJob {
   logs: string[]
   created_by: string
   worker_count: number
+  scraped_leads: ScrapedLead[] | null
 }
 
 export default function ScraperPage() {
@@ -58,20 +73,18 @@ export default function ScraperPage() {
   const [jobs, setJobs] = useState<ScrapeJob[]>([])
   const [loadingJobs, setLoadingJobs] = useState(true)
   const [selectedJob, setSelectedJob] = useState<ScrapeJob | null>(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [recentLeads, setRecentLeads] = useState<any[]>([])
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [jobLeads, setJobLeads] = useState<Record<string, any[]>>({})
-  const [loadingJobLeads, setLoadingJobLeads] = useState<Record<string, boolean>>({})
+  // Per-job selected lead indices for checkboxes (jobId -> Set of indices)
+  const [selectedLeadIndices, setSelectedLeadIndices] = useState<Record<string, Set<number>>>({})
+  const [savingLeads, setSavingLeads] = useState<Record<string, boolean>>({})
 
-  // Fetch all jobs
+  // Fetch all jobs — scraped_leads come embedded in the job record (JSONB)
   async function fetchJobs() {
     try {
       const res = await fetch('/api/scraper/jobs')
       const data = await res.json()
       if (res.ok && data.jobs) {
         setJobs(data.jobs)
-        // Keep selected job updated
+        // Keep selected job in sync with poll
         if (selectedJob) {
           const updated = data.jobs.find((j: ScrapeJob) => j.id === selectedJob.id)
           if (updated) setSelectedJob(updated)
@@ -84,59 +97,64 @@ export default function ScraperPage() {
     }
   }
 
-  // Fetch recently scraped leads via backend proxy (bypasses Supabase RLS)
-  async function fetchRecentLeads() {
-    try {
-      const res = await fetch('/api/scraper/recent-leads')
-      if (res.ok) {
-        const data = await res.json()
-        if (data.leads) setRecentLeads(data.leads)
-      } else {
-        // Fallback to Supabase direct (may fail if RLS not configured)
-        const { data, error } = await supabaseBrowser
-          .from('leads')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(10)
-        if (!error && data) setRecentLeads(data)
-      }
-    } catch (err) {
-      console.error('Failed to fetch recent leads:', err)
-    }
+  // Toggle a lead index selection for a job
+  function toggleLeadSelection(jobId: string, index: number) {
+    setSelectedLeadIndices(prev => {
+      const current = new Set(prev[jobId] || [])
+      if (current.has(index)) current.delete(index)
+      else current.add(index)
+      return { ...prev, [jobId]: current }
+    })
   }
 
-  // Fetch leads for a specific job from the backend
-  async function fetchJobLeads(jobId: string) {
-    setLoadingJobLeads(prev => ({ ...prev, [jobId]: true }))
+  function toggleSelectAll(jobId: string, total: number) {
+    setSelectedLeadIndices(prev => {
+      const current = prev[jobId] || new Set()
+      const allSelected = current.size === total
+      return { ...prev, [jobId]: allSelected ? new Set() : new Set(Array.from({ length: total }, (_, i) => i)) }
+    })
+  }
+
+  // Save selected (or all) scraped_leads from the job record to the leads table
+  async function handleSaveLeads(jobId: string, totalLeads: number) {
+    setSavingLeads(prev => ({ ...prev, [jobId]: true }))
+    const toastId = toast.loading('Saving leads to database...')
     try {
-      const res = await fetch(`/api/scraper/${jobId}/leads`)
+      const sel = selectedLeadIndices[jobId]
+      const body = sel && sel.size > 0 && sel.size < totalLeads
+        ? { indices: Array.from(sel) }
+        : {}
+
+      const res = await fetch(`/api/scraper/${jobId}/save-leads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
       const data = await res.json()
-      if (res.ok && data.leads) {
-        setJobLeads(prev => ({ ...prev, [jobId]: data.leads }))
-        console.log(`[Scraper] Fetched ${data.leads.length} leads for job ${jobId}`)
-      } else {
-        console.warn(`[Scraper] No leads returned for job ${jobId}:`, data)
-        setJobLeads(prev => ({ ...prev, [jobId]: [] }))
+      if (!res.ok) throw new Error(data.error || 'Save failed')
+
+      toast.success(`✅ ${data.message}`, { id: toastId, duration: 5000 })
+      if (data.warnings?.length > 0) {
+        data.warnings.forEach((w: string) => toast(`⚠️ ${w}`, { duration: 4000 }))
       }
-    } catch (err) {
-      console.error(`Failed to fetch leads for job ${jobId}:`, err)
-      setJobLeads(prev => ({ ...prev, [jobId]: [] }))
+      // Clear selection and refresh jobs (scraped_leads will be empty now)
+      setSelectedLeadIndices(prev => ({ ...prev, [jobId]: new Set() }))
+      fetchJobs()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save'
+      toast.error(msg, { id: toastId })
     } finally {
-      setLoadingJobLeads(prev => ({ ...prev, [jobId]: false }))
+      setSavingLeads(prev => ({ ...prev, [jobId]: false }))
     }
   }
 
-  // Poll jobs list and recent leads every 5 seconds
+  // Poll jobs every 5 seconds — scraped_leads come embedded in job records
   useEffect(() => {
     fetchJobs()
-    fetchRecentLeads()
-    const interval = setInterval(() => {
-      fetchJobs()
-      fetchRecentLeads()
-    }, 5000)
+    const interval = setInterval(fetchJobs, 5000)
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedJob?.id])
+  }, [])
 
   // Queue a new job
   async function handleQueueJob(e: React.FormEvent) {
@@ -570,49 +588,40 @@ export default function ScraperPage() {
             )}
           </div>
 
-          {/* Recently Scraped Leads panel */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-            <h3 className="font-bold text-gray-200 text-lg mb-4 flex items-center justify-between">
-              <span>📊 Recently Scraped Leads</span>
-              <span className="text-[10px] text-gray-500 uppercase tracking-wider">Live Database Sync</span>
-            </h3>
-
-            {recentLeads.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 text-xs">
-                No leads scraped yet. Start a job to see results stream in.
+          {/* Live Leads Preview - reads from active job's scraped_leads JSONB (no extra API call) */}
+          {activeJob && (activeJob.scraped_leads?.length ?? 0) > 0 && (
+            <div className="rounded-xl border border-purple-900/40 bg-purple-950/10 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-purple-300 text-sm flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                  Live Preview — {activeJob.scraped_leads!.length} leads extracted so far
+                </h3>
+                <span className="text-[9px] text-gray-500 uppercase tracking-wider">Not saved yet</span>
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+              <div className="overflow-x-auto max-h-[140px] overflow-y-auto">
+                <table className="w-full text-left text-[10px] border-collapse">
                   <thead>
-                    <tr className="border-b border-gray-850 text-gray-500 font-semibold uppercase tracking-wider text-[10px]">
-                      <th className="pb-3 pr-2">Name</th>
-                      <th className="pb-3 pr-2">Phone</th>
-                      <th className="pb-3 pr-2">Category</th>
-                      <th className="pb-3 pr-2">City</th>
-                      <th className="pb-3 text-right">Status</th>
+                    <tr className="border-b border-purple-900/30 text-gray-500 font-semibold uppercase tracking-wider text-[9px]">
+                      <th className="pb-2 pr-2">Name</th>
+                      <th className="pb-2 pr-2">Phone</th>
+                      <th className="pb-2 pr-2">Category</th>
+                      <th className="pb-2">Rating</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-850 text-gray-300">
-                    {recentLeads.map((lead) => (
-                      <tr key={lead.id} className="hover:bg-gray-950/30 transition-colors">
-                        <td className="py-3 pr-2 font-medium text-white max-w-[150px] truncate">{lead.name}</td>
-                        <td className="py-3 pr-2 font-mono text-[11px] text-gray-400">{lead.phone || 'N/A'}</td>
-                        <td className="py-3 pr-2 text-gray-400 max-w-[100px] truncate">{lead.category || 'N/A'}</td>
-                        <td className="py-3 pr-2 text-gray-400">{lead.city || 'N/A'}</td>
-                        <td className="py-3 text-right">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-500/10 text-green-400 text-[10px] font-medium border border-green-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                            Saved
-                          </span>
-                        </td>
+                  <tbody className="divide-y divide-purple-900/20 text-gray-300">
+                    {activeJob.scraped_leads!.slice(-8).map((lead, i) => (
+                      <tr key={i} className="hover:bg-purple-950/20">
+                        <td className="py-1.5 pr-2 font-medium text-white max-w-[130px] truncate">{lead.name}</td>
+                        <td className="py-1.5 pr-2 font-mono text-gray-400 text-[9px]">{lead.phone || '—'}</td>
+                        <td className="py-1.5 pr-2 text-gray-400 max-w-[90px] truncate">{lead.category || '—'}</td>
+                        <td className="py-1.5 text-yellow-400">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Job History list */}
           <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
@@ -655,15 +664,9 @@ export default function ScraperPage() {
                           {job.status}
                         </span>
 
-                        {/* Logs / Leads inspector toggle */}
+                        {/* Toggle expand */}
                         <button
-                          onClick={() => {
-                            const isOpening = selectedJob?.id !== job.id
-                            setSelectedJob(isOpening ? job : null)
-                            if (isOpening && !jobLeads[job.id]) {
-                              fetchJobLeads(job.id)
-                            }
-                          }}
+                          onClick={() => setSelectedJob(selectedJob?.id === job.id ? null : job)}
                           className="px-2 py-1 text-[10px] bg-gray-800 text-gray-300 rounded hover:bg-gray-700"
                         >
                           {selectedJob?.id === job.id ? 'Hide' : 'View Leads & Logs'}
@@ -696,60 +699,125 @@ export default function ScraperPage() {
                       )}
                     </div>
 
-                    {/* Leads + Logs output viewer */}
+                    {/* Scraped Leads + Save Panel (JSONB from job record — no extra API call) */}
                     {selectedJob?.id === job.id && (
                       <div className="mt-3 space-y-3">
-                        {/* Leads for this job */}
+                        {/* Leads table with checkboxes */}
                         <div className="rounded-lg bg-gray-950 border border-gray-800 p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider">📋 Scraped Leads ({jobLeads[job.id]?.length ?? '...'})</span>
-                            <button
-                              onClick={() => fetchJobLeads(job.id)}
-                              className="text-[9px] text-gray-500 hover:text-gray-300 underline"
-                            >Refresh</button>
-                          </div>
-                          {loadingJobLeads[job.id] ? (
-                            <p className="text-[10px] text-gray-500 py-2">Loading leads...</p>
-                          ) : jobLeads[job.id]?.length > 0 ? (
-                            <div className="overflow-x-auto max-h-[180px] overflow-y-auto">
-                              <table className="w-full text-left text-[10px] border-collapse">
-                                <thead>
-                                  <tr className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800">
-                                    <th className="pb-1.5 pr-2">Name</th>
-                                    <th className="pb-1.5 pr-2">Phone</th>
-                                    <th className="pb-1.5 pr-2">Category</th>
-                                    <th className="pb-1.5">Rating</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-900">
-                                  {jobLeads[job.id].map((lead) => (
-                                    <tr key={lead.id} className="text-gray-300 hover:bg-gray-900/40">
-                                      <td className="py-1.5 pr-2 font-medium text-white max-w-[120px] truncate">{lead.name}</td>
-                                      <td className="py-1.5 pr-2 font-mono text-gray-400">{lead.phone || '—'}</td>
-                                      <td className="py-1.5 pr-2 text-gray-400 max-w-[80px] truncate">{lead.category || '—'}</td>
-                                      <td className="py-1.5 text-yellow-400">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ) : (
-                            <p className="text-[10px] text-gray-600 py-2">
-                              No leads linked to this job yet. {job.status === 'completed' ? 'Leads may have been saved before job_id tracking was added — run a new job.' : 'Leads appear here as the job runs.'}
-                            </p>
-                          )}
+                          {(() => {
+                            const leads = job.scraped_leads || []
+                            const sel = selectedLeadIndices[job.id] || new Set<number>()
+                            const allSelected = leads.length > 0 && sel.size === leads.length
+                            return (
+                              <>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider">
+                                    📋 Scraped Leads ({leads.length})
+                                    {leads.length > 0 && (
+                                      <span className="ml-2 text-gray-500 normal-case font-normal">
+                                        {sel.size > 0 ? `${sel.size} selected` : 'none selected'}
+                                      </span>
+                                    )}
+                                  </span>
+                                  {leads.length > 0 && (
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => toggleSelectAll(job.id, leads.length)}
+                                        className="text-[9px] text-purple-400 hover:text-purple-300 underline"
+                                      >
+                                        {allSelected ? 'Deselect All' : 'Select All'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleSaveLeads(job.id, leads.length)}
+                                        disabled={savingLeads[job.id]}
+                                        className="px-3 py-1 text-[10px] font-semibold rounded bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white transition-colors"
+                                      >
+                                        {savingLeads[job.id]
+                                          ? 'Saving...'
+                                          : sel.size > 0 && sel.size < leads.length
+                                            ? `💾 Save ${sel.size} Selected`
+                                            : '💾 Save All to Leads'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {leads.length === 0 ? (
+                                  <p className="text-[10px] text-gray-600 py-3">
+                                    {job.status === 'running'
+                                      ? 'Leads stream in here as scraping progresses...'
+                                      : job.status === 'completed'
+                                        ? 'All leads were saved and cleared. Run a new job to scrape more.'
+                                        : 'No leads extracted yet.'}
+                                  </p>
+                                ) : (
+                                  <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
+                                    <table className="w-full text-left text-[10px] border-collapse">
+                                      <thead className="sticky top-0 bg-gray-950">
+                                        <tr className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800 text-[9px]">
+                                          <th className="pb-1.5 pr-2 w-6">
+                                            <input
+                                              type="checkbox"
+                                              checked={allSelected}
+                                              onChange={() => toggleSelectAll(job.id, leads.length)}
+                                              className="accent-purple-500"
+                                            />
+                                          </th>
+                                          <th className="pb-1.5 pr-2">Name</th>
+                                          <th className="pb-1.5 pr-2">Phone</th>
+                                          <th className="pb-1.5 pr-2">Category</th>
+                                          <th className="pb-1.5 pr-2">Rating</th>
+                                          <th className="pb-1.5">Website</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-900">
+                                        {leads.map((lead, idx) => (
+                                          <tr
+                                            key={idx}
+                                            onClick={() => toggleLeadSelection(job.id, idx)}
+                                            className={`cursor-pointer hover:bg-gray-900/60 transition-colors ${
+                                              sel.has(idx) ? 'bg-purple-950/20' : ''
+                                            }`}
+                                          >
+                                            <td className="py-1.5 pr-2">
+                                              <input
+                                                type="checkbox"
+                                                checked={sel.has(idx)}
+                                                onChange={() => toggleLeadSelection(job.id, idx)}
+                                                onClick={e => e.stopPropagation()}
+                                                className="accent-purple-500"
+                                              />
+                                            </td>
+                                            <td className="py-1.5 pr-2 font-medium text-white max-w-[120px] truncate">{lead.name}</td>
+                                            <td className="py-1.5 pr-2 font-mono text-gray-400 text-[9px]">{lead.phone || '—'}</td>
+                                            <td className="py-1.5 pr-2 text-gray-400 max-w-[80px] truncate">{lead.category || '—'}</td>
+                                            <td className="py-1.5 pr-2 text-yellow-400">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
+                                            <td className="py-1.5 text-blue-400 max-w-[100px] truncate">
+                                              {lead.website
+                                                ? <a href={lead.website} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
+                                                : '—'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </>
+                            )
+                          })()}
                         </div>
 
                         {/* Logs Stream */}
                         <div className="rounded bg-black border border-purple-950/40 p-3">
                           <span className="block text-[10px] font-semibold text-purple-400 uppercase mb-2">📟 Logs Stream</span>
-                          <div className="text-[10px] text-gray-400 font-mono space-y-1 max-h-[120px] overflow-y-auto">
+                          <div className="text-[10px] text-gray-400 font-mono space-y-1 max-h-[100px] overflow-y-auto">
                             {job.logs && job.logs.length > 0 ? (
-                              job.logs.map((log, index) => (
+                              [...job.logs].reverse().map((log, index) => (
                                 <p key={index} className="whitespace-pre-wrap">{log}</p>
                               ))
                             ) : (
-                              <p className="text-gray-600">No logs registered yet.</p>
+                              <p className="text-gray-600">No logs yet.</p>
                             )}
                           </div>
                         </div>

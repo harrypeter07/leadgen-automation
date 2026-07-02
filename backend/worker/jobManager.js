@@ -1,7 +1,8 @@
 // backend/worker/jobManager.js
+// JSONB approach: leads are accumulated in memory and stored on the job record.
+// No per-lead DB writes. User explicitly saves leads from the frontend.
 
 const scrapeJobRepository = require('../repositories/scrapeJobRepository');
-const leadsRepository = require('../repositories/leadsRepository');
 const browserManager = require('./browserManager');
 const eventBus = require('./eventBus');
 const logger = require('./logger');
@@ -33,11 +34,15 @@ class JobManager {
     const { context, contextId } = await browserManager.newContext();
     const { page, pageId } = await browserManager.newPage(contextId, context);
 
+    // Accumulate leads in memory — NO per-lead DB writes
+    const scrapedLeads = [];
+
     try {
       // 1. Search Query phase
       const freshJob = await scrapeJobRepository.getById(job.id);
       const logs = freshJob.logs || [];
       logs.push(`[${new Date().toISOString()}] Initiating provider search query...`);
+
       // Parse brackets notation to extract area if present
       let searchKeyword = job.keyword;
       let searchArea = null;
@@ -59,7 +64,7 @@ class JobManager {
       logs.push(`[${new Date().toISOString()}] Found ${totalItems} elements. Extracting ${limit} leads...`);
       await scrapeJobRepository.update(job.id, { logs });
 
-      // 3. Details Extraction Loop
+      // 3. Details Extraction Loop — accumulate in memory, batch update job record
       for (let i = 0; i < limit; i++) {
         if (this.activeAborts.get(job.id) === true) {
           throw new Error('JOB_ABORTED');
@@ -69,51 +74,54 @@ class JobManager {
         if (!raw) continue;
 
         const lead = provider.normalize(raw, job.city);
-        
-        // Write to Supabase via Repository — link to this job
-        await leadsRepository.upsert({ ...lead, job_id: job.id });
-
-        // Update Job progress
-        const currentFresh = await scrapeJobRepository.getById(job.id);
-        const loopLogs = currentFresh.logs || [];
-        loopLogs.push(`[${new Date().toISOString()}] Extracted: ${lead.name}`);
+        scrapedLeads.push(lead); // <- in-memory, no DB write
 
         const elapsed = (Date.now() - startTime) / 1000;
         const avg = elapsed / (i + 1);
         const estRemaining = Math.round(avg * (limit - (i + 1)));
 
+        // Single update: progress + accumulated leads (replaces old separate leadsRepository.upsert)
+        const currentFresh = await scrapeJobRepository.getById(job.id);
+        const loopLogs = currentFresh.logs || [];
+        loopLogs.push(`[${new Date().toISOString()}] Extracted: ${lead.name} (${lead.phone || 'no phone'})`);
+
         await scrapeJobRepository.update(job.id, {
-          progress: i + 1,
+          progress: scrapedLeads.length,
           current_business: lead.name,
           estimated_remaining_seconds: estRemaining,
           duration_seconds: Math.round(elapsed),
+          scraped_leads: scrapedLeads, // JSONB column — full array written each time
           logs: loopLogs
         });
 
-        eventBus.publish('job.progress', { jobId: job.id, progress: i + 1, maxLeads: limit });
+        eventBus.publish('job.progress', { jobId: job.id, progress: scrapedLeads.length, maxLeads: limit });
+        logger.info(`[JobManager] [${scrapedLeads.length}/${limit}] Extracted: ${lead.name}`);
       }
 
-      // Mark Job completed
+      // 4. Mark Job completed — keep scraped_leads for user to review & save
       const finalFresh = await scrapeJobRepository.getById(job.id);
       const finalLogs = finalFresh.logs || [];
-      finalLogs.push(`[${new Date().toISOString()}] Job completed successfully.`);
+      finalLogs.push(`[${new Date().toISOString()}] Job completed. ${scrapedLeads.length} leads ready to save.`);
 
       await scrapeJobRepository.update(job.id, {
         status: 'completed',
         completed_at: new Date().toISOString(),
         logs: finalLogs
+        // scraped_leads stays on the record for the user to review
       });
 
-      eventBus.publish('job.completed', { jobId: job.id, status: 'completed' });
+      eventBus.publish('job.completed', { jobId: job.id, status: 'completed', count: scrapedLeads.length });
+
     } catch (err) {
       const freshJob = await scrapeJobRepository.getById(job.id);
       const logs = freshJob ? (freshJob.logs || []) : [];
-      
+
       if (err.message === 'JOB_ABORTED') {
-        logs.push(`[${new Date().toISOString()}] Job stopped/cancelled by user.`);
+        logs.push(`[${new Date().toISOString()}] Job stopped by user. ${scrapedLeads.length} partial leads saved on job record.`);
         await scrapeJobRepository.update(job.id, {
           status: 'stopped',
           completed_at: new Date().toISOString(),
+          scraped_leads: scrapedLeads, // Keep partial results
           logs
         });
         eventBus.publish('job.completed', { jobId: job.id, status: 'stopped' });
@@ -123,6 +131,7 @@ class JobManager {
           status: 'failed',
           completed_at: new Date().toISOString(),
           error_count: (freshJob?.error_count || 0) + 1,
+          scraped_leads: scrapedLeads, // Keep whatever was extracted before crash
           logs
         });
         eventBus.publish('job.failed', { jobId: job.id, error: err.message });

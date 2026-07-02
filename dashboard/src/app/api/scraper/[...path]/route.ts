@@ -11,9 +11,13 @@ function resolveBackendPath(subPath: string): string {
   // /api/scraper/jobs           → /api/jobs
   if (subPath === 'jobs') return '/api/jobs'
 
-  // /api/scraper/{uuid}/leads   → /api/jobs/{uuid}/leads
+  // /api/scraper/{uuid}/leads        → /api/jobs/{uuid}/leads  (GET)
   const jobLeadsMatch = subPath.match(/^([0-9a-f-]{36})\/leads$/)
   if (jobLeadsMatch) return `/api/jobs/${jobLeadsMatch[1]}/leads`
+
+  // /api/scraper/{uuid}/save-leads   → /api/jobs/{uuid}/save-leads  (POST)
+  const saveLeadsMatch = subPath.match(/^([0-9a-f-]{36})\/save-leads$/)
+  if (saveLeadsMatch) return `/api/jobs/${saveLeadsMatch[1]}/save-leads`
 
   // /api/scraper/start|pause|stop|resume|retry → /api/jobs/start etc.
   return `/api/jobs/${subPath}`

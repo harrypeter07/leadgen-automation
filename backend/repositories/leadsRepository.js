@@ -16,9 +16,8 @@ class LeadsRepository {
           .maybeSingle();
           
         if (existing) {
-          logger.warn(`[LeadsRepository] DUPLICATE WARNING: Lead with phone ${leadData.phone} already exists (Name: "${existing.name}"). Merging details...`);
+          logger.warn(`[LeadsRepository] DUPLICATE: ${leadData.phone} exists as "${existing.name}" — merging.`);
           
-          // Update the existing record instead of inserting a duplicate
           const { data: updated, error: updateError } = await supabase
             .from('leads')
             .update({
@@ -29,21 +28,21 @@ class LeadsRepository {
               website: leadData.website || undefined,
               rating: leadData.rating || undefined,
               review_count: leadData.review_count || undefined,
-              notes: leadData.notes || undefined
+              job_id: leadData.job_id || undefined
             })
             .eq('id', existing.id)
             .select()
             .single();
 
           if (updateError) throw updateError;
-          return updated;
+          return { ...updated, _was_duplicate: true };
         }
       } catch (e) {
-        logger.error(`[LeadsRepository] Manual upsert-merge failed: ${e.message}`);
+        logger.error(`[LeadsRepository] Duplicate check failed: ${e.message}`);
       }
     }
 
-    // No duplicate found, proceed with direct insert
+    // No duplicate — fresh insert
     const { data, error } = await supabase
       .from('leads')
       .insert([leadData])
@@ -51,10 +50,10 @@ class LeadsRepository {
       .single();
 
     if (error) {
-      logger.error(`[LeadsRepository] upsert error: ${error.message}`);
+      logger.error(`[LeadsRepository] insert error: ${error.message}`);
       throw error;
     }
-    return data;
+    return { ...data, _was_duplicate: false };
   }
 
   async getById(id) {
