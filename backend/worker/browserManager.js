@@ -39,9 +39,8 @@ class BrowserManager {
         ]
       });
       
-      const pid = this.browser.process() ? this.browser.process().pid : 'unknown';
-      logger.info(`[BROWSER] Browser launched. PID=${pid}`);
-      eventBus.publish('browser.started', { pid });
+      logger.info('[BROWSER] Browser launched successfully.');
+      eventBus.publish('browser.started', { pid: 'unknown' });
     } catch (err) {
       logger.error(`[BROWSER] Launch failed: ${err.message}`);
       eventBus.publish('browser.crashed', { error: err.message });
