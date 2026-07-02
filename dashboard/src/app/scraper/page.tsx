@@ -3,8 +3,6 @@
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 
-import { supabaseBrowser } from '@/lib/supabase'
-
 interface ScrapedLead {
   name: string
   phone: string | null

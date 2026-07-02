@@ -42,7 +42,7 @@ class LeadsRepository {
       }
     }
 
-    // No duplicate — fresh insert
+    // No duplicate found by phone check — attempt fresh insert
     const { data, error } = await supabase
       .from('leads')
       .insert([leadData])
@@ -50,6 +50,11 @@ class LeadsRepository {
       .single();
 
     if (error) {
+      // Postgres unique constraint violation (code 23505) — skip gracefully
+      if (error.code === '23505') {
+        logger.warn(`[LeadsRepository] Unique constraint hit for "${leadData.name}" — skipping.`);
+        return { name: leadData.name, _was_duplicate: true, _skipped: true };
+      }
       logger.error(`[LeadsRepository] insert error: ${error.message}`);
       throw error;
     }

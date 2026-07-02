@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
-import { supabaseBrowser } from '@/lib/supabase'
 import type { Lead, LeadStatus } from '@/types/lead'
 import StatusBadge from './components/StatusBadge'
 
@@ -47,57 +46,44 @@ export default function LeadsPage() {
     return () => clearTimeout(handler)
   }, [search])
 
-  // Fetch unique categories once on mount
+  // Fetch unique categories via server-side API (bypasses RLS)
   async function fetchCategories() {
     try {
-      const { data, error } = await supabaseBrowser
-        .from('leads')
-        .select('category')
-      if (error) throw error
-
-      if (data) {
-        const uniqueCats = Array.from(new Set(data.map(item => item.category).filter(Boolean))) as string[]
-        setCategories(uniqueCats.sort())
-      }
+      const res = await fetch('/api/leads?perPage=1000&page=1')
+      if (!res.ok) return
+      const data = await res.json()
+      const cats = Array.from(
+        new Set((data.leads ?? []).map((l: Lead) => l.category).filter(Boolean))
+      ) as string[]
+      setCategories(cats.sort())
     } catch (err) {
       console.error('Error fetching categories:', err)
     }
   }
 
-  // Fetch leads based on filters and pagination
+  // Fetch leads via server-side API route (service role key — bypasses RLS)
   async function fetchLeads() {
     setLoading(true)
     try {
-      const offset = (page - 1) * PER_PAGE
+      const params = new URLSearchParams({
+        page:    String(page),
+        perPage: String(PER_PAGE),
+      })
+      if (status)              params.set('status',   status)
+      if (city.trim())         params.set('city',     city.trim())
+      if (category)            params.set('category', category)
+      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim())
 
-      let query = supabaseBrowser
-        .from('leads')
-        .select('*', { count: 'exact' })
+      const res = await fetch(`/api/leads?${params.toString()}`)
+      const data = await res.json()
 
-      if (status) {
-        query = query.eq('status', status)
-      }
-      if (city.trim()) {
-        query = query.ilike('city', `%${city.trim()}%`)
-      }
-      if (category) {
-        query = query.eq('category', category)
-      }
-      if (debouncedSearch.trim()) {
-        const term = debouncedSearch.trim()
-        query = query.or(`name.ilike.%${term}%,phone.ilike.%${term}%`)
-      }
+      if (!res.ok) throw new Error(data.error || 'Failed to load leads')
 
-      // Order by created_at desc
-      query = query.order('created_at', { ascending: false }).range(offset, offset + PER_PAGE - 1)
-
-      const { data, count, error } = await query
-      if (error) throw error
-
-      setLeads((data ?? []) as Lead[])
-      setTotalLeads(count ?? 0)
+      setLeads((data.leads ?? []) as Lead[])
+      setTotalLeads(data.total ?? 0)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load leads'
+      console.error('[Leads Page] fetchLeads error:', message)
       toast.error(message)
     } finally {
       setLoading(false)

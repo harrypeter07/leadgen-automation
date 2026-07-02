@@ -1,0 +1,45 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+// Server-side Supabase client with service role key — bypasses RLS completely
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  return createClient(url, key, { auth: { persistSession: false } })
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const page    = parseInt(searchParams.get('page')     || '1')
+  const perPage = parseInt(searchParams.get('perPage')  || '25')
+  const search  = searchParams.get('search')  || ''
+  const status  = searchParams.get('status')  || ''
+  const city    = searchParams.get('city')    || ''
+  const category = searchParams.get('category') || ''
+  const offset  = (page - 1) * perPage
+
+  try {
+    const supabase = getSupabase()
+    let query = supabase
+      .from('leads')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + perPage - 1)
+
+    if (status)   query = query.eq('status', status)
+    if (city)     query = query.ilike('city', `%${city}%`)
+    if (category) query = query.eq('category', category)
+    if (search)   query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
+
+    const { data, count, error } = await query
+    if (error) {
+      console.error('[Leads API] fetchLeads error:', error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ leads: data ?? [], total: count ?? 0 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
