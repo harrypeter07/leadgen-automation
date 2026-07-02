@@ -3,36 +3,44 @@
 const logger = require('../../worker/logger');
 
 class GoogleMapsDetails {
+  /**
+   * Extract business details from Google Maps.
+   * 
+   * Strategy: Always navigate directly to the business URL (via href) when available.
+   * This completely avoids sidebar click timing issues, DOM index shifts, and browser crashes.
+   * Falls back to sidebar click (v2) only when no href is provided.
+   */
   async extract(page, cardIndex, version = 'v2', searchUrl = '', href = null) {
-    let card;
-    if (href) {
-      // Find card by exact unique href to prevent index shifts
-      card = page.locator(`div[role="feed"] a.hfpxzc[href="${href}"]`).first();
-    } else {
-      // Fallback to index if href is missing
-      const cards = page.locator('div[role="feed"] a.hfpxzc');
-      card = cards.nth(cardIndex);
-    }
 
-    if (version === 'v1') {
-      logger.info(`[Google Maps Details] [Legacy V1] Extracting via full page navigation on index ${cardIndex}...`);
-      const targetHref = href || await card.getAttribute('href').catch(() => null);
-      if (!targetHref) {
-        logger.warn(`[Google Maps Details] [Legacy V1] Could not retrieve href on index ${cardIndex}.`);
+    if (href) {
+      // ✅ Best path: navigate directly to the unique business URL — no clicking, no crashes
+      logger.info(`[Google Maps Details] Direct navigation to: ${href.substring(0, 80)}...`);
+      await page.goto(href, { timeout: 20000, waitUntil: 'domcontentloaded' }).catch(() => {});
+    } else if (version === 'v1') {
+      // Legacy: get href from the card by index and navigate
+      logger.info(`[Google Maps Details] [V1 Fallback] Extracting via page navigation on index ${cardIndex}...`);
+      const cards = page.locator('div[role="feed"] a.hfpxzc');
+      const card = cards.nth(cardIndex);
+      const cardHref = await card.getAttribute('href').catch(() => null);
+      if (!cardHref) {
+        logger.warn(`[Google Maps Details] Could not retrieve href on index ${cardIndex}. Skipping.`);
         return null;
       }
-
-      await page.goto(targetHref, { timeout: 15000, waitUntil: 'domcontentloaded' }).catch(() => {});
+      await page.goto(cardHref, { timeout: 20000, waitUntil: 'domcontentloaded' }).catch(() => {});
     } else {
-      logger.info(`[Google Maps Details] [Playwright V2] Extracting via sidebar click on card (index ${cardIndex})...`);
+      // Sidebar click fallback (least preferred — prone to DOM shifts and crashes)
+      logger.info(`[Google Maps Details] [V2 Click Fallback] Clicking sidebar card index ${cardIndex}...`);
+      const cards = page.locator('div[role="feed"] a.hfpxzc');
+      const card = cards.nth(cardIndex);
       await card.scrollIntoViewIfNeeded().catch(() => {});
       await card.click({ force: true }).catch(() => {});
     }
 
+    // Wait for business detail panel to load
     try {
       await page.waitForSelector('h1.DUwDvf, [data-item-id="address"]', { timeout: 8000 });
     } catch (e) {
-      logger.warn(`[Google Maps Details] Details pane timeout on item ${cardIndex}.`);
+      logger.warn(`[Google Maps Details] Detail pane timeout on item ${cardIndex}. Will still attempt extraction.`);
     }
 
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -51,14 +59,20 @@ class GoogleMapsDetails {
       } catch (err) {}
     }
 
+    // Fallback: extract from page title
     if (!raw.name) {
-      const pageTitle = await page.title();
-      if (pageTitle.includes(' - Google Maps')) {
-        raw.name = pageTitle.replace(' - Google Maps', '').trim();
-      }
+      try {
+        const pageTitle = await page.title();
+        if (pageTitle && pageTitle.includes(' - Google Maps')) {
+          raw.name = pageTitle.replace(' - Google Maps', '').trim();
+        }
+      } catch (err) {}
     }
 
-    if (!raw.name) return null;
+    if (!raw.name) {
+      logger.warn(`[Google Maps Details] Could not extract name on index ${cardIndex}. Skipping.`);
+      return null;
+    }
 
     // 2. Address
     raw.address = null;
@@ -88,9 +102,9 @@ class GoogleMapsDetails {
     raw.website = null;
     for (const sel of ['a[data-item-id="authority"]', '[data-item-id="authority"]', 'a[aria-label*="website"]']) {
       try {
-        const href = await page.locator(sel).first().getAttribute('href', { timeout: 1500 });
-        if (href) {
-          raw.website = href.trim();
+        const siteHref = await page.locator(sel).first().getAttribute('href', { timeout: 1500 });
+        if (siteHref) {
+          raw.website = siteHref.trim();
           break;
         }
       } catch (err) {}
@@ -105,7 +119,7 @@ class GoogleMapsDetails {
         if (label && (label.toLowerCase().includes('star') || label.toLowerCase().includes('review'))) {
           const ratingMatch = label.match(/([0-5]\.[0-9]|[0-5])/);
           if (ratingMatch) raw.rating = ratingMatch[1];
-          
+
           const reviewsMatch = label.match(/(\d+[,.\d]*)\s*reviews?/i);
           if (reviewsMatch) raw.reviews = reviewsMatch[1].replace(/,/g, '');
           break;
@@ -125,8 +139,9 @@ class GoogleMapsDetails {
       } catch (err) {}
     }
 
-    if (version === 'v1' && searchUrl) {
-      logger.info(`[Google Maps Details] [Legacy V1] Navigating back to search list: ${searchUrl}`);
+    // After direct navigation, return to the search results page (only needed for v1/click modes without href)
+    if (!href && searchUrl) {
+      logger.info(`[Google Maps Details] Navigating back to search list: ${searchUrl}`);
       await page.goto(searchUrl, { timeout: 15000, waitUntil: 'domcontentloaded' }).catch(() => {});
       try {
         await page.waitForSelector('div[role="feed"]', { timeout: 8000 });

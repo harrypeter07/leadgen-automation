@@ -64,7 +64,9 @@ class JobManager {
       logs.push(`[${new Date().toISOString()}] Found ${totalItems} elements. Extracting ${limit} leads...`);
       await scrapeJobRepository.update(job.id, { logs });
 
-      // 3. Details Extraction Loop
+      // 3. Details Extraction Loop — seenKeys prevents any in-memory duplicates
+      const seenKeys = new Set();
+
       for (let i = 0; i < limit; i++) {
         if (this.activeAborts.get(job.id) === true) {
           throw new Error('JOB_ABORTED');
@@ -74,8 +76,16 @@ class JobManager {
         if (!raw) continue;
 
         const lead = provider.normalize(raw, job.city);
-        
-        // Write to leads database in real-time (duplicate check and constraint bypass handled inside upsert)
+
+        // Deduplicate in memory: skip if same name+phone seen before
+        const dedupeKey = `${(lead.name || '').toLowerCase().trim()}|${(lead.phone || '').replace(/\s/g, '')}`;
+        if (seenKeys.has(dedupeKey)) {
+          logger.warn(`[JobManager] Duplicate skipped in-memory: ${lead.name} (${lead.phone})`);
+          continue;
+        }
+        seenKeys.add(dedupeKey);
+
+        // Write to leads database in real-time (upsert handles DB-level duplicates too)
         try {
           await leadsRepository.upsert({ ...lead, job_id: job.id });
         } catch (dbErr) {
