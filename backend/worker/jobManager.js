@@ -3,6 +3,7 @@
 // No per-lead DB writes. User explicitly saves leads from the frontend.
 
 const scrapeJobRepository = require('../repositories/scrapeJobRepository');
+const leadsRepository = require('../repositories/leadsRepository');
 const browserManager = require('./browserManager');
 const eventBus = require('./eventBus');
 const logger = require('./logger');
@@ -34,7 +35,6 @@ class JobManager {
     const { context, contextId } = await browserManager.newContext();
     const { page, pageId } = await browserManager.newPage(contextId, context);
 
-    // Accumulate leads in memory — NO per-lead DB writes
     const scrapedLeads = [];
 
     try {
@@ -64,7 +64,7 @@ class JobManager {
       logs.push(`[${new Date().toISOString()}] Found ${totalItems} elements. Extracting ${limit} leads...`);
       await scrapeJobRepository.update(job.id, { logs });
 
-      // 3. Details Extraction Loop — accumulate in memory, batch update job record
+      // 3. Details Extraction Loop
       for (let i = 0; i < limit; i++) {
         if (this.activeAborts.get(job.id) === true) {
           throw new Error('JOB_ABORTED');
@@ -74,7 +74,15 @@ class JobManager {
         if (!raw) continue;
 
         const lead = provider.normalize(raw, job.city);
-        scrapedLeads.push(lead); // <- in-memory, no DB write
+        
+        // Write to leads database in real-time (duplicate check and constraint bypass handled inside upsert)
+        try {
+          await leadsRepository.upsert({ ...lead, job_id: job.id });
+        } catch (dbErr) {
+          logger.error(`[JobManager] Real-time save failed for ${lead.name}: ${dbErr.message}`);
+        }
+
+        scrapedLeads.push(lead);
 
         const elapsed = (Date.now() - startTime) / 1000;
         const avg = elapsed / (i + 1);

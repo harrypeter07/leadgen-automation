@@ -704,39 +704,19 @@ export default function ScraperPage() {
                         <div className="rounded-lg bg-gray-950 border border-gray-800 p-3">
                           {(() => {
                             const leads = job.scraped_leads || []
-                            const sel = selectedLeadIndices[job.id] || new Set<number>()
-                            const allSelected = leads.length > 0 && sel.size === leads.length
                             return (
                               <>
                                 <div className="flex items-center justify-between mb-2">
                                   <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider">
                                     📋 Scraped Leads ({leads.length})
-                                    {leads.length > 0 && (
-                                      <span className="ml-2 text-gray-500 normal-case font-normal">
-                                        {sel.size > 0 ? `${sel.size} selected` : 'none selected'}
-                                      </span>
-                                    )}
                                   </span>
                                   {leads.length > 0 && (
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => toggleSelectAll(job.id, leads.length)}
-                                        className="text-[9px] text-purple-400 hover:text-purple-300 underline"
-                                      >
-                                        {allSelected ? 'Deselect All' : 'Select All'}
-                                      </button>
-                                      <button
-                                        onClick={() => handleSaveLeads(job.id, leads.length)}
-                                        disabled={savingLeads[job.id]}
-                                        className="px-3 py-1 text-[10px] font-semibold rounded bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white transition-colors"
-                                      >
-                                        {savingLeads[job.id]
-                                          ? 'Saving...'
-                                          : sel.size > 0 && sel.size < leads.length
-                                            ? `💾 Save ${sel.size} Selected`
-                                            : '💾 Save All to Leads'}
-                                      </button>
-                                    </div>
+                                    <a
+                                      href="/leads"
+                                      className="px-3 py-1 text-[10px] font-semibold rounded bg-purple-650 hover:bg-purple-600 text-white transition-colors"
+                                    >
+                                      📂 View on Leads Page
+                                    </a>
                                   )}
                                 </div>
 
@@ -744,9 +724,7 @@ export default function ScraperPage() {
                                   <p className="text-[10px] text-gray-600 py-3">
                                     {job.status === 'running'
                                       ? 'Leads stream in here as scraping progresses...'
-                                      : job.status === 'completed'
-                                        ? 'All leads were saved and cleared. Run a new job to scrape more.'
-                                        : 'No leads extracted yet.'}
+                                      : 'No leads extracted yet.'}
                                   </p>
                                 ) : (
                                   <div>
@@ -754,14 +732,6 @@ export default function ScraperPage() {
                                       <table className="w-full text-left text-[10px] border-collapse">
                                         <thead className="sticky top-0 bg-gray-950">
                                           <tr className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800 text-[9px]">
-                                            <th className="pb-1.5 pr-2 w-6">
-                                              <input
-                                                type="checkbox"
-                                                checked={allSelected}
-                                                onChange={() => toggleSelectAll(job.id, leads.length)}
-                                                className="accent-purple-500"
-                                              />
-                                            </th>
                                             <th className="pb-1.5 pr-2">Name</th>
                                             <th className="pb-1.5 pr-2">Phone</th>
                                             <th className="pb-1.5 pr-2">Category</th>
@@ -773,27 +743,15 @@ export default function ScraperPage() {
                                           {leads.slice(0, 10).map((lead, idx) => (
                                             <tr
                                               key={idx}
-                                              onClick={() => toggleLeadSelection(job.id, idx)}
-                                              className={`cursor-pointer hover:bg-gray-900/60 transition-colors ${
-                                                sel.has(idx) ? 'bg-purple-950/20' : ''
-                                              }`}
+                                              className="hover:bg-gray-900/60 transition-colors"
                                             >
-                                              <td className="py-1.5 pr-2">
-                                                <input
-                                                  type="checkbox"
-                                                  checked={sel.has(idx)}
-                                                  onChange={() => toggleLeadSelection(job.id, idx)}
-                                                  onClick={e => e.stopPropagation()}
-                                                  className="accent-purple-500"
-                                                />
-                                              </td>
                                               <td className="py-1.5 pr-2 font-medium text-white max-w-[120px] truncate">{lead.name}</td>
                                               <td className="py-1.5 pr-2 font-mono text-gray-400 text-[9px]">{lead.phone || '—'}</td>
                                               <td className="py-1.5 pr-2 text-gray-400 max-w-[80px] truncate">{lead.category || '—'}</td>
                                               <td className="py-1.5 pr-2 text-yellow-400">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
                                               <td className="py-1.5 text-blue-400 max-w-[100px] truncate">
                                                 {lead.website
-                                                  ? <a href={lead.website} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
+                                                  ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
                                                   : '—'}
                                               </td>
                                             </tr>
@@ -803,7 +761,7 @@ export default function ScraperPage() {
                                     </div>
                                     {leads.length > 10 && (
                                       <p className="text-[10px] text-gray-500 mt-2 italic text-center">
-                                        Showing first 10 of {leads.length} leads. Save to view all of them on the <a href="/leads" className="text-purple-400 hover:text-purple-300 underline font-medium">Leads page</a>.
+                                        Showing first 10 of {leads.length} leads. View all of them on the <a href="/leads" className="text-purple-400 hover:text-purple-300 underline font-medium">Leads page</a>.
                                       </p>
                                     )}
                                   </div>
