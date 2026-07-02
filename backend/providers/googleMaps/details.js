@@ -4,7 +4,7 @@ const logger = require('../../worker/logger');
 
 class GoogleMapsDetails {
   async extract(page, cardIndex, version = 'v2', searchUrl = '') {
-    const cards = page.locator('a[href*="/maps/place/"]');
+    const cards = page.locator('div[role="feed"] a[href*="/maps/place/"]');
     const card = cards.nth(cardIndex);
 
     if (version === 'v1') {

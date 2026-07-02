@@ -14,7 +14,7 @@ class GoogleMapsCollector {
     let staleCount = 0;
 
     while (true) {
-      const currentCount = await page.locator('a[href*="/maps/place/"]').count();
+      const currentCount = await page.locator('div[role="feed"] a[href*="/maps/place/"]').count();
       logger.info(`   [Scroll] Loaded ${currentCount} listings...`);
 
       if (currentCount >= maxLeads) {
@@ -24,7 +24,7 @@ class GoogleMapsCollector {
       await feed.evaluate(el => el.scrollTop += 900).catch(() => {});
       await new Promise(resolve => setTimeout(resolve, SCROLL_PAUSE));
 
-      const newCount = await page.locator('a[href*="/maps/place/"]').count();
+      const newCount = await page.locator('div[role="feed"] a[href*="/maps/place/"]').count();
       if (newCount <= prevCount) {
         staleCount++;
         if (staleCount >= MAX_STALE_SCROLLS) {
@@ -36,7 +36,7 @@ class GoogleMapsCollector {
       prevCount = newCount;
     }
 
-    return await page.locator('a[href*="/maps/place/"]').count();
+    return await page.locator('div[role="feed"] a[href*="/maps/place/"]').count();
   }
 }
 
