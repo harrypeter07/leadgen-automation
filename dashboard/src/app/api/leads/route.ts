@@ -3,8 +3,16 @@ import { createClient } from '@supabase/supabase-js'
 
 // Server-side Supabase client with service role key — bypasses RLS completely
 function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '').trim()
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()
+  
+  if (!url) {
+    throw new Error('Supabase URL is missing from environment variables (please set NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL)')
+  }
+  if (!key) {
+    throw new Error('Supabase Service Role Key is missing (please set SUPABASE_SERVICE_ROLE_KEY)')
+  }
+  
   return createClient(url, key, { auth: { persistSession: false } })
 }
 

@@ -18,7 +18,15 @@ export async function GET() {
   const status: Record<string, boolean> = {}
 
   for (const key of keys) {
-    const val = process.env[key]
+    let val = process.env[key]
+    
+    // Check fallback naming
+    if (key === 'NEXT_PUBLIC_SUPABASE_URL') {
+      val = val || process.env.SUPABASE_URL
+    } else if (key === 'NEXT_PUBLIC_SUPABASE_ANON_KEY') {
+      val = val || process.env.SUPABASE_ANON_KEY
+    }
+    
     status[key] = typeof val === 'string' && val.trim().length > 0
   }
 
