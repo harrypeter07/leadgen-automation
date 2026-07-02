@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+function getTargetUrl(baseUrl: string, subPath: string) {
+  let formatted = baseUrl.trim()
+  if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+    formatted = `https://${formatted}`
+  }
+  // Remove trailing slashes
+  formatted = formatted.replace(/\/+$/, '')
+  return `${formatted}/api/${subPath}`
+}
+
 export async function POST(req: NextRequest, { params }: { params: { path: string[] } }) {
-  const backendUrl = process.env.V3_BACKEND_URL || process.env.WHATSAPP_SERVICE_URL; // Fallback to Whatsapp url if not separately configured
+  const backendUrl = process.env.V3_BACKEND_URL || process.env.WHATSAPP_SERVICE_URL;
   if (!backendUrl) {
     return NextResponse.json({ error: 'V3_BACKEND_URL not configured' }, { status: 500 })
   }
 
   const subPath = params.path.join('/')
-  const targetUrl = `${backendUrl}/api/${subPath}`
+  const targetUrl = getTargetUrl(backendUrl, subPath)
 
   try {
     const body = await req.json().catch(() => ({}))
@@ -35,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: { path: string
   }
 
   const subPath = params.path.join('/')
-  const targetUrl = `${backendUrl}/api/${subPath}`
+  const targetUrl = getTargetUrl(backendUrl, subPath)
 
   try {
     const res = await fetch(targetUrl, {
