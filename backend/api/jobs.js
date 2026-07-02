@@ -107,4 +107,16 @@ router.post('/retry', async (req, res, next) => {
   }
 });
 
+// Fetch leads for a specific job
+router.get('/:jobId/leads', async (req, res, next) => {
+  const { jobId } = req.params;
+  try {
+    const leadsRepository = require('../repositories/leadsRepository');
+    const leads = await leadsRepository.getByJobId(jobId);
+    formatResponse(res, req, { leads, count: leads.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

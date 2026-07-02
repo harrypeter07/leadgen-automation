@@ -71,6 +71,42 @@ class LeadsRepository {
     }
     return data;
   }
+
+  async getByJobId(jobId) {
+    logger.debug(`[LeadsRepository] Fetching leads for job: ${jobId}`);
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('job_id', jobId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      logger.error(`[LeadsRepository] getByJobId error: ${error.message}`);
+      throw error;
+    }
+    return data || [];
+  }
+
+  async getAll({ limit = 50, offset = 0, city, category, status, search } = {}) {
+    logger.debug(`[LeadsRepository] Fetching all leads (limit=${limit}, offset=${offset})`);
+    let query = supabase
+      .from('leads')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (city) query = query.ilike('city', `%${city}%`);
+    if (category) query = query.eq('category', category);
+    if (status) query = query.eq('status', status);
+    if (search) query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
+
+    const { data, count, error } = await query;
+    if (error) {
+      logger.error(`[LeadsRepository] getAll error: ${error.message}`);
+      throw error;
+    }
+    return { leads: data || [], total: count || 0 };
+  }
 }
 
 module.exports = new LeadsRepository();

@@ -60,6 +60,9 @@ export default function ScraperPage() {
   const [selectedJob, setSelectedJob] = useState<ScrapeJob | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [recentLeads, setRecentLeads] = useState<any[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [jobLeads, setJobLeads] = useState<Record<string, any[]>>({})
+  const [loadingJobLeads, setLoadingJobLeads] = useState<Record<string, boolean>>({})
 
   // Fetch all jobs
   async function fetchJobs() {
@@ -81,19 +84,45 @@ export default function ScraperPage() {
     }
   }
 
-  // Fetch recently scraped leads directly from DB
+  // Fetch recently scraped leads via backend proxy (bypasses Supabase RLS)
   async function fetchRecentLeads() {
     try {
-      const { data, error } = await supabaseBrowser
-        .from('leads')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10)
-      if (!error && data) {
-        setRecentLeads(data)
+      const res = await fetch('/api/scraper/recent-leads')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.leads) setRecentLeads(data.leads)
+      } else {
+        // Fallback to Supabase direct (may fail if RLS not configured)
+        const { data, error } = await supabaseBrowser
+          .from('leads')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(10)
+        if (!error && data) setRecentLeads(data)
       }
     } catch (err) {
       console.error('Failed to fetch recent leads:', err)
+    }
+  }
+
+  // Fetch leads for a specific job from the backend
+  async function fetchJobLeads(jobId: string) {
+    setLoadingJobLeads(prev => ({ ...prev, [jobId]: true }))
+    try {
+      const res = await fetch(`/api/scraper/${jobId}/leads`)
+      const data = await res.json()
+      if (res.ok && data.leads) {
+        setJobLeads(prev => ({ ...prev, [jobId]: data.leads }))
+        console.log(`[Scraper] Fetched ${data.leads.length} leads for job ${jobId}`)
+      } else {
+        console.warn(`[Scraper] No leads returned for job ${jobId}:`, data)
+        setJobLeads(prev => ({ ...prev, [jobId]: [] }))
+      }
+    } catch (err) {
+      console.error(`Failed to fetch leads for job ${jobId}:`, err)
+      setJobLeads(prev => ({ ...prev, [jobId]: [] }))
+    } finally {
+      setLoadingJobLeads(prev => ({ ...prev, [jobId]: false }))
     }
   }
 
@@ -626,12 +655,18 @@ export default function ScraperPage() {
                           {job.status}
                         </span>
 
-                        {/* Logs inspector toggle */}
+                        {/* Logs / Leads inspector toggle */}
                         <button
-                          onClick={() => setSelectedJob(selectedJob?.id === job.id ? null : job)}
+                          onClick={() => {
+                            const isOpening = selectedJob?.id !== job.id
+                            setSelectedJob(isOpening ? job : null)
+                            if (isOpening && !jobLeads[job.id]) {
+                              fetchJobLeads(job.id)
+                            }
+                          }}
                           className="px-2 py-1 text-[10px] bg-gray-800 text-gray-300 rounded hover:bg-gray-700"
                         >
-                          {selectedJob?.id === job.id ? 'Hide Logs' : 'Logs'}
+                          {selectedJob?.id === job.id ? 'Hide' : 'View Leads & Logs'}
                         </button>
                       </div>
                     </div>
@@ -661,18 +696,62 @@ export default function ScraperPage() {
                       )}
                     </div>
 
-                    {/* Logs output viewer */}
+                    {/* Leads + Logs output viewer */}
                     {selectedJob?.id === job.id && (
-                      <div className="rounded bg-black border border-purple-950/40 p-3 mt-2">
-                        <span className="block text-[10px] font-semibold text-purple-400 uppercase mb-2">Logs Stream</span>
-                        <div className="text-[10px] text-gray-400 font-mono space-y-1 max-h-[150px] overflow-y-auto">
-                          {job.logs && job.logs.length > 0 ? (
-                            job.logs.map((log, index) => (
-                              <p key={index} className="whitespace-pre-wrap">{log}</p>
-                            ))
+                      <div className="mt-3 space-y-3">
+                        {/* Leads for this job */}
+                        <div className="rounded-lg bg-gray-950 border border-gray-800 p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider">📋 Scraped Leads ({jobLeads[job.id]?.length ?? '...'})</span>
+                            <button
+                              onClick={() => fetchJobLeads(job.id)}
+                              className="text-[9px] text-gray-500 hover:text-gray-300 underline"
+                            >Refresh</button>
+                          </div>
+                          {loadingJobLeads[job.id] ? (
+                            <p className="text-[10px] text-gray-500 py-2">Loading leads...</p>
+                          ) : jobLeads[job.id]?.length > 0 ? (
+                            <div className="overflow-x-auto max-h-[180px] overflow-y-auto">
+                              <table className="w-full text-left text-[10px] border-collapse">
+                                <thead>
+                                  <tr className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800">
+                                    <th className="pb-1.5 pr-2">Name</th>
+                                    <th className="pb-1.5 pr-2">Phone</th>
+                                    <th className="pb-1.5 pr-2">Category</th>
+                                    <th className="pb-1.5">Rating</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-900">
+                                  {jobLeads[job.id].map((lead) => (
+                                    <tr key={lead.id} className="text-gray-300 hover:bg-gray-900/40">
+                                      <td className="py-1.5 pr-2 font-medium text-white max-w-[120px] truncate">{lead.name}</td>
+                                      <td className="py-1.5 pr-2 font-mono text-gray-400">{lead.phone || '—'}</td>
+                                      <td className="py-1.5 pr-2 text-gray-400 max-w-[80px] truncate">{lead.category || '—'}</td>
+                                      <td className="py-1.5 text-yellow-400">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           ) : (
-                            <p className="text-gray-600">No logs registered yet.</p>
+                            <p className="text-[10px] text-gray-600 py-2">
+                              No leads linked to this job yet. {job.status === 'completed' ? 'Leads may have been saved before job_id tracking was added — run a new job.' : 'Leads appear here as the job runs.'}
+                            </p>
                           )}
+                        </div>
+
+                        {/* Logs Stream */}
+                        <div className="rounded bg-black border border-purple-950/40 p-3">
+                          <span className="block text-[10px] font-semibold text-purple-400 uppercase mb-2">📟 Logs Stream</span>
+                          <div className="text-[10px] text-gray-400 font-mono space-y-1 max-h-[120px] overflow-y-auto">
+                            {job.logs && job.logs.length > 0 ? (
+                              job.logs.map((log, index) => (
+                                <p key={index} className="whitespace-pre-wrap">{log}</p>
+                              ))
+                            ) : (
+                              <p className="text-gray-600">No logs registered yet.</p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )}

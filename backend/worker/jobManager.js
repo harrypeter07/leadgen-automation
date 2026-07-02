@@ -70,8 +70,8 @@ class JobManager {
 
         const lead = provider.normalize(raw, job.city);
         
-        // Write to Supabase via Repository
-        await leadsRepository.upsert(lead);
+        // Write to Supabase via Repository — link to this job
+        await leadsRepository.upsert({ ...lead, job_id: job.id });
 
         // Update Job progress
         const currentFresh = await scrapeJobRepository.getById(job.id);

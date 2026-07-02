@@ -98,7 +98,7 @@ class Worker {
 class WorkerManager {
   constructor() {
     this.workers = new Map(); // workerId -> Worker
-    this.maxWorkers = 4;
+    this.maxWorkers = 2; // Keep at 2 to avoid Railway memory exhaustion (each Chromium ~250MB)
   }
 
   initialize(onJobPull) {

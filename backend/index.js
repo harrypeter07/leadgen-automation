@@ -27,6 +27,7 @@ app.use('/api/health', require('./api/health'));
 app.use('/api/test', require('./api/testing'));
 app.use('/api/discovery', require('./api/discovery'));
 app.use('/api/logs', require('./api/logs'));
+app.use('/api/leads', require('./api/leads'));
 
 // System diagnostic health endpoints
 app.get('/health', (_req, res) => {
