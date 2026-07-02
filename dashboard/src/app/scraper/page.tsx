@@ -261,9 +261,9 @@ export default function ScraperPage() {
                   onChange={(e) => setProvider(e.target.value)}
                   className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
                 >
-                  <option value="google_maps">🗺️ Google Maps (Provider #1)</option>
-                  <option value="google_search" disabled>🔍 Google Search (Upcoming)</option>
-                  <option value="instagram" disabled>📸 Instagram (Upcoming)</option>
+                  <option value="google_maps">🗺️ Google Maps Scraper</option>
+                  <option value="google_search">🔍 Google Search Scraper</option>
+                  <option value="instagram">📸 Instagram Scraper</option>
                 </select>
               </div>
 

@@ -31,17 +31,22 @@ router.post('/website', async (req, res, next) => {
   if (!url) return res.status(400).json({ success: false, error: 'url is required' });
 
   logger.info(`[API Testing] Audit request for website: ${url}`);
-  const { context, contextId } = await browserManager.newContext();
-  const { page, pageId } = await browserManager.newPage(contextId, context);
-
+  
+  let contextId = null;
+  let pageId = null;
   try {
-    const report = await websiteAnalyzer.audit(page, url);
+    const contextObj = await browserManager.newContext();
+    contextId = contextObj.contextId;
+    const pageObj = await browserManager.newPage(contextId, contextObj.context);
+    pageId = pageObj.pageId;
+
+    const report = await websiteAnalyzer.audit(pageObj.page, url);
     formatResponse(res, req, { report });
   } catch (err) {
     next(err);
   } finally {
-    await browserManager.releasePage(pageId);
-    await browserManager.releaseContext(contextId);
+    if (pageId) await browserManager.releasePage(pageId);
+    if (contextId) await browserManager.releaseContext(contextId);
   }
 });
 
@@ -53,17 +58,22 @@ router.post('/instagram', async (req, res, next) => {
   if (!username) return res.status(400).json({ success: false, error: 'username is required' });
 
   logger.info(`[API Testing] Audit request for Instagram: @${username}`);
-  const { context, contextId } = await browserManager.newContext();
-  const { page, pageId } = await browserManager.newPage(contextId, context);
-
+  
+  let contextId = null;
+  let pageId = null;
   try {
-    const report = await instagramAnalyzer.audit(page, username);
+    const contextObj = await browserManager.newContext();
+    contextId = contextObj.contextId;
+    const pageObj = await browserManager.newPage(contextId, contextObj.context);
+    pageId = pageObj.pageId;
+
+    const report = await instagramAnalyzer.audit(pageObj.page, username);
     formatResponse(res, req, { report });
   } catch (err) {
     next(err);
   } finally {
-    await browserManager.releasePage(pageId);
-    await browserManager.releaseContext(contextId);
+    if (pageId) await browserManager.releasePage(pageId);
+    if (contextId) await browserManager.releaseContext(contextId);
   }
 });
 

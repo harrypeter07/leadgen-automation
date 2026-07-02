@@ -125,7 +125,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       {/* Brand Logo */}
       <div className="flex items-center justify-between px-6 py-5 border-b border-gray-800">
         <Link href="/" className="text-xl font-bold text-white tracking-wider flex items-center gap-2">
-          <span className="text-purple-500">WHSoftec</span> Lead Gen
+          <span className="text-purple-500">Lead</span> Gen
         </Link>
       </div>
 
@@ -184,7 +184,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       {/* Mobile Top Bar */}
       <div className="flex md:hidden items-center justify-between px-6 py-4 bg-gray-900 border-b border-gray-800 text-white">
         <Link href="/" className="text-lg font-bold">
-          <span className="text-purple-500">WHSoftec</span> Lead Gen
+          <span className="text-purple-500">Lead</span> Gen
         </Link>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
