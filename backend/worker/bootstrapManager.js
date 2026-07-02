@@ -67,6 +67,7 @@ class BootstrapManager {
     logger.info(`  • Package Version:    ${this.status.version}`);
     logger.info(`  • Git Commit SHA:     ${this.status.git_commit}`);
     logger.info(`  • WebSocket transport: ${global.WebSocket ? 'ws package' : 'native'}`);
+    logger.info(`  • Playwright path:    ${process.env.PLAYWRIGHT_BROWSERS_PATH}`);
   }
 
   async bootstrapDatabase() {

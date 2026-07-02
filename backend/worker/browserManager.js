@@ -1,4 +1,7 @@
-// backend/worker/browserManager.js
+const path = require('path');
+
+// Enforce browser binary directory relative path before loading playwright
+process.env.PLAYWRIGHT_BROWSERS_PATH = path.resolve(__dirname, '../node_modules/playwright-core/.local-browsers');
 
 const playwright = require('playwright');
 const logger = require('./logger');
