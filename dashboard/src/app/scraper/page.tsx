@@ -734,6 +734,8 @@ export default function ScraperPage() {
                                           <tr className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800 text-[9px]">
                                             <th className="pb-1.5 pr-2">Name</th>
                                             <th className="pb-1.5 pr-2">Phone</th>
+                                            <th className="pb-1.5 pr-2">Email</th>
+                                            <th className="pb-1.5 pr-2">Address</th>
                                             <th className="pb-1.5 pr-2">Category</th>
                                             <th className="pb-1.5 pr-2">Rating</th>
                                             <th className="pb-1.5">Website</th>
@@ -747,6 +749,8 @@ export default function ScraperPage() {
                                             >
                                               <td className="py-1.5 pr-2 font-medium text-white max-w-[120px] truncate">{lead.name}</td>
                                               <td className="py-1.5 pr-2 font-mono text-gray-400 text-[9px]">{lead.phone || '—'}</td>
+                                              <td className="py-1.5 pr-2 text-purple-300 max-w-[120px] truncate">{lead.email || '—'}</td>
+                                              <td className="py-1.5 pr-2 text-gray-400 max-w-[120px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
                                               <td className="py-1.5 pr-2 text-gray-400 max-w-[80px] truncate">{lead.category || '—'}</td>
                                               <td className="py-1.5 pr-2 text-yellow-400">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
                                               <td className="py-1.5 text-blue-400 max-w-[100px] truncate">

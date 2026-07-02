@@ -74,6 +74,21 @@ class JobManager {
         if (!raw) continue;
 
         const lead = provider.normalize(raw, job.city);
+
+        // Background email lookup if website exists
+        if (lead.website) {
+          try {
+            const { page: contactPage, pageId: contactPageId } = await browserManager.newPage(contextId, context);
+            const emailScraper = require('../services/emailScraper');
+            const email = await emailScraper.scrapeEmail(contactPage, lead.website);
+            if (email) {
+              lead.email = email;
+            }
+            await browserManager.releasePage(contactPageId);
+          } catch (emailErr) {
+            logger.warn(`[JobManager] Background email lookup failed for ${lead.name}: ${emailErr.message}`);
+          }
+        }
         
         // Write to leads database in real-time (duplicate check and constraint bypass handled inside upsert)
         try {
