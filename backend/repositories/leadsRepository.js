@@ -17,17 +17,36 @@ class LeadsRepository {
           
         if (existing) {
           logger.warn(`[LeadsRepository] DUPLICATE WARNING: Lead with phone ${leadData.phone} already exists (Name: "${existing.name}"). Merging details...`);
+          
+          // Update the existing record instead of inserting a duplicate
+          const { data: updated, error: updateError } = await supabase
+            .from('leads')
+            .update({
+              name: leadData.name,
+              address: leadData.address || undefined,
+              city: leadData.city || undefined,
+              category: leadData.category || undefined,
+              website: leadData.website || undefined,
+              rating: leadData.rating || undefined,
+              review_count: leadData.review_count || undefined,
+              notes: leadData.notes || undefined
+            })
+            .eq('id', existing.id)
+            .select()
+            .single();
+
+          if (updateError) throw updateError;
+          return updated;
         }
-      } catch (e) {}
+      } catch (e) {
+        logger.error(`[LeadsRepository] Manual upsert-merge failed: ${e.message}`);
+      }
     }
 
-    // In Supabase client library: upsert resolves conflict based on unique columns automatically
+    // No duplicate found, proceed with direct insert
     const { data, error } = await supabase
       .from('leads')
-      .upsert([leadData], {
-        onConflict: leadData.phone ? 'phone' : undefined,
-        ignoreDuplicates: false
-      })
+      .insert([leadData])
       .select()
       .single();
 
