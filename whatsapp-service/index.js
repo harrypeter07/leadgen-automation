@@ -388,7 +388,7 @@ app.get('/logs', (_req, res) => {
 
 app.post('/connect', async (req, res) => {
   const apiSecret = (req.headers['x-api-secret'] || '').trim();
-  const expectedSecret = (process.env.API_SECRET || '').trim();
+  const expectedSecret = (process.env.WHATSAPP_API_SECRET || process.env.API_SECRET || '').trim();
   if (apiSecret !== expectedSecret) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
@@ -411,7 +411,7 @@ app.post('/connect', async (req, res) => {
 
 app.post('/reconnect', async (req, res) => {
   const apiSecret = (req.headers['x-api-secret'] || '').trim();
-  const expectedSecret = (process.env.API_SECRET || '').trim();
+  const expectedSecret = (process.env.WHATSAPP_API_SECRET || process.env.API_SECRET || '').trim();
   if (apiSecret !== expectedSecret) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
@@ -449,7 +449,7 @@ app.post('/reconnect', async (req, res) => {
 
 app.post('/disconnect', async (req, res) => {
   const apiSecret = (req.headers['x-api-secret'] || '').trim();
-  const expectedSecret = (process.env.API_SECRET || '').trim();
+  const expectedSecret = (process.env.WHATSAPP_API_SECRET || process.env.API_SECRET || '').trim();
   if (apiSecret !== expectedSecret) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
@@ -478,7 +478,7 @@ app.post('/disconnect', async (req, res) => {
 
 app.post('/send', async (req, res) => {
   const apiSecret = (req.headers['x-api-secret'] || '').trim();
-  const expectedSecret = (process.env.API_SECRET || '').trim();
+  const expectedSecret = (process.env.WHATSAPP_API_SECRET || process.env.API_SECRET || '').trim();
 
   console.log('🔑 Auth check:', {
     receivedLength: apiSecret.length,
