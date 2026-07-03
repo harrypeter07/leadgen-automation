@@ -708,6 +708,10 @@ app.get('/scraper/jobs', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
 
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return res.json({ jobs: [], message: 'Supabase credentials not configured on WhatsApp service' });
+  }
+
   try {
     const list = await dbWriter.fetchRecords('scrape_jobs', {
       order: 'created_at.desc'
@@ -778,7 +782,11 @@ app.get('/qr-scan', (_req, res) => {
 app.listen(PORT, () => {
   console.log(`🌐 WhatsApp service running on port ${PORT}`);
   console.log('🚀 Service is in IDLE state. Call POST /connect or POST /reconnect to initialize.');
-  jobManager.recoverJobs().catch(err => {
-    console.error('⚠️ [Boot Recovery] Failed to recover scrape jobs:', err.message);
-  });
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    jobManager.recoverJobs().catch(err => {
+      console.error('⚠️ [Boot Recovery] Failed to recover scrape jobs:', err.message);
+    });
+  } else {
+    console.log('⚙️ [Boot Recovery] Supabase credentials not configured. Skipping legacy job recovery.');
+  }
 });
