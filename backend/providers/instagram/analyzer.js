@@ -43,39 +43,66 @@ class InstagramAnalyzer {
       }
 
       logger.info(`[Instagram Analyzer] Navigating to Instagram profile page: ${profileUrl}`);
+
+      // ── Network interceptor: capture the profile API response ──────────────
+      // Instagram calls /api/v1/users/web_profile_info/?username=<user> which
+      // contains bio_links, external_url, biography and full stats.
+      let capturedApiData = null;
+      page.on('response', async (response) => {
+        try {
+          const url = response.url();
+          if (url.includes('web_profile_info') && url.includes(username)) {
+            const body = await response.text().catch(() => '');
+            if (body && (body.includes('bio_links') || body.includes('biography'))) {
+              capturedApiData = body;
+              logger.info(`[Instagram Analyzer] ✅ Captured profile API response (${body.length} bytes)`);
+            }
+          }
+        } catch (_) {}
+      });
+      // ─────────────────────────────────────────────────────────────────────
+
       await page.goto(profileUrl, { timeout: 20000, waitUntil: 'domcontentloaded' });
 
-      // 2. Detect login wall redirect
+      // 2. Detect login wall OR home redirect (expired session cookie)
       let currentUrl = page.url();
       logger.info(`[Instagram Analyzer] Loaded page URL: ${currentUrl}`);
-      
-      if (currentUrl.includes('accounts/login')) {
-        logger.warn(`[Instagram Analyzer] Scraper encountered Instagram login wall.`);
-        
-        if (crawlerUser) {
-          logger.info(`[Instagram Analyzer] Initiating automated login sequence...`);
-          const loginSuccess = await this.login(page);
-          
-          if (loginSuccess) {
-            logger.info(`[Instagram Analyzer] Login verified. Returning to profile page...`);
-            await page.goto(profileUrl, { timeout: 20000, waitUntil: 'domcontentloaded' });
-            currentUrl = page.url();
-            logger.info(`[Instagram Analyzer] Re-loaded profile page URL: ${currentUrl}`);
-          }
+
+      // If redirected to home feed or login — session cookie is expired/invalid
+      const isOnProfile = currentUrl.includes(`/${username}`);
+      if (!isOnProfile) {
+        if (currentUrl.includes('accounts/login') || currentUrl.replace(/\/$/, '') === 'https://www.instagram.com') {
+          logger.warn(`[Instagram Analyzer] Session cookie redirected away from profile (URL: ${currentUrl}). Retrying without cookie...`);
+          // Clear all cookies and retry as public user
+          await page.context().clearCookies();
+          await page.goto(profileUrl, { timeout: 20000, waitUntil: 'domcontentloaded' });
+          currentUrl = page.url();
+          logger.info(`[Instagram Analyzer] Retry URL: ${currentUrl}`);
         }
       }
 
-      // 3. Fallback check
-      if (currentUrl.includes('accounts/login')) {
-        logger.warn(`[Instagram Analyzer] Profile still blocked by login wall. Returning structured fallback...`);
+      // Still on login after retry? Try auto-login
+      if (currentUrl.includes('accounts/login') && crawlerUser) {
+        logger.info(`[Instagram Analyzer] Initiating automated login sequence...`);
+        const loginSuccess = await this.login(page);
+        if (loginSuccess) {
+          await page.goto(profileUrl, { timeout: 20000, waitUntil: 'domcontentloaded' });
+          currentUrl = page.url();
+        }
+      }
+
+      // 3. Final check — give up if still not on profile
+      if (!page.url().includes(`/${username}`)) {
+        logger.warn(`[Instagram Analyzer] Could not reach profile page. Returning structured fallback...`);
         return this.getFallbackPayload(username);
       }
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait for Instagram API calls to fire and be captured
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Invoke scraper modules
+      // Invoke scraper modules — pass captured API data to profileFetcher
       logger.info(`[Instagram Analyzer] Fetching profile metadata (followers, following, bio)...`);
-      const profile = await profileFetcher.fetch(page);
+      const profile = await profileFetcher.fetch(page, capturedApiData);
       if (!profile || !profile.display_name) {
         logger.warn(`[Instagram Analyzer] Profile elements not found. Generating fallback data...`);
         return this.getFallbackPayload(username);
