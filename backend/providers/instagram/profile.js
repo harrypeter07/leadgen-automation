@@ -1,10 +1,4 @@
 // backend/providers/instagram/profile.js
-//
-// Fetches Instagram profile data by intercepting the API response
-// from /api/v1/users/web_profile_info/?username=<username>
-// This gives us: biography, bio_links, external_url, followers, following, posts, verified
-//
-// Falls back to meta description parsing if the API response isn't captured.
 
 const logger = require('../../worker/logger');
 
@@ -44,56 +38,74 @@ class InstagramProfileFetcher {
         return parseInt(s, 10) || 0;
       };
 
-      // DOM stats from anchors
+      // Exact DOM stats extraction from spans/links/buttons containing "follower", "following", "posts"
       let domFollowers = null, domFollowing = null, domPosts = null;
-      Array.from(document.querySelectorAll('a')).forEach(a => {
-        const text = a.innerText || '';
+      
+      const elements = Array.from(document.querySelectorAll('span, a, button, li'));
+      elements.forEach(el => {
+        const text = (el.innerText || '').trim();
         const lower = text.toLowerCase();
-        if (lower.includes('follower')) {
-          const m = text.match(/([\d,.\sMK]+)/i);
-          if (m) domFollowers = cleanNum(m[1]);
-        } else if (lower.includes('following')) {
-          const m = text.match(/([\d,.\sMK]+)/i);
-          if (m) domFollowing = cleanNum(m[1]);
-        } else if (lower.includes('post')) {
-          const m = text.match(/([\d,.\sMK]+)/i);
-          if (m) domPosts = cleanNum(m[1]);
+        
+        if (lower.endsWith(' followers') || lower.endsWith(' follower') || lower === 'followers' || lower === 'follower') {
+          const titleVal = el.getAttribute('title');
+          if (titleVal && titleVal.match(/^[\d,]+$/)) {
+            domFollowers = cleanNum(titleVal);
+          } else {
+            // Find parent/sibling numbers
+            const m = text.match(/([\d,.\sMK]+)/i);
+            if (m) domFollowers = cleanNum(m[1]);
+          }
+        } else if (lower.endsWith(' following') || lower === 'following') {
+          const titleVal = el.getAttribute('title');
+          if (titleVal && titleVal.match(/^[\d,]+$/)) {
+            domFollowing = cleanNum(titleVal);
+          } else {
+            const m = text.match(/([\d,.\sMK]+)/i);
+            if (m) domFollowing = cleanNum(m[1]);
+          }
+        } else if (lower.endsWith(' posts') || lower.endsWith(' post') || lower === 'posts' || lower === 'post') {
+          const titleVal = el.getAttribute('title');
+          if (titleVal && titleVal.match(/^[\d,]+$/)) {
+            domPosts = cleanNum(titleVal);
+          } else {
+            const m = text.match(/([\d,.\sMK]+)/i);
+            if (m) domPosts = cleanNum(m[1]);
+          }
         }
       });
 
-      // Bio links from header (DOM — works when session is active)
+      // Bio links from header (Global DOM matching - works for both logged-in and public pages)
       const bioLinks = [];
-      const headerSection = document.querySelector('main header section') || document.querySelector('header');
-      if (headerSection) {
-        const seen = new Set();
-        Array.from(headerSection.querySelectorAll('a[href]')).forEach(a => {
-          const href = a.getAttribute('href') || '';
+      const seen = new Set();
+      
+      Array.from(document.querySelectorAll('a')).forEach(a => {
+        const href = a.getAttribute('href') || '';
+        let targetUrl = href;
+        let isBioLink = false;
+
+        if (href.includes('l.instagram.com/?u=')) {
+          isBioLink = true;
+          try {
+            const u = new URL(href);
+            targetUrl = decodeURIComponent(u.searchParams.get('u') || href);
+          } catch (_) {}
+        } else if (href && !href.startsWith('/') && !href.includes('instagram.com') && href !== '#') {
+          isBioLink = true;
+        }
+
+        if (isBioLink && targetUrl && !seen.has(targetUrl)) {
+          seen.add(targetUrl);
           const text = (a.innerText || '').trim();
-          let targetUrl = href;
-
-          if (href.includes('l.instagram.com/?u=')) {
-            try {
-              const u = new URL(href);
-              targetUrl = decodeURIComponent(u.searchParams.get('u') || href);
-            } catch (_) {}
-          }
-
-          const isExternal = href.includes('l.instagram.com/?u=') ||
-            (href && !href.startsWith('/') && !href.includes('instagram.com') && href !== '#');
-
-          if (isExternal && targetUrl && !seen.has(targetUrl)) {
-            seen.add(targetUrl);
-            bioLinks.push({ text: text || targetUrl, href: targetUrl });
-          }
-        });
-      }
+          bioLinks.push({ text: text || targetUrl, href: targetUrl });
+        }
+      });
 
       const isVerified = !!document.querySelector('svg[aria-label="Verified"]');
 
       // Bio text from spans
       const textParts = [];
       const bioSpans = Array.from(document.querySelectorAll(
-        'main header section h1 ~ div span, main header section h2 ~ div span, main header section h1 ~ span, main header section h2 ~ span'
+        'main header section h1 ~ div span, main header section h2 ~ div span, main header section h1 ~ span, main header section h2 ~ span, main header section h1 ~ div div, main header section h2 ~ div div'
       ));
       bioSpans.forEach(el => {
         const text = (el.innerText || '').trim();

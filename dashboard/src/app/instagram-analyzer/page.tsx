@@ -202,40 +202,34 @@ export default function InstagramAnalyzerPage() {
 
           {/* Scrape History Switch */}
           <div className="flex flex-col justify-end">
-            <label className="flex items-center gap-3 cursor-pointer group select-none py-2.5">
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={scrapeHistory}
-                  onChange={(e) => setScrapeHistory(e.target.checked)}
-                  className="sr-only"
-                />
-                <div className={`w-9 h-5.5 rounded-full transition-colors ${scrapeHistory ? 'bg-[#1C1C1E]' : 'bg-[#ECEAE4]'}`} />
-                <div className={`absolute left-0.5 top-0.5 bg-white w-4.5 h-4.5 rounded-full transition-transform ${scrapeHistory ? 'translate-x-3.5' : 'translate-x-0'}`} />
-              </div>
-              <span className="text-[11px] font-bold text-gray-500 group-hover:text-gray-800 transition-colors uppercase tracking-wider">
-                Analyze History
-              </span>
-            </label>
+            <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Analyze History</label>
+            <button
+              type="button"
+              onClick={() => setScrapeHistory(!scrapeHistory)}
+              className={`w-full rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all border text-center ${
+                scrapeHistory
+                  ? 'bg-[#1C1C1E] border-[#1C1C1E] text-white shadow-sm'
+                  : 'bg-[#F4F3EF] border-[#E4E3DD] text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {scrapeHistory ? '✓ Scrape posts: ON' : '✗ Scrape posts: OFF'}
+            </button>
           </div>
 
           {/* Scrape Reels Switch */}
           <div className="flex flex-col justify-end">
-            <label className="flex items-center gap-3 cursor-pointer group select-none py-2.5">
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={scrapeReels}
-                  onChange={(e) => setScrapeReels(e.target.checked)}
-                  className="sr-only"
-                />
-                <div className={`w-9 h-5.5 rounded-full transition-colors ${scrapeReels ? 'bg-[#1C1C1E]' : 'bg-[#ECEAE4]'}`} />
-                <div className={`absolute left-0.5 top-0.5 bg-white w-4.5 h-4.5 rounded-full transition-transform ${scrapeReels ? 'translate-x-3.5' : 'translate-x-0'}`} />
-              </div>
-              <span className="text-[11px] font-bold text-gray-500 group-hover:text-gray-800 transition-colors uppercase tracking-wider">
-                Scrape Reels
-              </span>
-            </label>
+            <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Scrape Reels</label>
+            <button
+              type="button"
+              onClick={() => setScrapeReels(!scrapeReels)}
+              className={`w-full rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all border text-center ${
+                scrapeReels
+                  ? 'bg-[#1C1C1E] border-[#1C1C1E] text-white shadow-sm'
+                  : 'bg-[#F4F3EF] border-[#E4E3DD] text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {scrapeReels ? '✓ Scrape reels: ON' : '✗ Scrape reels: OFF'}
+            </button>
           </div>
         </div>
       </div>
