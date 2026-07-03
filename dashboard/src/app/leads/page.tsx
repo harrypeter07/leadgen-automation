@@ -1,3 +1,4 @@
+// dashboard/src/app/leads/page.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -320,18 +321,18 @@ export default function LeadsPage() {
   const endIdx = Math.min(page * PER_PAGE, totalLeads)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-[#2D2D2D] select-none">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">Leads Pipeline</h1>
-          <p className="mt-1 text-sm text-gray-400">Total Leads Found: {totalLeads}</p>
+          <h1 className="text-3xl font-black text-[#1C1C1E] tracking-tight">Leads Pipeline</h1>
+          <p className="mt-1 text-sm text-gray-500 font-medium">Total Active Leads: {totalLeads}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportCsv}
             disabled={totalLeads === 0}
-            className="flex items-center gap-2 rounded-lg bg-gray-900 border border-gray-800 px-4 py-2 text-sm font-semibold text-gray-200 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed hover:border-gray-700 transition-all duration-150"
+            className="flex items-center gap-2 rounded-xl bg-white border border-[#E4E3DD] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all"
           >
             📥 Export CSV
           </button>
@@ -339,29 +340,29 @@ export default function LeadsPage() {
       </div>
 
       {/* Filter Bar (Sticky Top) */}
-      <div className="sticky top-0 z-25 bg-gray-950/80 backdrop-blur-md py-2 border-b border-gray-800/40">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-gray-900 border border-gray-800 p-4 rounded-xl shadow-xl">
+      <div className="sticky top-0 z-20 bg-[#F4F3EF]/90 backdrop-blur-md py-2 border-b border-[#E4E3DD]/40">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-white border border-[#E4E3DD] p-4 rounded-2xl shadow-sm">
           {/* Search Input */}
           <div className="col-span-2 md:col-span-1">
-            <label htmlFor="search" className="block text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider">Search</label>
+            <label htmlFor="search" className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Search</label>
             <input
               id="search"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Name or phone..."
-              className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+              className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500 transition-colors"
             />
           </div>
 
           {/* Status Dropdown */}
           <div>
-            <label htmlFor="status" className="block text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider">Status</label>
+            <label htmlFor="status" className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Status</label>
             <select
               id="status"
               value={status}
               onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-              className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 transition-colors"
+              className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500 transition-colors"
             >
               <option value="">All Statuses</option>
               <option value="new">New</option>
@@ -375,25 +376,25 @@ export default function LeadsPage() {
 
           {/* City Input */}
           <div>
-            <label htmlFor="city" className="block text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider">City</label>
+            <label htmlFor="city" className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">City</label>
             <input
               id="city"
               type="text"
               value={city}
               onChange={(e) => { setCity(e.target.value); setPage(1); }}
               placeholder="e.g. Mumbai"
-              className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+              className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500 transition-colors"
             />
           </div>
 
           {/* Category Dropdown */}
           <div>
-            <label htmlFor="category" className="block text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider">Category</label>
+            <label htmlFor="category" className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Category</label>
             <select
               id="category"
               value={category}
               onChange={(e) => { setCategory(e.target.value); setPage(1); }}
-              className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 transition-colors"
+              className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500 transition-colors"
             >
               <option value="">All Categories</option>
               {categories.map((cat) => (
@@ -407,9 +408,9 @@ export default function LeadsPage() {
             <button
               onClick={clearAllFilters}
               type="button"
-              className="w-full rounded-lg border border-gray-800 bg-gray-950 hover:bg-gray-900 hover:border-gray-700 py-2.5 text-sm font-semibold text-gray-300 transition-all duration-150"
+              className="w-full rounded-xl border border-[#E4E3DD] bg-gray-50 hover:bg-gray-100 py-3 text-xs font-bold uppercase tracking-wider text-gray-700 transition-all"
             >
-              🧹 Clear Filters
+              🧹 Clear
             </button>
           </div>
         </div>
@@ -417,73 +418,73 @@ export default function LeadsPage() {
 
       {/* Bulk Action Bar */}
       {selectedIds.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-purple-950/20 border border-purple-900/60 p-4 rounded-xl animate-fade-in">
-          <span className="text-sm font-medium text-purple-300">
-            Selected <strong className="text-white">{selectedIds.length}</strong> leads
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-purple-50/50 border border-purple-200 p-4 rounded-2xl animate-fade-in">
+          <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">
+            Selected <strong className="text-purple-700">{selectedIds.length}</strong> leads
           </span>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleBulkSendWhatsapp}
-              className="rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs px-3.5 py-2 transition-colors duration-150"
+              className="rounded-xl bg-[#1C1C1E] hover:bg-[#252528] text-white font-bold uppercase tracking-wider text-[10px] px-4 py-2.5 transition-colors shadow-sm"
             >
               💬 Send WhatsApp (AI)
             </button>
             <button
               onClick={handleBulkMarkReplied}
-              className="rounded-lg border border-purple-900 bg-gray-950 hover:bg-gray-900 text-purple-300 font-semibold text-xs px-3.5 py-2 transition-colors duration-150"
+              className="rounded-xl border border-purple-200 bg-white hover:bg-gray-50 text-purple-700 font-bold uppercase tracking-wider text-[10px] px-4 py-2.5 transition-colors"
             >
               ✓ Mark Replied
             </button>
             <button
               onClick={handleBulkDelete}
-              className="rounded-lg bg-red-950/60 border border-red-900 text-red-300 hover:bg-red-900/40 font-semibold text-xs px-3.5 py-2 transition-colors duration-150"
+              className="rounded-xl bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 font-bold uppercase tracking-wider text-[10px] px-4 py-2.5 transition-colors"
             >
-              🗑️ Delete Selected
+              🗑️ Delete
             </button>
           </div>
         </div>
       )}
 
       {/* Table Section */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/40 overflow-hidden shadow-2xl">
+      <div className="rounded-2xl border border-[#E4E3DD] bg-white overflow-hidden shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-800 text-sm">
-            <thead className="bg-gray-900/60">
-              <tr className="text-left text-gray-400">
-                <th className="px-5 py-3.5 text-left w-12">
+          <table className="min-w-full divide-y divide-[#E4E3DD]/60 text-xs">
+            <thead className="bg-gray-50/50">
+              <tr className="text-left text-gray-400 uppercase tracking-wider text-[9px] font-bold">
+                <th className="px-5 py-4 text-left w-12">
                   <input
                     type="checkbox"
                     checked={leads.length > 0 && selectedIds.length === leads.length}
                     onChange={handleSelectAll}
-                    className="rounded border-gray-800 bg-gray-950 text-purple-600 focus:ring-purple-500/20 w-4 h-4 cursor-pointer"
+                    className="rounded border-[#E4E3DD] bg-gray-50 text-gray-900 focus:ring-gray-400 w-4 h-4 cursor-pointer"
                     aria-label="Select all leads"
                   />
                 </th>
-                <th className="px-5 py-3.5 font-bold">Name</th>
-                <th className="px-5 py-3.5 font-bold">Phone</th>
-                <th className="px-5 py-3.5 font-bold">Email</th>
-                <th className="px-5 py-3.5 font-bold">Website</th>
-                <th className="px-5 py-3.5 font-bold">City</th>
-                <th className="px-5 py-3.5 font-bold">Category</th>
-                <th className="px-5 py-3.5 font-bold">Status</th>
-                <th className="px-5 py-3.5 font-bold text-center">AI Ready</th>
-                <th className="px-5 py-3.5 font-bold">Created</th>
-                <th className="px-5 py-3.5 font-bold text-right">Actions</th>
+                <th className="px-5 py-4 font-bold">Name</th>
+                <th className="px-5 py-4 font-bold">Phone</th>
+                <th className="px-5 py-4 font-bold">Email</th>
+                <th className="px-5 py-4 font-bold">Website</th>
+                <th className="px-5 py-4 font-bold">City</th>
+                <th className="px-5 py-4 font-bold">Category</th>
+                <th className="px-5 py-4 font-bold">Status</th>
+                <th className="px-5 py-4 font-bold text-center">AI Message</th>
+                <th className="px-5 py-4 font-bold">Created</th>
+                <th className="px-5 py-4 font-bold text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800/40">
+            <tbody className="divide-y divide-[#E4E3DD]/50 text-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="px-5 py-12 text-center text-gray-500">
+                  <td colSpan={11} className="px-5 py-16 text-center text-gray-400">
                     <div className="flex flex-col items-center justify-center gap-3">
-                      <span className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="w-8 h-8 border-4 border-gray-700 border-t-transparent rounded-full animate-spin" />
                       Loading pipeline leads...
                     </div>
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-5 py-12 text-center text-gray-500 font-medium">
+                  <td colSpan={11} className="px-5 py-12 text-center text-gray-400 font-semibold">
                     No leads match the filter criteria.
                   </td>
                 </tr>
@@ -495,145 +496,137 @@ export default function LeadsPage() {
                   const isDropdownActive = activeMenuId === lead.id
 
                   return (
-                    <tr key={lead.id} className={`hover:bg-gray-800/10 transition-colors duration-150 ${isChecked ? 'bg-purple-950/5' : ''}`}>
-                      <td className="px-5 py-3">
+                    <tr key={lead.id} className={`hover:bg-[#F4F3EF]/30 transition-colors duration-150 ${isChecked ? 'bg-purple-50/20' : ''}`}>
+                      <td className="px-5 py-3.5">
                         <input
                           type="checkbox"
                           checked={isChecked}
                           onChange={(e) => handleSelectRow(lead.id, e.target.checked)}
-                          className="rounded border-gray-800 bg-gray-950 text-purple-600 focus:ring-purple-500/20 w-4 h-4 cursor-pointer"
+                          className="rounded border-[#E4E3DD] bg-gray-50 text-gray-900 focus:ring-gray-400 w-4 h-4 cursor-pointer"
                           aria-label={`Select ${lead.name}`}
                         />
                       </td>
-                      <td className="px-5 py-3 text-white font-bold max-w-[200px] truncate" title={lead.name}>{lead.name}</td>
-                      <td className="px-5 py-3">
+                      <td className="px-5 py-3.5 font-bold text-gray-900 max-w-[150px] truncate" title={lead.name}>
+                        {lead.name}
+                      </td>
+                      <td className="px-5 py-3.5 font-mono text-[10px] text-gray-500">
                         {lead.phone ? (
                           <button
-                            onClick={() => copyToClipboard(lead.phone!, 'Phone number')}
-                            className="inline-flex items-center gap-1.5 text-gray-300 font-medium hover:text-purple-400 group text-left transition-colors"
-                            title="Click to copy phone number"
+                            onClick={() => copyToClipboard(lead.phone!, 'Phone')}
+                            className="hover:underline hover:text-[#1C1C1E]"
+                            title="Click to copy"
                           >
-                            <span>{lead.phone}</span>
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-gray-500">📋</span>
+                            {lead.phone}
                           </button>
-                        ) : (
-                          <span className="text-gray-600">—</span>
-                        )}
+                        ) : '—'}
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-5 py-3.5 max-w-[130px] truncate text-gray-500">
                         {lead.email ? (
                           <button
-                            onClick={() => copyToClipboard(lead.email!, 'Email address')}
-                            className="inline-flex items-center gap-1.5 text-gray-300 font-medium hover:text-purple-400 group text-left truncate max-w-[150px] transition-colors"
-                            title="Click to copy email address"
+                            onClick={() => copyToClipboard(lead.email!, 'Email')}
+                            className="hover:underline hover:text-[#1C1C1E] text-purple-700 font-semibold"
+                            title="Click to copy"
                           >
-                            <span>{lead.email}</span>
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-gray-500">📋</span>
+                            {lead.email}
                           </button>
-                        ) : (
-                          <span className="text-gray-600">—</span>
-                        )}
+                        ) : '—'}
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-5 py-3.5 max-w-[120px] truncate font-semibold text-blue-600">
                         {lead.website ? (
                           <a
-                            href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                            href={lead.website}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-blue-400 hover:text-blue-300 hover:underline truncate max-w-[150px] inline-block transition-colors"
+                            className="hover:underline"
                             title={lead.website}
                           >
-                            {lead.website.replace(/^https?:\/\/(www\.)?/, '')}
+                            {lead.website.replace(/^https?:\/\//i, '')}
                           </a>
-                        ) : (
-                          <span className="text-gray-600">—</span>
-                        )}
+                        ) : '—'}
                       </td>
-                      <td className="px-5 py-3 text-gray-400">{lead.city || '—'}</td>
-                      <td className="px-5 py-3 text-gray-400">{lead.category || '—'}</td>
-                      <td className="px-5 py-3">
+                      <td className="px-5 py-3.5 text-gray-500 font-medium">{lead.city || '—'}</td>
+                      <td className="px-5 py-3.5 text-gray-400 font-bold uppercase tracking-wider text-[9px] max-w-[100px] truncate" title={lead.category || undefined}>
+                        {lead.category || '—'}
+                      </td>
+                      <td className="px-5 py-3.5">
                         <StatusBadge status={lead.status} />
                       </td>
-                      <td className="px-5 py-3 text-center">
+                      <td className="px-5 py-3.5 text-center">
                         {isAiReady ? (
-                          <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-bold" title="AI Outreach Copy Generated">✓</span>
+                          <button
+                            onClick={() => {
+                              setSelectedLeadForModal(lead)
+                              setModalTab('whatsapp')
+                            }}
+                            className="px-2.5 py-1 rounded bg-green-50 text-green-700 border border-green-200 text-[9px] font-bold uppercase tracking-wider hover:bg-green-100 transition-colors"
+                            title="View AI Copy details"
+                          >
+                            ✓ Ready
+                          </button>
                         ) : (
-                          <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-gray-800 text-gray-500 border border-gray-700 font-bold" title="AI Outreach Copy Missing">✗</span>
+                          <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Empty</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-gray-500 whitespace-nowrap">
+                      <td className="px-5 py-3.5 text-gray-400 font-medium whitespace-nowrap text-[10px]">
                         {formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}
                       </td>
-                      <td className="px-5 py-3 text-right relative">
+                      <td className="px-5 py-3.5 text-right relative">
                         {isRowActionLoading ? (
-                          <span className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin inline-block align-middle mr-2" />
+                          <span className="inline-block w-4 h-4 border-2 border-gray-700 border-t-transparent rounded-full animate-spin mr-2" />
                         ) : (
                           <div className="inline-block text-left">
                             <button
                               onClick={() => setActiveMenuId(isDropdownActive ? null : lead.id)}
-                              type="button"
-                              className="p-1 rounded bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-gray-700 focus:outline-none transition-colors"
-                              aria-label="Lead Actions"
+                              className="px-2 py-1 text-gray-500 hover:text-[#1C1C1E] font-bold text-sm bg-gray-50 rounded-lg hover:bg-gray-100 border border-[#E4E3DD] transition-all"
+                              aria-label="Lead action options"
                             >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                              </svg>
+                              •••
                             </button>
 
-                            {/* Dropdown Menu */}
+                            {/* Dropdown Options */}
                             {isDropdownActive && (
                               <>
-                                <div className="fixed inset-0 z-30" onClick={() => setActiveMenuId(null)} />
-                                <div className="absolute right-0 mt-2 w-48 rounded-lg bg-gray-900 border border-gray-800 shadow-2xl z-40 py-1 overflow-hidden animate-fade-in">
+                                <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)} />
+                                <div className="absolute right-0 mt-1 w-44 rounded-xl border border-[#E4E3DD] bg-white shadow-xl z-20 overflow-hidden text-left py-1 text-xs">
                                   {isAiReady && (
                                     <button
-                                      onClick={() => {
-                                        setSelectedLeadForModal(lead)
-                                        setModalTab('whatsapp')
-                                        setActiveMenuId(null)
-                                      }}
-                                      className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                                      onClick={() => handleSendWhatsapp(lead)}
+                                      className="flex items-center w-full px-4 py-2 hover:bg-gray-50 font-bold text-gray-700 text-left"
                                     >
-                                      👁️ View AI Messages
+                                      💬 Send WhatsApp
                                     </button>
                                   )}
-                                  <button
-                                    onClick={() => handleSendWhatsapp(lead)}
-                                    disabled={!lead.phone || !isAiReady}
-                                    className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-300 transition-colors"
-                                  >
-                                    💬 Send WhatsApp (AI)
-                                  </button>
-                                  <button
-                                    onClick={() => handleSendEmail(lead)}
-                                    disabled={!lead.email || !lead.ai_message_email_subject}
-                                    className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-300 transition-colors"
-                                  >
-                                    📧 Send Email (AI)
-                                  </button>
-                                  <hr className="border-gray-800" />
-                                  <button
-                                    onClick={() => handleUpdateStatus(lead.id, 'replied')}
-                                    className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-amber-400 hover:bg-gray-800 transition-colors"
-                                  >
-                                    ✓ Mark Replied
-                                  </button>
+                                  {lead.email && lead.ai_message_email_subject && (
+                                    <button
+                                      onClick={() => handleSendEmail(lead)}
+                                      className="flex items-center w-full px-4 py-2 hover:bg-gray-50 font-bold text-gray-700 text-left"
+                                    >
+                                      📧 Send Email Outreach
+                                    </button>
+                                  )}
+                                  <div className="border-t border-[#E4E3DD]/60 my-1" />
                                   <button
                                     onClick={() => handleUpdateStatus(lead.id, 'converted')}
-                                    className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-green-400 hover:bg-gray-800 transition-colors"
+                                    className="flex items-center w-full px-4 py-2 hover:bg-green-50 text-green-700 font-bold text-left"
                                   >
                                     ✓ Mark Converted
                                   </button>
                                   <button
-                                    onClick={() => handleUpdateStatus(lead.id, 'skip')}
-                                    className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-gray-400 hover:bg-gray-800 transition-colors"
+                                    onClick={() => handleUpdateStatus(lead.id, 'replied')}
+                                    className="flex items-center w-full px-4 py-2 hover:bg-amber-50 text-amber-700 font-bold text-left"
                                   >
-                                    ⊘ Skip Lead
+                                    ★ Mark Replied
                                   </button>
-                                  <hr className="border-gray-800" />
+                                  <button
+                                    onClick={() => handleUpdateStatus(lead.id, 'skip')}
+                                    className="flex items-center w-full px-4 py-2 hover:bg-gray-50 text-gray-400 font-bold text-left"
+                                  >
+                                    ⏹ Mark Skipped
+                                  </button>
+                                  <div className="border-t border-[#E4E3DD]/60 my-1" />
                                   <button
                                     onClick={() => handleDeleteLead(lead.id)}
-                                    className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-gray-800 transition-colors"
+                                    className="flex items-center w-full px-4 py-2 hover:bg-red-50 text-red-700 font-bold text-left"
                                   >
                                     🗑️ Delete Lead
                                   </button>
@@ -654,23 +647,23 @@ export default function LeadsPage() {
 
       {/* Pagination Bar */}
       {!loading && totalLeads > 0 && (
-        <div className="flex items-center justify-between text-xs text-gray-400">
+        <div className="flex items-center justify-between text-xs text-gray-500 font-semibold bg-white border border-[#E4E3DD] px-6 py-3 rounded-2xl shadow-sm">
           <span>
-            Showing <strong className="text-white">{startIdx}-{endIdx}</strong> of <strong className="text-white">{totalLeads}</strong> leads
+            Showing <strong className="text-gray-800">{startIdx}-{endIdx}</strong> of <strong className="text-gray-800">{totalLeads}</strong> leads
           </span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(prev => Math.max(1, prev - 1))}
               disabled={page === 1}
-              className="rounded-lg border border-gray-800 bg-gray-900 px-3.5 py-1.5 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg border border-[#E4E3DD] bg-white px-3.5 py-1.5 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Previous
             </button>
-            <span className="font-semibold text-white">Page {page} of {totalPages}</span>
+            <span className="font-bold text-gray-800 px-1">Page {page} of {totalPages}</span>
             <button
               onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
               disabled={page === totalPages}
-              className="rounded-lg border border-gray-800 bg-gray-900 px-3.5 py-1.5 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg border border-[#E4E3DD] bg-white px-3.5 py-1.5 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Next
             </button>
@@ -681,18 +674,18 @@ export default function LeadsPage() {
       {/* AI Message Viewer Modal */}
       {selectedLeadForModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setSelectedLeadForModal(null)} />
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedLeadForModal(null)} />
           
-          <div className="relative w-full max-w-lg rounded-xl border border-gray-800 bg-gray-900 shadow-2xl overflow-hidden animate-fade-in">
+          <div className="relative w-full max-w-lg rounded-2xl border border-[#E4E3DD] bg-white shadow-2xl overflow-hidden animate-fade-in text-[#2D2D2D]">
             {/* Modal Header */}
-            <div className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+            <div className="border-b border-[#E4E3DD] px-6 py-4 flex items-center justify-between bg-gray-50/50">
               <div>
-                <h3 className="text-lg font-bold text-white">AI Messages: {selectedLeadForModal.name}</h3>
-                <p className="text-xs text-gray-500 mt-0.5">{selectedLeadForModal.category || 'No Category'} | {selectedLeadForModal.city || 'No City'}</p>
+                <h3 className="text-lg font-black text-gray-900">AI Outreach Editor</h3>
+                <p className="text-xs text-gray-400 mt-0.5 font-bold uppercase tracking-wider">{selectedLeadForModal.name}</p>
               </div>
               <button
                 onClick={() => setSelectedLeadForModal(null)}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
                 aria-label="Close modal"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -702,23 +695,23 @@ export default function LeadsPage() {
             </div>
 
             {/* Modal Tabs */}
-            <div className="flex border-b border-gray-800 text-sm font-semibold">
+            <div className="flex border-b border-[#E4E3DD] text-xs font-bold uppercase tracking-wider">
               <button
                 onClick={() => setModalTab('whatsapp')}
-                className={`flex-1 text-center py-3 border-b-2 transition-all ${
+                className={`flex-1 text-center py-3.5 border-b-2 transition-all ${
                   modalTab === 'whatsapp'
-                    ? 'border-purple-500 text-purple-400 bg-purple-500/5'
-                    : 'border-transparent text-gray-400 hover:text-gray-200'
+                    ? 'border-[#1C1C1E] text-gray-900 bg-gray-50/30'
+                    : 'border-transparent text-gray-450 hover:text-gray-700'
                 }`}
               >
                 💬 WhatsApp Message
               </button>
               <button
                 onClick={() => setModalTab('email')}
-                className={`flex-1 text-center py-3 border-b-2 transition-all ${
+                className={`flex-1 text-center py-3.5 border-b-2 transition-all ${
                   modalTab === 'email'
-                    ? 'border-purple-500 text-purple-400 bg-purple-500/5'
-                    : 'border-transparent text-gray-400 hover:text-gray-200'
+                    ? 'border-[#1C1C1E] text-gray-900 bg-gray-50/30'
+                    : 'border-transparent text-gray-450 hover:text-gray-700'
                 }`}
               >
                 📧 Email Copy
@@ -730,10 +723,10 @@ export default function LeadsPage() {
               {modalTab === 'whatsapp' ? (
                 <div className="space-y-4">
                   {/* WhatsApp style preview bubble */}
-                  <div className="rounded-xl bg-[#0b141a] p-4 border border-gray-800/80">
-                    <div className="max-w-[85%] rounded-lg bg-[#202c33] p-3 text-sm text-gray-100 relative shadow border border-gray-700/30">
-                      <span className="block whitespace-pre-wrap">{selectedLeadForModal.ai_message_whatsapp || 'No WhatsApp Copy Generated'}</span>
-                      <span className="block text-[10px] text-gray-500 text-right mt-1.5">just now</span>
+                  <div className="rounded-xl bg-[#E5DDD5] p-4 border border-[#D8CFC7] shadow-inner">
+                    <div className="max-w-[85%] rounded-xl bg-white p-3 text-xs text-gray-800 relative shadow-sm border border-white">
+                      <span className="block whitespace-pre-wrap leading-relaxed">{selectedLeadForModal.ai_message_whatsapp || 'No WhatsApp Copy Generated'}</span>
+                      <span className="block text-[9px] text-gray-400 text-right mt-1.5 font-bold">just now</span>
                     </div>
                   </div>
                   <button
@@ -742,22 +735,22 @@ export default function LeadsPage() {
                       setSelectedLeadForModal(null)
                     }}
                     disabled={!selectedLeadForModal.phone || !selectedLeadForModal.ai_message_whatsapp}
-                    className="w-full rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white font-semibold py-2.5 text-sm transition-colors duration-150"
+                    className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 text-white font-bold uppercase tracking-wider py-3 text-xs transition-colors shadow-sm"
                   >
                     🚀 Send WhatsApp Now
                   </button>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="space-y-3 rounded-lg bg-gray-950 border border-gray-800 p-4 text-sm text-gray-200">
+                  <div className="space-y-3 rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-4 text-xs">
                     <div>
-                      <span className="text-xs text-gray-500 block font-semibold uppercase tracking-wider">Subject</span>
-                      <p className="text-white font-bold mt-1 text-sm">{selectedLeadForModal.ai_message_email_subject || 'No Subject Generated'}</p>
+                      <span className="text-[9px] text-gray-400 block font-bold uppercase tracking-wider">Subject</span>
+                      <p className="text-gray-900 font-bold mt-1 text-sm">{selectedLeadForModal.ai_message_email_subject || 'No Subject Generated'}</p>
                     </div>
-                    <hr className="border-gray-800" />
+                    <hr className="border-[#E4E3DD]/60" />
                     <div>
-                      <span className="text-xs text-gray-500 block font-semibold uppercase tracking-wider">Body</span>
-                      <p className="whitespace-pre-wrap text-gray-300 mt-1 text-xs leading-relaxed">{selectedLeadForModal.ai_message_email_body || 'No Email Body Generated'}</p>
+                      <span className="text-[9px] text-gray-400 block font-bold uppercase tracking-wider">Body</span>
+                      <p className="whitespace-pre-wrap text-gray-700 mt-1 text-xs leading-relaxed">{selectedLeadForModal.ai_message_email_body || 'No Email Body Generated'}</p>
                     </div>
                   </div>
                   <button
@@ -766,7 +759,7 @@ export default function LeadsPage() {
                       setSelectedLeadForModal(null)
                     }}
                     disabled={!selectedLeadForModal.email || !selectedLeadForModal.ai_message_email_subject}
-                    className="w-full rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-semibold py-2.5 text-sm transition-colors duration-150"
+                    className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 text-white font-bold uppercase tracking-wider py-3 text-xs transition-colors shadow-sm"
                   >
                     🚀 Send Email Now
                   </button>
