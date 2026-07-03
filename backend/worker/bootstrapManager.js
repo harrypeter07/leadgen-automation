@@ -47,6 +47,9 @@ class BootstrapManager {
     // 2. Database Connection Check
     await this.bootstrapDatabase();
 
+    // Cleanup stale running jobs left from a previous crash/restart
+    await this.cleanupStaleJobs();
+
     // 3. Browser Pool Boot check
     await this.bootstrapBrowser();
 
@@ -147,6 +150,47 @@ class BootstrapManager {
       timestamp: new Date().toISOString(),
       status: this.status
     };
+  }
+
+  async cleanupStaleJobs() {
+    try {
+      const supabase = require('../database/connection');
+      if (!supabase) return;
+      
+      // Reset any jobs stuck in 'running' state from a previous crash/restart
+      const { data: staleJobs } = await supabase
+        .from('scrape_jobs')
+        .select('id, keyword')
+        .eq('status', 'running');
+
+      if (staleJobs && staleJobs.length > 0) {
+        logger.warn(`[Bootstrap] Found ${staleJobs.length} stale running job(s). Resetting to 'failed'...`);
+        for (const job of staleJobs) {
+          const { data: jobDetails } = await supabase
+            .from('scrape_jobs')
+            .select('logs')
+            .eq('id', job.id)
+            .single();
+
+          const currentLogs = jobDetails?.logs || [];
+          currentLogs.push(`[${new Date().toISOString()}] Job terminated/aborted due to server restart.`);
+
+          await supabase
+            .from('scrape_jobs')
+            .update({
+              status: 'failed',
+              completed_at: new Date().toISOString(),
+              logs: currentLogs
+            })
+            .eq('id', job.id);
+        }
+        logger.info(`[Bootstrap] ✓ Cleaned up ${staleJobs.length} stale job(s).`);
+      } else {
+        logger.info('[Bootstrap] No stale running jobs found.');
+      }
+    } catch (err) {
+      logger.warn(`[Bootstrap] Stale job cleanup failed (non-critical): ${err.message}`);
+    }
   }
 }
 
