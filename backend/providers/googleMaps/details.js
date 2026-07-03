@@ -11,36 +11,72 @@ class GoogleMapsDetails {
    * Falls back to sidebar click (v2) only when no href is provided.
    */
   async extract(page, cardIndex, version = 'v2', searchUrl = '', href = null) {
+    let clickSuccess = false;
+    let expectedName = null;
 
-    if (href) {
-      // ✅ Best path: navigate directly to the unique business URL — no clicking, no crashes
-      logger.info(`[Google Maps Details] Direct navigation to: ${href.substring(0, 80)}...`);
-      await page.goto(href, { timeout: 20000, waitUntil: 'domcontentloaded' }).catch(() => {});
-    } else if (version === 'v1') {
-      // Legacy: get href from the card by index and navigate
-      logger.info(`[Google Maps Details] [V1 Fallback] Extracting via page navigation on index ${cardIndex}...`);
-      const cards = page.locator('div[role="feed"] a.hfpxzc');
-      const card = cards.nth(cardIndex);
-      const cardHref = await card.getAttribute('href').catch(() => null);
-      if (!cardHref) {
-        logger.warn(`[Google Maps Details] Could not retrieve href on index ${cardIndex}. Skipping.`);
-        return null;
-      }
-      await page.goto(cardHref, { timeout: 20000, waitUntil: 'domcontentloaded' }).catch(() => {});
-    } else {
-      // Sidebar click fallback (least preferred — prone to DOM shifts and crashes)
-      logger.info(`[Google Maps Details] [V2 Click Fallback] Clicking sidebar card index ${cardIndex}...`);
-      const cards = page.locator('div[role="feed"] a.hfpxzc');
-      const card = cards.nth(cardIndex);
-      await card.scrollIntoViewIfNeeded().catch(() => {});
-      await card.click({ force: true }).catch(() => {});
+    // ── Check for CAPTCHA page ──────────────────────────────────────────────
+    const pageTitle = await page.title().catch(() => '');
+    if (pageTitle.toLowerCase().includes('unusual traffic') || pageTitle.toLowerCase().includes('captcha') || pageTitle.toLowerCase().includes('sorry')) {
+      logger.error('[Google Maps Details] CAPTCHA page detected!');
+      throw new Error('CAPTCHA_DETECTED');
     }
 
-    // Wait for business detail panel to load
+    // ── Strategy 1: Synchronized Sidebar Click (Highly Preferred to avoid CAPTCHAs) ──
     try {
-      await page.waitForSelector('h1.DUwDvf, [data-item-id="address"]', { timeout: 8000 });
-    } catch (e) {
-      logger.warn(`[Google Maps Details] Detail pane timeout on item ${cardIndex}. Will still attempt extraction.`);
+      const cards = page.locator('div[role="feed"] a.hfpxzc');
+      const count = await cards.count().catch(() => 0);
+      if (cardIndex < count) {
+        const card = cards.nth(cardIndex);
+        expectedName = await card.getAttribute('aria-label').catch(() => null);
+        
+        await card.scrollIntoViewIfNeeded({ timeout: 2500 }).catch(() => {});
+        await card.click({ force: true, timeout: 2500 });
+
+        // Wait for details pane title to match the expected name
+        if (expectedName) {
+          const cleanExpected = expectedName.replace(/^Details for\s+/i, '').trim();
+          await page.waitForFunction((name) => {
+            const h1 = document.querySelector('h1.DUwDvf, .DUwDvf');
+            return h1 && h1.innerText.trim().toLowerCase().includes(name.toLowerCase());
+          }, cleanExpected, { timeout: 6000 });
+          clickSuccess = true;
+          logger.info(`[Google Maps Details] Click transition succeeded for: ${cleanExpected}`);
+        }
+      }
+    } catch (clickErr) {
+      logger.warn(`[Google Maps Details] Click transition failed on index ${cardIndex}: ${clickErr.message}`);
+    }
+
+    // ── Strategy 2: Direct Page Navigation Fallback ─────────────────────────
+    if (!clickSuccess) {
+      if (href) {
+        logger.info(`[Google Maps Details] [Fallback] Direct navigation to: ${href.substring(0, 80)}...`);
+        await page.goto(href, { timeout: 20000, waitUntil: 'domcontentloaded' }).catch(() => {});
+      } else if (version === 'v1') {
+        logger.info(`[Google Maps Details] [V1 Fallback] Extracting via page navigation on index ${cardIndex}...`);
+        const cards = page.locator('div[role="feed"] a.hfpxzc');
+        const card = cards.nth(cardIndex);
+        const cardHref = await card.getAttribute('href').catch(() => null);
+        if (!cardHref) {
+          logger.warn(`[Google Maps Details] Could not retrieve href on index ${cardIndex}. Skipping.`);
+          return null;
+        }
+        await page.goto(cardHref, { timeout: 20000, waitUntil: 'domcontentloaded' }).catch(() => {});
+      } else {
+        // Ultimate fallback click without sync
+        logger.info(`[Google Maps Details] [Fallback Click] Simple click card index ${cardIndex}...`);
+        const cards = page.locator('div[role="feed"] a.hfpxzc');
+        const card = cards.nth(cardIndex);
+        await card.scrollIntoViewIfNeeded().catch(() => {});
+        await card.click({ force: true }).catch(() => {});
+      }
+
+      // Wait for business detail panel to load
+      try {
+        await page.waitForSelector('h1.DUwDvf, [data-item-id="address"]', { timeout: 8000 });
+      } catch (e) {
+        logger.warn(`[Google Maps Details] Detail pane timeout on item ${cardIndex}.`);
+      }
     }
 
     await new Promise(resolve => setTimeout(resolve, 300));
