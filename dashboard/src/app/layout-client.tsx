@@ -1,3 +1,4 @@
+// dashboard/src/app/layout-client.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -37,7 +38,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
 
   const navLinks = [
     {
-      name: 'Overview',
+      name: 'Dashboard',
       href: '/',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -46,7 +47,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       )
     },
     {
-      name: 'Leads',
+      name: 'Leads List',
       href: '/leads',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -55,7 +56,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       )
     },
     {
-      name: 'WhatsApp',
+      name: 'WhatsApp Bot',
       href: '/whatsapp',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -73,7 +74,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       )
     },
     {
-      name: 'Scraper',
+      name: 'Google Scraper',
       href: '/scraper',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -91,7 +92,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       )
     },
     {
-      name: 'Instagram',
+      name: 'Instagram Audit',
       href: '/instagram-analyzer',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -100,7 +101,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       )
     },
     {
-      name: 'Metrics',
+      name: 'System Metrics',
       href: '/metrics',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -121,16 +122,33 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   ]
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-gray-900 border-r border-gray-800 text-gray-300">
-      {/* Brand Logo */}
-      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-800">
-        <Link href="/" className="text-xl font-bold text-white tracking-wider flex items-center gap-2">
-          <span className="text-purple-500">Lead</span> Gen
+    <div className="flex flex-col h-full bg-[#18181A] text-gray-400 select-none">
+      {/* Brand Logo - Zarss Style */}
+      <div className="flex items-center gap-3 px-6 py-6 border-b border-[#252528]">
+        <div className="w-8 h-8 rounded-lg bg-[#E3B859] flex items-center justify-center text-[#18181A] font-black text-lg shadow-md shadow-[#E3B859]/20">
+          Z
+        </div>
+        <Link href="/" className="text-xl font-bold text-white tracking-tight flex items-center gap-1.5">
+          <span>Zarss</span>
+          <span className="text-[10px] uppercase bg-[#252528] text-gray-400 px-1.5 py-0.5 rounded font-mono font-normal">v3</span>
         </Link>
       </div>
 
+      {/* User profile widget inside sidebar (Zarss style) */}
+      <div className="px-6 py-6 border-b border-[#252528] flex flex-col items-center text-center">
+        <div className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600 to-[#E3B859] p-0.5 shadow-xl">
+          <div className="w-full h-full rounded-full bg-[#18181A] flex items-center justify-center text-white text-xl font-black">
+            OP
+          </div>
+          {/* Active green dot indicator */}
+          <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-[#18181A] bg-green-500 shadow-sm" />
+        </div>
+        <span className="mt-3 text-xs text-gray-500 font-semibold uppercase tracking-wider block">Welcome Back,</span>
+        <span className="text-sm font-bold text-white tracking-tight mt-0.5">Operator LeadGen</span>
+      </div>
+
       {/* Nav Menu */}
-      <nav className="flex-1 px-4 py-6 space-y-1">
+      <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
         {navLinks.map((link) => {
           const isActive = pathname === link.href
           return (
@@ -138,13 +156,19 @@ export default function LayoutClient({ children }: LayoutClientProps) {
               key={link.name}
               href={link.href}
               onClick={() => setMobileMenuOpen(false)}
-              className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-150 ${
+              className={`flex items-center gap-3 px-4 py-3 text-xs font-semibold uppercase tracking-wider rounded-xl transition-all duration-200 group relative ${
                 isActive
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                  ? 'text-[#E3B859] bg-[#222225] font-bold shadow-sm'
+                  : 'text-gray-400 hover:bg-[#202022] hover:text-gray-200'
               }`}
             >
-              {link.icon}
+              {/* Left active line indicator (Zarss style) */}
+              {isActive && (
+                <span className="absolute left-0 top-3 bottom-3 w-1 bg-[#E3B859] rounded-r-md" />
+              )}
+              <span className={`transition-colors duration-200 ${isActive ? 'text-[#E3B859]' : 'text-gray-500 group-hover:text-gray-300'}`}>
+                {link.icon}
+              </span>
               {link.name}
             </Link>
           )
@@ -152,39 +176,36 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       </nav>
 
       {/* Footer Status Indicators */}
-      <div className="p-4 border-t border-gray-800 flex items-center justify-between text-xs text-gray-500">
-        <div className="flex items-center gap-2">
-          <span>WhatsApp Status:</span>
+      <div className="p-5 border-t border-[#252528] flex flex-col gap-3 text-xs text-gray-500 bg-[#141416]">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold uppercase tracking-wider text-[10px]">WhatsApp Status</span>
           {whatsappConnected === null ? (
-            <span className="w-2.5 h-2.5 rounded-full bg-gray-600 animate-pulse" title="Checking status" />
+            <span className="px-2 py-0.5 rounded bg-gray-800 text-gray-400 font-mono text-[9px] animate-pulse">CHECKING</span>
           ) : whatsappConnected ? (
-            <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-md shadow-green-500/50" title="Connected" />
+            <span className="px-2 py-0.5 rounded bg-green-950/40 text-green-400 font-mono text-[9px] font-bold border border-green-900/30">ONLINE</span>
           ) : (
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-md shadow-red-500/50" title="Disconnected" />
+            <span className="px-2 py-0.5 rounded bg-red-950/40 text-red-400 font-mono text-[9px] font-bold border border-red-900/30">OFFLINE</span>
           )}
         </div>
-        <button
-          onClick={checkWhatsappStatus}
-          className="text-gray-400 hover:text-white transition-colors"
-          title="Force refresh status"
-          aria-label="Refresh WhatsApp status"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3-3 3 3m-3-3v12" />
-          </svg>
-        </button>
+        <div className="flex items-center justify-between text-[10px]">
+          <span className="text-gray-600">Engine Node:</span>
+          <span className="font-mono text-gray-400">Railway v3</span>
+        </div>
       </div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col md:flex-row font-sans">
-      <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: '#1f2937', color: '#f9fafb', border: '1px solid #374151' } }} />
+    <div className="min-h-screen bg-[#F4F3EF] text-[#2D2D2D] flex flex-col md:flex-row font-sans">
+      <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: '#1c1c1e', color: '#f3f4f6', border: '1px solid #2d2d30' } }} />
 
       {/* Mobile Top Bar */}
-      <div className="flex md:hidden items-center justify-between px-6 py-4 bg-gray-900 border-b border-gray-800 text-white">
-        <Link href="/" className="text-lg font-bold">
-          <span className="text-purple-500">Lead</span> Gen
+      <div className="flex md:hidden items-center justify-between px-6 py-4 bg-[#18181A] border-b border-[#252528] text-white">
+        <Link href="/" className="text-lg font-bold flex items-center gap-2">
+          <div className="w-6 h-6 rounded bg-[#E3B859] flex items-center justify-center text-[#18181A] font-black text-xs">
+            Z
+          </div>
+          <span>Zarss</span>
         </Link>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -204,8 +225,10 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       </div>
 
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:block w-64 flex-shrink-0">
-        <SidebarContent />
+      <aside className="hidden md:block w-64 flex-shrink-0 z-20">
+        <div className="h-screen sticky top-0">
+          <SidebarContent />
+        </div>
       </aside>
 
       {/* Sidebar - Mobile Slide-out */}
@@ -214,7 +237,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
           {/* Backdrop */}
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
           {/* Menu */}
-          <div className="relative w-64 max-w-xs flex-1 flex flex-col">
+          <div className="relative w-64 max-w-xs flex-1 flex flex-col h-full z-10">
             <SidebarContent />
           </div>
         </div>

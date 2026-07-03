@@ -10,6 +10,7 @@ const logger = require('./logger');
 
 const GoogleMapsProvider = require('../providers/googleMaps/provider');
 const GoogleSearchProvider = require('../providers/googleSearch/provider');
+const emailScraper = require('../services/emailScraper');
 
 class JobManager {
   constructor() {
@@ -22,14 +23,16 @@ class JobManager {
 
   async executeJob(job, workerId) {
     const startTime = Date.now();
-    const providerName = job.current_provider || 'google_maps';
+    const fullProviderName = job.current_provider || 'google_maps';
+    const providerName = fullProviderName.split(':')[0];
     const provider = this.providers[providerName];
 
     if (!provider) {
       throw new Error(`PROVIDER_NOT_REGISTERED: ${providerName}`);
     }
 
-    logger.info(`[JobManager] Initiating job ${job.id} on worker #${workerId} using provider ${providerName}`);
+    const enrichEmails = fullProviderName.includes(':email');
+    logger.info(`[JobManager] Initiating job ${job.id} on worker #${workerId} using provider ${providerName} (Enrich Emails: ${enrichEmails})`);
     this.activeAborts.set(job.id, false);
 
     const { context, contextId } = await browserManager.newContext();
@@ -84,6 +87,23 @@ class JobManager {
           continue;
         }
         seenKeys.add(dedupeKey);
+
+        // Email Enrichment if enabled
+        if (enrichEmails && lead.website) {
+          const emailPage = await context.newPage();
+          try {
+            logger.info(`[JobManager] Scraping email for ${lead.name} from: ${lead.website}`);
+            const email = await emailScraper.scrapeEmail(emailPage, lead.website);
+            if (email) {
+              lead.email = email;
+              logger.info(`[JobManager] ✅ Found email: ${email}`);
+            }
+          } catch (e) {
+            logger.warn(`[JobManager] Email enrichment failed for ${lead.website}: ${e.message}`);
+          } finally {
+            await emailPage.close().catch(() => {});
+          }
+        }
 
         // Write to leads database in real-time (upsert handles DB-level duplicates too)
         try {

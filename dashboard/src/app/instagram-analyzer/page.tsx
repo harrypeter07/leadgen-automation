@@ -1,3 +1,4 @@
+// dashboard/src/app/instagram-analyzer/page.tsx
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
@@ -138,35 +139,35 @@ export default function InstagramAnalyzerPage() {
   }
 
   function getScoreColor(score: number) {
-    if (score >= 80) return 'text-green-400 border-green-500/30 bg-green-950/20'
-    if (score >= 50) return 'text-yellow-400 border-yellow-500/30 bg-yellow-950/20'
-    return 'text-red-400 border-red-500/30 bg-red-950/20'
+    if (score >= 80) return 'text-[#3B4D3C] bg-[#D4E0CD] border-[#B8C8B0]'
+    if (score >= 50) return 'text-[#5C451F] bg-[#F9D99A] border-[#E8C584]'
+    return 'text-red-700 bg-red-50 border-red-200'
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-[#2D2D2D] select-none">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">Instagram Engagement Profiler</h1>
-        <p className="mt-1 text-sm text-gray-400">Audit profile stats, consistency parameters, engagement ratios, and opportunity signals.</p>
+        <h1 className="text-3xl font-black text-[#1C1C1E] tracking-tight">Instagram Engagement Profiler</h1>
+        <p className="mt-1 text-sm text-gray-500 font-medium">Audit profile stats, consistency parameters, engagement ratios, and opportunity signals.</p>
       </div>
 
       {/* Input panel */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 max-w-2xl">
+      <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 max-w-2xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
         <form onSubmit={handleAudit} className="flex gap-4">
-          <span className="flex items-center text-gray-500 pl-3 bg-gray-950 border border-gray-800 border-r-0 rounded-l-lg text-sm select-none">@</span>
+          <span className="flex items-center text-gray-400 pl-4 bg-[#F4F3EF] border border-[#E4E3DD] border-r-0 rounded-l-xl text-sm font-bold">@</span>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="username"
             required
-            className="flex-1 rounded-r-lg bg-gray-950 border border-gray-800 border-l-0 px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+            className="flex-1 rounded-r-xl bg-[#F4F3EF] border border-[#E4E3DD] border-l-0 px-4 py-3 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500 placeholder-gray-400"
           />
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold text-white px-6 py-2.5 transition-colors flex items-center gap-2"
+            className="rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white px-6 py-3 transition-colors flex items-center gap-2"
           >
             {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             {loading ? 'Analyzing...' : 'Run Audit'}
@@ -176,20 +177,19 @@ export default function InstagramAnalyzerPage() {
 
       {/* Real-time Logger Console Terminal */}
       {(loading || logs.length > 0) && (
-        <div className="rounded-xl border border-gray-800 bg-gray-950 overflow-hidden max-w-2xl flex flex-col h-[200px]">
-          <div className="bg-gray-900/80 px-4 py-2 border-b border-gray-800 flex items-center justify-between">
-            <span className="font-mono text-[10px] text-gray-400 font-bold uppercase tracking-wider">📡 Scraper Engine Console Logs</span>
+        <div className="rounded-2xl border border-[#E4E3DD] bg-white overflow-hidden max-w-2xl flex flex-col h-[200px] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+          <div className="bg-gray-50 px-4 py-3 border-b border-[#E4E3DD] flex items-center justify-between">
+            <span className="font-bold text-[10px] text-gray-400 uppercase tracking-wider">📡 Scraper Engine Console Logs</span>
             {loading && (
-              <span className="text-[10px] text-purple-400 font-mono animate-pulse flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+              <span className="text-[10px] text-purple-600 font-bold uppercase tracking-wider animate-pulse flex items-center gap-1.5 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
                 Live streaming...
               </span>
             )}
           </div>
-          <div className="flex-1 p-4 font-mono text-[10px] text-gray-300 overflow-y-auto space-y-1 select-none">
+          <div className="flex-1 p-4 font-mono text-[10px] text-gray-600 overflow-y-auto space-y-1.5 bg-[#F4F3EF]/30">
             {logs.map((log, index) => (
               <div key={index} className="leading-relaxed break-all">
-                <span className={log.startsWith('❌') ? 'text-red-400' : 'text-gray-400'}>{log}</span>
+                <span className={log.startsWith('❌') ? 'text-red-600 font-bold' : 'text-gray-600'}>{log}</span>
               </div>
             ))}
             <div ref={logEndRef} />
@@ -201,22 +201,25 @@ export default function InstagramAnalyzerPage() {
       {report && (
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left panel: Info & Metrics */}
-          <div className="lg:col-span-1 space-y-4">
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 space-y-4 text-center">
-              <div className="space-y-1">
-                <h3 className="text-xl font-bold text-white flex items-center justify-center gap-1.5">
+          <div className="lg:col-span-1 space-y-6">
+            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-4 text-center shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+              <div className="space-y-1 flex flex-col items-center">
+                <div className="w-16 h-16 rounded-full bg-[#ECEAE4] flex items-center justify-center font-black text-xl text-gray-600 border border-[#E4E3DD]">
+                  {report.username.substring(0, 2).toUpperCase()}
+                </div>
+                <h3 className="text-xl font-black text-[#1C1C1E] mt-3 flex items-center justify-center gap-1.5">
                   @{report.username}
                   {report.verified && (
-                    <span className="text-blue-400" title="Verified Account">
-                      🛡️
+                    <span className="text-blue-500 font-normal text-sm" title="Verified Account">
+                      🛡️ Verified
                     </span>
                   )}
                 </h3>
-                <p className="text-xs text-gray-400">{report.display_name}</p>
+                <p className="text-xs text-gray-400 font-medium">{report.display_name}</p>
               </div>
 
               {report.bio && (
-                <p className="text-xs text-gray-300 italic px-2">&quot;{report.bio}&quot;</p>
+                <p className="text-xs text-gray-600 italic px-2 bg-[#F4F3EF]/50 py-3.5 rounded-xl border border-gray-100">&quot;{report.bio}&quot;</p>
               )}
 
               {report.website && (
@@ -224,23 +227,23 @@ export default function InstagramAnalyzerPage() {
                   href={report.website}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-block text-xs text-purple-400 hover:text-purple-300 hover:underline max-w-[220px] truncate"
+                  className="inline-block text-xs text-blue-600 font-bold hover:underline max-w-[220px] truncate"
                 >
-                  🔗 {report.website}
+                  🔗 {report.website.replace(/^https?:\/\//, '')}
                 </a>
               )}
 
               {report.bio_links && report.bio_links.length > 0 && (
-                <div className="space-y-2 mt-4 pt-4 border-t border-gray-800 text-left">
+                <div className="space-y-2.5 mt-4 pt-4 border-t border-[#E4E3DD] text-left">
                   <h4 className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Bio Links</h4>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {report.bio_links.map((link, idx) => (
                       <a
                         key={idx}
                         href={link.href}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-950 border border-gray-850 text-xs text-purple-400 hover:text-purple-300 hover:border-purple-500/30 transition-colors"
+                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] text-xs text-gray-700 font-bold hover:bg-[#ECEAE4] transition-all"
                       >
                         <span>🔗</span>
                         <span className="truncate flex-1" title={link.href}>{link.text || link.href}</span>
@@ -252,55 +255,55 @@ export default function InstagramAnalyzerPage() {
             </div>
 
             {/* Score lists */}
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5 space-y-4 text-xs">
-              <h4 className="font-bold text-gray-200 uppercase text-[10px] border-b border-gray-850 pb-2">Operational Scores</h4>
+            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-5 space-y-4 text-xs shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+              <h4 className="font-bold text-gray-400 uppercase text-[9px] tracking-wider border-b border-[#E4E3DD] pb-2">Operational Scores</h4>
               
-              <div className="flex justify-between items-center border-b border-gray-855 pb-2">
-                <span className="text-gray-400">Health Index</span>
-                <span className={`px-2 py-0.5 rounded font-bold ${getScoreColor(report.health_score)}`}>{report.health_score}</span>
+              <div className="flex justify-between items-center border-b border-[#E4E3DD]/60 pb-2">
+                <span className="text-gray-500 font-semibold">Health Index</span>
+                <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold ${getScoreColor(report.health_score)}`}>{report.health_score}</span>
               </div>
-              <div className="flex justify-between items-center border-b border-gray-855 pb-2">
-                <span className="text-gray-400">Content Consistency</span>
-                <span className={`px-2 py-0.5 rounded font-bold ${getScoreColor(report.consistency_score)}`}>{report.consistency_score}</span>
+              <div className="flex justify-between items-center border-b border-[#E4E3DD]/60 pb-2">
+                <span className="text-gray-500 font-semibold">Consistency</span>
+                <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold ${getScoreColor(report.consistency_score)}`}>{report.consistency_score}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-400">Engagement Rate</span>
-                <span className="text-purple-400 font-bold text-sm">{report.engagement_rate}%</span>
+                <span className="text-gray-500 font-semibold">Engagement Rate</span>
+                <span className="text-gray-800 font-black text-sm">{report.engagement_rate}%</span>
               </div>
             </div>
           </div>
 
           {/* Right panel: Statistics */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 space-y-6">
-              <h3 className="font-bold text-gray-200 text-sm border-b border-gray-850 pb-2">📊 Profile Audience Statistics</h3>
+            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+              <h3 className="font-bold text-gray-500 text-xs uppercase tracking-wider border-b border-[#E4E3DD] pb-3">📊 Profile Audience Statistics</h3>
               
               <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="bg-gray-950/60 p-4 rounded-xl border border-gray-850">
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold block">Followers</span>
-                  <span className="text-2xl font-black text-white">{report.followers.toLocaleString()}</span>
+                <div className="bg-[#D4E0CD] p-4.5 rounded-2xl">
+                  <span className="text-[10px] text-[#3B4D3C] uppercase font-bold tracking-wider block">Followers</span>
+                  <span className="text-2xl font-black text-[#2E3A2F] mt-1 block">{report.followers.toLocaleString()}</span>
                 </div>
-                <div className="bg-gray-950/60 p-4 rounded-xl border border-gray-850">
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold block">Following</span>
-                  <span className="text-2xl font-black text-white">{report.following.toLocaleString()}</span>
+                <div className="bg-[#F9D99A] p-4.5 rounded-2xl">
+                  <span className="text-[10px] text-[#5C451F] uppercase font-bold tracking-wider block">Following</span>
+                  <span className="text-2xl font-black text-[#4A391D] mt-1 block">{report.following.toLocaleString()}</span>
                 </div>
-                <div className="bg-gray-950/60 p-4 rounded-xl border border-gray-850">
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold block">Posts</span>
-                  <span className="text-2xl font-black text-white">{report.posts_count.toLocaleString()}</span>
+                <div className="bg-[#ECEAE4] p-4.5 rounded-2xl border border-[#E4E3DD]">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider block">Posts</span>
+                  <span className="text-2xl font-black text-gray-800 mt-1 block">{report.posts_count.toLocaleString()}</span>
                 </div>
               </div>
 
               {/* Insights */}
-              <div className="space-y-4 pt-2 border-b border-gray-850 pb-6">
-                <h4 className="font-bold text-gray-300 text-xs uppercase text-[10px]">Presence Opportunity Signals</h4>
-                <div className="grid gap-3 sm:grid-cols-2 text-xs">
-                  <div className="rounded-lg bg-gray-950 border border-gray-855 p-3 space-y-1">
-                    <span className="text-gray-500 font-semibold block">Profile Completeness</span>
-                    <span className="text-gray-200">{report.bio && (report.website || (report.bio_links && report.bio_links.length > 0)) ? '✅ Fully Configured' : '⚠️ Missing Bio Links'}</span>
+              <div className="space-y-4 pt-2 border-b border-[#E4E3DD] pb-6">
+                <h4 className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Presence Opportunity Signals</h4>
+                <div className="grid gap-4 sm:grid-cols-2 text-xs">
+                  <div className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-4 space-y-1">
+                    <span className="text-gray-400 font-bold uppercase text-[9px] block">Profile Completeness</span>
+                    <span className="text-gray-800 font-bold">{report.bio && (report.website || (report.bio_links && report.bio_links.length > 0)) ? '✅ Fully Configured' : '⚠️ Missing Bio Links'}</span>
                   </div>
-                  <div className="rounded-lg bg-gray-950 border border-gray-855 p-3 space-y-1">
-                    <span className="text-gray-500 font-semibold block">Consistency Index</span>
-                    <span className="text-gray-200">{report.posts_count > 50 ? '✅ Active account' : '⚠️ Low active cadence'}</span>
+                  <div className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-4 space-y-1">
+                    <span className="text-gray-400 font-bold uppercase text-[9px] block">Consistency Index</span>
+                    <span className="text-gray-800 font-bold">{report.posts_count > 50 ? '✅ Active account' : '⚠️ Low active cadence'}</span>
                   </div>
                 </div>
               </div>
@@ -308,22 +311,22 @@ export default function InstagramAnalyzerPage() {
               {/* Recent Posts & Reels Grid */}
               {report.posts && report.posts.length > 0 && (
                 <div className="space-y-4 pt-2">
-                  <h3 className="font-bold text-gray-200 text-sm flex items-center justify-between">
+                  <h3 className="font-bold text-gray-700 text-xs uppercase tracking-wider flex items-center justify-between">
                     <span>📸 Recent Posts & Reels ({report.posts.length})</span>
-                    <span className="text-[9px] text-gray-500 font-normal">Chronological order</span>
+                    <span className="text-[9px] text-gray-400 font-normal">Chronological</span>
                   </h3>
                   
-                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                  <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
                     {report.posts.map((post) => (
                       <a
                         key={post.shortcode}
                         href={post.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="group rounded-xl border border-gray-850 bg-gray-950/60 overflow-hidden flex flex-col hover:border-purple-500/30 hover:scale-[1.02] transition-all duration-300"
+                        className="group rounded-2xl border border-[#E4E3DD] bg-white overflow-hidden flex flex-col hover:border-gray-400 hover:scale-[1.02] transition-all duration-300 shadow-sm"
                       >
                         {/* Image Thumbnail */}
-                        <div className="relative aspect-square w-full bg-gray-900 flex items-center justify-center overflow-hidden">
+                        <div className="relative aspect-square w-full bg-[#F4F3EF] flex items-center justify-center overflow-hidden border-b border-[#E4E3DD]">
                           {post.thumbnail ? (
                             <img
                               src={post.thumbnail}
@@ -332,7 +335,7 @@ export default function InstagramAnalyzerPage() {
                               referrerPolicy="no-referrer"
                             />
                           ) : (
-                            <span className="text-gray-600 text-xs">No Image</span>
+                            <span className="text-gray-400 text-xs font-semibold">No Image</span>
                           )}
                           {/* Hover Stats */}
                           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-4 text-white text-xs font-bold transition-opacity duration-300">
@@ -340,30 +343,30 @@ export default function InstagramAnalyzerPage() {
                             <span>💬 {post.comments_count.toLocaleString()}</span>
                           </div>
                           {/* Type Badge */}
-                          <span className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/60 text-[9px] font-bold text-gray-300 uppercase tracking-wider">
+                          <span className="absolute top-3 right-3 px-2 py-0.5 rounded-lg bg-black/60 text-[9px] font-bold text-gray-200 uppercase tracking-wider">
                             {post.type === 'reel' ? '🎥 Reel' : '🖼️ Post'}
                           </span>
                         </div>
                         
                         {/* Caption & Date */}
-                        <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
-                          <p className="text-[10px] text-gray-300 line-clamp-2 leading-relaxed" title={post.caption}>
+                        <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                          <p className="text-[10px] text-gray-600 line-clamp-2 leading-relaxed font-medium" title={post.caption}>
                             {post.caption}
                           </p>
                           
-                          <div className="space-y-1.5 pt-1.5 border-t border-gray-900">
+                          <div className="space-y-2 pt-2 border-t border-gray-50">
                             {/* Hashtags */}
                             {post.hashtags && post.hashtags.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {post.hashtags.slice(0, 3).map((tag, idx) => (
-                                  <span key={idx} className="text-[9px] text-purple-400 font-mono">
+                                  <span key={idx} className="text-[9px] text-[#5C451F] font-bold font-mono">
                                     {tag}
                                   </span>
                                 ))}
                               </div>
                             )}
                             
-                            <div className="flex justify-between items-center text-[9px] text-gray-500">
+                            <div className="flex justify-between items-center text-[9px] text-gray-400 font-semibold">
                               <span>📅 {new Date(post.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                             </div>
                           </div>

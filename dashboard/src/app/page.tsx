@@ -1,3 +1,4 @@
+// dashboard/src/app/page.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -67,7 +68,7 @@ export default function HomeDashboard() {
     const interval = setInterval(() => {
       fetchStats()
       fetchRecentLeads()
-    }, 15000) // auto-refresh every 15 seconds
+    }, 15000)
 
     return () => clearInterval(interval)
   }, [])
@@ -123,58 +124,81 @@ export default function HomeDashboard() {
 
   // Status mapping to match specifications
   const statusCards = [
-    { key: 'new', label: 'New', color: 'border-slate-800 bg-slate-900/30 text-slate-400' },
-    { key: 'whatsapp_sent', label: 'WhatsApp Sent', color: 'border-blue-900/40 bg-blue-950/20 text-blue-400' },
-    { key: 'email_sent', label: 'Email Sent', color: 'border-violet-900/40 bg-violet-950/20 text-violet-400' },
-    { key: 'replied', label: 'Replied', color: 'border-amber-900/40 bg-amber-950/20 text-amber-400' },
-    { key: 'converted', label: 'Converted', color: 'border-green-900/40 bg-green-950/20 text-green-400' },
-    { key: 'skip', label: 'Skipped', color: 'border-red-900/40 bg-red-950/20 text-red-400' },
+    { key: 'new', label: 'New', color: 'border-[#ECEAE4] bg-white text-gray-800' },
+    { key: 'whatsapp_sent', label: 'WhatsApp Sent', color: 'border-[#ECEAE4] bg-white text-gray-800' },
+    { key: 'email_sent', label: 'Email Sent', color: 'border-[#ECEAE4] bg-white text-gray-800' },
+    { key: 'replied', label: 'Replied', color: 'border-[#ECEAE4] bg-white text-gray-800' },
+    { key: 'converted', label: 'Converted', color: 'border-[#ECEAE4] bg-white text-gray-800 font-bold' },
+    { key: 'skip', label: 'Skipped', color: 'border-[#ECEAE4] bg-white text-gray-400' },
   ]
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 select-none text-[#2D2D2D]">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">Lead Gen Dashboard</h1>
-          <p className="mt-1 text-sm text-gray-400">{today}</p>
+          <h1 className="text-3xl font-black text-[#1C1C1E] tracking-tight">Dashboard Overview</h1>
+          <p className="mt-1 text-sm text-gray-500 font-medium">{today}</p>
         </div>
-        <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-lg px-4 py-2 text-xs text-gray-400 self-start md:self-auto">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+        <div className="flex items-center gap-2 bg-white border border-[#E4E3DD] rounded-xl px-4 py-2.5 text-xs text-gray-500 font-semibold shadow-sm self-start md:self-auto">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E3B859] opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#E3B859]"></span>
           </span>
-          Live Monitoring (15s auto-refresh)
+          Live Monitoring (15s refresh)
         </div>
       </div>
 
-      {/* Main Stats Row & Conversion Widget */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 flex flex-col justify-between">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Leads</span>
-          <h3 className="mt-2 text-3xl font-black text-white">{loadingStats ? '...' : stats?.total ?? 0}</h3>
+      {/* Main Stats Row & Conversion Widget (Zarss Pastel Aesthetic) */}
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Sage Green Balance Card */}
+        <div className="rounded-2xl bg-[#D4E0CD] p-6 flex flex-col justify-between shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)] min-h-[140px]">
+          <div className="flex justify-between items-start">
+            <span className="text-xs font-bold text-[#3B4D3C] uppercase tracking-wider">Total Leads</span>
+            <span className="text-[10px] bg-[#3B4D3C]/10 text-[#3B4D3C] px-2 py-0.5 rounded-full font-bold">ALL</span>
+          </div>
+          <h3 className="mt-4 text-4xl font-black text-[#2E3A2F] tracking-tight">
+            {loadingStats ? '...' : (stats?.total ?? 0).toLocaleString()}
+          </h3>
         </div>
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 flex flex-col justify-between">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Added Last 7 Days</span>
-          <h3 className="mt-2 text-3xl font-black text-purple-400">{loadingStats ? '...' : stats?.addedLast7Days ?? 0}</h3>
+
+        {/* Pastel Gold Growth Card */}
+        <div className="rounded-2xl bg-[#F9D99A] p-6 flex flex-col justify-between shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)] min-h-[140px]">
+          <div className="flex justify-between items-start">
+            <span className="text-xs font-bold text-[#5C451F] uppercase tracking-wider">Added (7d)</span>
+            <span className="text-[10px] bg-[#5C451F]/10 text-[#5C451F] px-2 py-0.5 rounded-full font-bold">+100%</span>
+          </div>
+          <h3 className="mt-4 text-4xl font-black text-[#4A391D] tracking-tight">
+            {loadingStats ? '...' : (stats?.addedLast7Days ?? 0).toLocaleString()}
+          </h3>
         </div>
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 flex flex-col justify-between">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Outreach Conversion</span>
+
+        {/* Soft Purple/Blue Gradient Card */}
+        <div className="rounded-2xl bg-gradient-to-br from-[#9FB1F7] to-[#7E96F5] p-6 flex flex-col justify-between shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)] min-h-[140px] text-white">
+          <div className="flex justify-between items-start">
+            <span className="text-xs font-bold uppercase tracking-wider opacity-90">Outreach Rate</span>
+            <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">Ratio</span>
+          </div>
           <div>
-            <h3 className="mt-2 text-3xl font-black text-green-400">
+            <h3 className="mt-4 text-4xl font-black tracking-tight">
               {loadingStats ? '...' : `${stats?.conversionStats?.rate ?? 0}%`}
             </h3>
-            <span className="text-[10px] text-gray-400 block mt-1">
-              Positive response ratio: {stats?.conversionStats?.replied ?? 0} replied, {stats?.conversionStats?.converted ?? 0} converted
+            <span className="text-[9px] opacity-80 block mt-1">
+              {stats?.conversionStats?.replied ?? 0} replied | {stats?.conversionStats?.converted ?? 0} converted
             </span>
           </div>
         </div>
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 flex flex-col justify-between">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Channels</span>
-          <div className="flex gap-2 mt-2">
-            <span className="px-2 py-1 bg-green-950 text-green-400 border border-green-900 rounded text-[10px] font-bold">WhatsApp</span>
-            <span className="px-2 py-1 bg-purple-950 text-purple-400 border border-purple-900 rounded text-[10px] font-bold">Emails</span>
-            <span className="px-2 py-1 bg-blue-950 text-blue-400 border border-blue-900 rounded text-[10px] font-bold">n8n triggers</span>
+
+        {/* Premium Light Gray Card */}
+        <div className="rounded-2xl bg-white border border-[#E4E3DD] p-6 flex flex-col justify-between shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] min-h-[140px]">
+          <div className="flex justify-between items-start">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Active Channels</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-4">
+            <span className="px-2.5 py-1 bg-green-50 text-green-700 border border-green-200/50 rounded-lg text-[9px] font-bold">WhatsApp</span>
+            <span className="px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200/50 rounded-lg text-[9px] font-bold">Emails</span>
+            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200/50 rounded-lg text-[9px] font-bold">n8n</span>
           </div>
         </div>
       </div>
@@ -182,25 +206,27 @@ export default function HomeDashboard() {
       {/* Visual Analytics Row: Growth & Providers */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Leads Growth Chart (Daily distribution) */}
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-          <h3 className="font-bold text-gray-200 mb-4 flex justify-between items-center text-sm">
-            <span>📈 Lead Growth Timeline</span>
-            <span className="text-[10px] text-gray-500">Last 7 Days</span>
+        <div className="rounded-2xl bg-white border border-[#E4E3DD] p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+          <h3 className="font-bold text-[#1C1C1E] mb-4 flex justify-between items-center text-sm">
+            <span className="uppercase tracking-wider text-[11px] text-gray-500">Lead growth timeline</span>
+            <span className="text-[10px] text-gray-400 font-normal">Last 7 Days</span>
           </h3>
-          <div className="flex items-end justify-between h-32 pt-4">
+          <div className="flex items-end justify-between h-40 pt-4 px-2">
             {loadingStats ? (
-              <div className="w-full text-center text-xs text-gray-500">Loading growth chart...</div>
+              <div className="w-full text-center text-xs text-gray-400 py-10">Loading growth chart...</div>
             ) : !stats?.dailyDistribution || stats.dailyDistribution.length === 0 ? (
-              <div className="w-full text-center text-xs text-gray-500">No recent leads activity</div>
+              <div className="w-full text-center text-xs text-gray-400 py-10">No recent leads activity</div>
             ) : (
               stats.dailyDistribution.map((day) => {
                 const max = Math.max(...stats.dailyDistribution.map(d => d.count), 1)
                 const pct = (day.count / max) * 100
                 return (
-                  <div key={day.date} className="flex flex-col items-center gap-1.5 flex-1 group">
-                    <span className="text-[9px] text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{day.count}</span>
-                    <div className="w-6 sm:w-8 bg-purple-950/60 border border-purple-900/30 group-hover:bg-purple-600 rounded-t transition-all duration-300" style={{ height: `${Math.max(10, pct)}%` }} />
-                    <span className="text-[9px] text-gray-400 font-semibold">{day.date}</span>
+                  <div key={day.date} className="flex flex-col items-center gap-2 flex-1 group">
+                    <span className="text-[9px] font-bold text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{day.count}</span>
+                    <div className="w-6 sm:w-8 bg-[#ECEAE4] group-hover:bg-[#1C1C1E] rounded-xl transition-all duration-300 relative overflow-hidden" style={{ height: `${Math.max(10, pct)}px` }}>
+                      <div className="absolute inset-0 bg-[#1C1C1E] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    </div>
+                    <span className="text-[9px] text-gray-400 font-semibold uppercase">{day.date}</span>
                   </div>
                 )
               })
@@ -209,25 +235,25 @@ export default function HomeDashboard() {
         </div>
 
         {/* Provider Distribution Card */}
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-          <h3 className="font-bold text-gray-200 mb-4 text-sm">🌐 Leads by Provider Channel</h3>
-          <div className="space-y-4">
+        <div className="rounded-2xl bg-white border border-[#E4E3DD] p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+          <h3 className="font-bold text-[#1C1C1E] mb-6 text-sm uppercase tracking-wider text-[11px] text-gray-500">Leads by Provider Channel</h3>
+          <div className="space-y-5">
             {loadingStats ? (
-              <div className="text-center text-xs text-gray-500 py-6">Loading channels...</div>
+              <div className="text-center text-xs text-gray-400 py-10">Loading channels...</div>
             ) : !stats?.providerComparison || stats.providerComparison.length === 0 ? (
-              <div className="text-center text-xs text-gray-500 py-6">No channel data available</div>
+              <div className="text-center text-xs text-gray-400 py-10">No channel data available</div>
             ) : (
               stats.providerComparison.map((p) => {
                 const max = stats.total || 1
                 const pct = Math.round((p.count / max) * 100)
                 return (
-                  <div key={p.source} className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-semibold text-gray-300">
+                  <div key={p.source} className="space-y-2">
+                    <div className="flex justify-between text-xs font-bold text-gray-700">
                       <span className="capitalize">{p.source.replace(/_/g, ' ')}</span>
                       <span>{p.count} leads ({pct}%)</span>
                     </div>
-                    <div className="w-full bg-gray-950 rounded-full h-2 border border-gray-850 p-0.5">
-                      <div className="bg-purple-600 h-1 rounded-full" style={{ width: `${pct}%` }} />
+                    <div className="w-full bg-[#F4F3EF] rounded-full h-2.5 p-0.5">
+                      <div className="bg-[#1C1C1E] h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 )
@@ -239,14 +265,14 @@ export default function HomeDashboard() {
 
       {/* Status Pipeline Cards */}
       <div>
-        <h2 className="text-lg font-bold text-gray-200 mb-4">Pipeline Distribution</h2>
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Pipeline Distribution</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {statusCards.map((card) => {
             const count = stats?.statusCounts[card.key] ?? 0
             return (
-              <div key={card.key} className={`rounded-xl border p-4 transition-all duration-200 ${card.color}`}>
-                <span className="text-xs font-medium">{card.label}</span>
-                <p className="mt-2 text-2xl font-black text-white">{loadingStats ? '...' : count}</p>
+              <div key={card.key} className={`rounded-2xl border border-[#E4E3DD] p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition-all duration-200 ${card.color}`}>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{card.label}</span>
+                <p className="mt-3 text-3xl font-black text-[#1C1C1E] tracking-tight">{loadingStats ? '...' : count}</p>
               </div>
             )
           })}
@@ -255,32 +281,32 @@ export default function HomeDashboard() {
 
       {/* Cities and Categories Tables */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-gray-800 bg-gray-900/40 overflow-hidden">
-          <div className="border-b border-gray-800 px-5 py-4 bg-gray-900/60">
-            <h3 className="font-bold text-gray-200">Top Cities</h3>
+        <div className="rounded-2xl bg-white border border-[#E4E3DD] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] overflow-hidden">
+          <div className="border-b border-[#E4E3DD] px-6 py-4 bg-gray-50/50">
+            <h3 className="font-bold text-[#1C1C1E] text-xs uppercase tracking-wider text-gray-500">Top Cities</h3>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-full text-xs">
               <thead>
-                <tr className="border-b border-gray-800 text-left text-gray-400">
-                  <th className="px-5 py-3 font-semibold">City</th>
-                  <th className="px-5 py-3 font-semibold text-right">Count</th>
+                <tr className="border-b border-[#E4E3DD] text-left text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-4 font-bold">City</th>
+                  <th className="px-6 py-4 font-bold text-right">Count</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800/40">
+              <tbody className="divide-y divide-[#E4E3DD]/60">
                 {loadingStats ? (
                   <tr>
-                    <td colSpan={2} className="px-5 py-4 text-center text-gray-500">Loading data...</td>
+                    <td colSpan={2} className="px-6 py-5 text-center text-gray-400">Loading data...</td>
                   </tr>
                 ) : !stats?.topCities || stats.topCities.length === 0 ? (
                   <tr>
-                    <td colSpan={2} className="px-5 py-4 text-center text-gray-500">No data found</td>
+                    <td colSpan={2} className="px-6 py-5 text-center text-gray-400">No data found</td>
                   </tr>
                 ) : (
                   stats.topCities.map((row) => (
-                    <tr key={row.name} className="hover:bg-gray-800/20">
-                      <td className="px-5 py-3 text-white font-medium">{row.name}</td>
-                      <td className="px-5 py-3 text-gray-300 text-right">{row.count}</td>
+                    <tr key={row.name} className="hover:bg-[#F4F3EF]/30 transition-colors">
+                      <td className="px-6 py-4 text-gray-800 font-semibold">{row.name}</td>
+                      <td className="px-6 py-4 text-gray-600 text-right font-mono font-bold">{row.count}</td>
                     </tr>
                   ))
                 )}
@@ -289,32 +315,32 @@ export default function HomeDashboard() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-800 bg-gray-900/40 overflow-hidden">
-          <div className="border-b border-gray-800 px-5 py-4 bg-gray-900/60">
-            <h3 className="font-bold text-gray-200">Top Categories</h3>
+        <div className="rounded-2xl bg-white border border-[#E4E3DD] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] overflow-hidden">
+          <div className="border-b border-[#E4E3DD] px-6 py-4 bg-gray-50/50">
+            <h3 className="font-bold text-[#1C1C1E] text-xs uppercase tracking-wider text-gray-500">Top Categories</h3>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-full text-xs">
               <thead>
-                <tr className="border-b border-gray-800 text-left text-gray-400">
-                  <th className="px-5 py-3 font-semibold">Category</th>
-                  <th className="px-5 py-3 font-semibold text-right">Count</th>
+                <tr className="border-b border-[#E4E3DD] text-left text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-4 font-bold">Category</th>
+                  <th className="px-6 py-4 font-bold text-right">Count</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800/40">
+              <tbody className="divide-y divide-[#E4E3DD]/60">
                 {loadingStats ? (
                   <tr>
-                    <td colSpan={2} className="px-5 py-4 text-center text-gray-500">Loading data...</td>
+                    <td colSpan={2} className="px-6 py-5 text-center text-gray-400">Loading data...</td>
                   </tr>
                 ) : !stats?.topCategories || stats.topCategories.length === 0 ? (
                   <tr>
-                    <td colSpan={2} className="px-5 py-4 text-center text-gray-500">No data found</td>
+                    <td colSpan={2} className="px-6 py-5 text-center text-gray-400">No data found</td>
                   </tr>
                 ) : (
                   stats.topCategories.map((row) => (
-                    <tr key={row.name} className="hover:bg-gray-800/20">
-                      <td className="px-5 py-3 text-white font-medium">{row.name}</td>
-                      <td className="px-5 py-3 text-gray-300 text-right">{row.count}</td>
+                    <tr key={row.name} className="hover:bg-[#F4F3EF]/30 transition-colors">
+                      <td className="px-6 py-4 text-gray-800 font-semibold">{row.name}</td>
+                      <td className="px-6 py-4 text-gray-600 text-right font-mono font-bold">{row.count}</td>
                     </tr>
                   ))
                 )}
@@ -326,31 +352,31 @@ export default function HomeDashboard() {
 
       {/* Recent Leads */}
       <div>
-        <h2 className="text-lg font-bold text-gray-200 mb-4">Recent Leads</h2>
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Recent Leads</h2>
         {loadingLeads ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-32 animate-pulse rounded-xl bg-gray-900 border border-gray-800" />
+              <div key={i} className="h-36 animate-pulse rounded-2xl bg-white border border-[#E4E3DD]" />
             ))}
           </div>
         ) : recentLeads.length === 0 ? (
-          <div className="text-center py-8 rounded-xl border border-gray-800 bg-gray-900/20 text-gray-500 text-sm">
+          <div className="text-center py-10 rounded-2xl border border-[#E4E3DD] bg-white text-gray-400 text-xs font-semibold">
             No leads in database yet.
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
             {recentLeads.map((lead) => (
-              <div key={lead.id} className="rounded-xl border border-gray-800 bg-gray-900/30 p-5 flex flex-col justify-between hover:border-gray-700 transition-all duration-200">
+              <div key={lead.id} className="rounded-2xl border border-[#E4E3DD] bg-white p-5 flex flex-col justify-between hover:border-gray-400 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] hover:scale-[1.01] transition-all duration-200">
                 <div>
                   <div className="flex items-start justify-between gap-2">
-                    <h4 className="font-bold text-white text-sm line-clamp-1" title={lead.name}>{lead.name}</h4>
+                    <h4 className="font-bold text-gray-800 text-sm line-clamp-1" title={lead.name}>{lead.name}</h4>
                     <StatusBadge status={lead.status} />
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">{lead.category || 'No Category'}</p>
-                  <p className="text-xs text-gray-500 mt-1">{lead.city || 'No City'}</p>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-2">{lead.category || 'No Category'}</p>
+                  <p className="text-xs text-gray-400 font-medium mt-0.5">{lead.city || 'No City'}</p>
                 </div>
-                <div className="mt-4 pt-3 border-t border-gray-800/60 text-[10px] text-gray-500 flex items-center justify-between">
-                  <span>{lead.source}</span>
+                <div className="mt-5 pt-3 border-t border-gray-100 text-[10px] text-gray-400 flex items-center justify-between font-medium">
+                  <span className="capitalize">{lead.source.replace(/_/g, ' ')}</span>
                   <span>{formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}</span>
                 </div>
               </div>
@@ -361,21 +387,21 @@ export default function HomeDashboard() {
 
       {/* Quick Actions Row */}
       <div>
-        <h2 className="text-lg font-bold text-gray-200 mb-4">Quick Controls</h2>
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Quick Controls</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Link
             href="/scraper"
-            className="flex items-center justify-center gap-2 rounded-xl border border-gray-800 bg-gray-900 hover:bg-gray-800/80 hover:border-gray-700 text-sm font-semibold text-white py-4 transition-all duration-150"
+            className="flex items-center justify-center gap-2 rounded-2xl border border-[#E4E3DD] bg-white hover:bg-gray-50 text-xs font-bold uppercase tracking-wider text-gray-700 py-4.5 shadow-sm transition-all duration-150"
           >
             🗺️ Run Scraper
           </Link>
           <button
             onClick={triggerAiWorkflow}
             disabled={triggeringAi}
-            className="flex items-center justify-center gap-2 rounded-xl border border-gray-800 bg-gray-900 hover:bg-gray-800/80 hover:border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold text-white py-4 transition-all duration-150"
+            className="flex items-center justify-center gap-2 rounded-2xl border border-[#E4E3DD] bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-gray-700 py-4.5 shadow-sm transition-all duration-150"
           >
             {triggeringAi ? (
-              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-gray-700 border-t-transparent rounded-full animate-spin" />
             ) : (
               '🤖'
             )}
@@ -384,10 +410,10 @@ export default function HomeDashboard() {
           <button
             onClick={triggerOutreachWorkflow}
             disabled={triggeringOutreach}
-            className="flex items-center justify-center gap-2 rounded-xl border border-gray-800 bg-gray-900 hover:bg-gray-800/80 hover:border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold text-white py-4 transition-all duration-150"
+            className="flex items-center justify-center gap-2 rounded-2xl border border-[#E4E3DD] bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-gray-700 py-4.5 shadow-sm transition-all duration-150"
           >
             {triggeringOutreach ? (
-              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-gray-700 border-t-transparent rounded-full animate-spin" />
             ) : (
               '📤'
             )}
@@ -395,7 +421,7 @@ export default function HomeDashboard() {
           </button>
           <Link
             href="/leads"
-            className="flex items-center justify-center gap-2 rounded-xl border border-purple-900/60 bg-purple-950/20 hover:bg-purple-900/30 text-sm font-semibold text-purple-300 py-4 transition-all duration-150"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] hover:bg-[#252528] text-xs font-bold uppercase tracking-wider text-white py-4.5 shadow-md shadow-gray-950/10 transition-all duration-150"
           >
             📋 View All Leads
           </Link>

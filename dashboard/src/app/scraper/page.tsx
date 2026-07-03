@@ -1,3 +1,4 @@
+// dashboard/src/app/scraper/page.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -46,6 +47,7 @@ export default function ScraperPage() {
   const [city, setCity] = useState('Mumbai')
   const [maxLeads, setMaxLeads] = useState(25)
   const [workerCount, setWorkerCount] = useState(1)
+  const [includeEmails, setIncludeEmails] = useState(false)
   const [queuing, setQueuing] = useState(false)
 
   // Helper to parse keyword brackets notation
@@ -72,7 +74,7 @@ export default function ScraperPage() {
   const [loadingJobs, setLoadingJobs] = useState(true)
   const [selectedJob, setSelectedJob] = useState<ScrapeJob | null>(null)
 
-  // Fetch all jobs — scraped_leads come embedded in the job record (JSONB)
+  // Fetch all jobs
   async function fetchJobs() {
     try {
       const res = await fetch('/api/scraper/jobs')
@@ -92,12 +94,10 @@ export default function ScraperPage() {
     }
   }
 
-  // Poll jobs every 5 seconds — scraped_leads come embedded in job records
   useEffect(() => {
     fetchJobs()
     const interval = setInterval(fetchJobs, 5000)
     return () => clearInterval(interval)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Queue a new job
@@ -111,6 +111,9 @@ export default function ScraperPage() {
     setQueuing(true)
     const toastId = toast.loading('Queueing scrape job...')
     try {
+      // Append :email to provider if enrichment is checked
+      const finalProvider = includeEmails ? `${provider}:email` : provider;
+
       const res = await fetch('/api/scraper/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,7 +123,7 @@ export default function ScraperPage() {
           area: area.trim() || undefined,
           maxLeads,
           workerCount,
-          provider
+          provider: finalProvider
         })
       })
 
@@ -148,15 +151,12 @@ export default function ScraperPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId })
       })
-      const data = await res.json()
       if (res.ok) {
         toast.success('Job paused')
         fetchJobs()
-      } else {
-        toast.error(data.error || 'Failed to pause')
       }
     } catch {
-      toast.error('Error sending request')
+      toast.error('Failed to pause job')
     }
   }
 
@@ -168,15 +168,12 @@ export default function ScraperPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId })
       })
-      const data = await res.json()
       if (res.ok) {
         toast.success('Job resumed')
         fetchJobs()
-      } else {
-        toast.error(data.error || 'Failed to resume')
       }
     } catch {
-      toast.error('Error sending request')
+      toast.error('Failed to resume job')
     }
   }
 
@@ -188,15 +185,12 @@ export default function ScraperPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId })
       })
-      const data = await res.json()
       if (res.ok) {
         toast.success('Job stopped')
         fetchJobs()
-      } else {
-        toast.error(data.error || 'Failed to stop')
       }
     } catch {
-      toast.error('Error sending request')
+      toast.error('Failed to stop job')
     }
   }
 
@@ -275,26 +269,26 @@ export default function ScraperPage() {
   const activeJob = jobs.find(j => j.status === 'running')
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-[#2D2D2D] select-none">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">Cloud Scraper Console</h1>
-        <p className="mt-1 text-sm text-gray-400">Deploy, manage, and monitor background Maps scraping jobs directly in the cloud.</p>
+        <h1 className="text-3xl font-black text-[#1C1C1E] tracking-tight">Cloud Scraper Console</h1>
+        <p className="mt-1 text-sm text-gray-500 font-medium">Deploy, manage, and monitor background Maps scraping jobs directly in the cloud.</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left Column: Forms */}
         <div className="lg:col-span-1 space-y-6">
           {/* Create Job Form */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-            <h3 className="font-bold text-gray-200 text-lg mb-4">🚀 Start Scrape Job</h3>
+          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+            <h3 className="font-bold text-[#1C1C1E] text-md mb-4 uppercase tracking-wider text-[11px] text-gray-500">🚀 Queue Scrape Job</h3>
             <form onSubmit={handleQueueJob} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-semibold text-gray-400 mb-1 uppercase tracking-wider">Provider</label>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Provider</label>
                 <select
                   value={provider}
                   onChange={(e) => setProvider(e.target.value)}
-                  className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500"
                 >
                   <option value="google_maps">🗺️ Google Maps Scraper</option>
                   <option value="google_search">🔍 Google Search Scraper</option>
@@ -303,69 +297,91 @@ export default function ScraperPage() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-semibold text-gray-400 mb-1 uppercase tracking-wider">Keyword</label>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Keyword</label>
                 <input
                   type="text"
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                   placeholder="e.g. dentist, cafe, hotel"
                   required
-                  className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-semibold text-gray-400 mb-1 uppercase tracking-wider">Area (Optional)</label>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Area (Optional)</label>
                 <input
                   type="text"
                   value={area}
                   onChange={(e) => setArea(e.target.value)}
                   placeholder="e.g. Andheri, Bandra, Juhu"
-                  className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-semibold text-gray-400 mb-1 uppercase tracking-wider">City</label>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">City</label>
                 <input
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   placeholder="e.g. Mumbai, Nagpur, Pune"
                   required
-                  className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 mb-1 uppercase tracking-wider">Max Leads</label>
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Max Leads</label>
                   <input
                     type="number"
                     value={maxLeads}
                     onChange={(e) => setMaxLeads(parseInt(e.target.value, 10) || 10)}
                     min="1"
-                    className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
+                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-400 mb-1 uppercase tracking-wider">Worker Tabs</label>
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Worker Tabs</label>
                   <select
                     value={workerCount}
                     onChange={(e) => setWorkerCount(parseInt(e.target.value, 10) || 1)}
-                    className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500"
+                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500"
                   >
-                    <option value={1}>1 Worker (Sequential)</option>
-                    <option value={2}>2 Workers (Tabs)</option>
-                    <option value={4}>4 Workers (Tabs)</option>
+                    <option value={1}>1 Tab</option>
+                    <option value={2}>2 Tabs</option>
+                    <option value={4}>4 Tabs</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Email Enrichment Toggle */}
+              <div className="pt-2">
+                <label className="flex items-center gap-3 cursor-pointer group select-none">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={includeEmails}
+                      onChange={(e) => setIncludeEmails(e.target.checked)}
+                      className="sr-only"
+                    />
+                    <div className={`w-10 h-6 rounded-full transition-colors ${includeEmails ? 'bg-[#1C1C1E]' : 'bg-[#ECEAE4]'}`} />
+                    <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${includeEmails ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </div>
+                  <span className="text-xs font-bold text-gray-600 group-hover:text-[#1C1C1E] transition-colors">
+                    Enrich with Email addresses
+                  </span>
+                </label>
+                <p className="text-[9px] text-gray-400 ml-13 mt-1 leading-relaxed">
+                  Automatically extracts emails by parsing business websites in a separate tab during extraction.
+                </p>
               </div>
 
               <button
                 type="submit"
                 disabled={queuing}
-                className="w-full rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold text-white py-2.5 mt-2 transition-colors"
+                className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white py-3.5 mt-2 transition-all shadow-sm"
               >
                 {queuing ? 'Queueing...' : 'Queue Scrape Job'}
               </button>
@@ -373,10 +389,10 @@ export default function ScraperPage() {
           </div>
 
           {/* Manual Entry Form */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-            <h3 className="font-bold text-gray-200 text-lg mb-2">✏️ Manual Lead Entry</h3>
+          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+            <h3 className="font-bold text-[#1C1C1E] text-md mb-1 uppercase tracking-wider text-[11px] text-gray-500">✏️ Manual Lead Entry</h3>
             <p className="text-[10px] text-gray-400 mb-4">Direct database bypass intake pipeline</p>
-            <form onSubmit={handleQuickAdd} className="space-y-3">
+            <form onSubmit={handleQuickAdd} className="space-y-3.5">
               <div>
                 <input
                   type="text"
@@ -384,7 +400,7 @@ export default function ScraperPage() {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Business Name *"
                   required
-                  className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -393,14 +409,14 @@ export default function ScraperPage() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="Phone (e.g. +91...)"
-                  className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
                 />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Email"
-                  className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -409,14 +425,14 @@ export default function ScraperPage() {
                   value={leadCity}
                   onChange={(e) => setLeadCity(e.target.value)}
                   placeholder="City"
-                  className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
                 />
                 <input
                   type="text"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   placeholder="Category"
-                  className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
                 />
               </div>
               <input
@@ -424,12 +440,12 @@ export default function ScraperPage() {
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
                 placeholder="Website URL"
-                className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
               />
               <button
                 type="submit"
                 disabled={addingLead}
-                className="flex items-center justify-center gap-2 w-full rounded-lg bg-gray-850 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold text-white py-2.5 transition-colors"
+                className="flex items-center justify-center gap-2 w-full rounded-xl bg-gray-100 hover:bg-[#202022] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-gray-700 py-3.5 transition-all"
               >
                 Add Lead
               </button>
@@ -440,12 +456,11 @@ export default function ScraperPage() {
         {/* Right Column: Live Status & History */}
         <div className="lg:col-span-2 space-y-6">
           {/* Active Job status */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-            <h3 className="font-bold text-gray-200 text-lg mb-4 flex items-center justify-between">
+          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+            <h3 className="font-bold text-[#1C1C1E] text-md mb-4 flex items-center justify-between uppercase tracking-wider text-[11px] text-gray-500">
               <span>⚡ Live Scraping Progress</span>
               {activeJob && (
-                <span className="flex items-center gap-1.5 text-xs text-green-400 font-semibold uppercase tracking-wider animate-pulse">
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                <span className="flex items-center gap-1.5 text-[10px] text-green-600 font-bold uppercase tracking-wider animate-pulse bg-green-50 border border-green-200 px-2 py-0.5 rounded">
                   Active
                 </span>
               )}
@@ -454,117 +469,119 @@ export default function ScraperPage() {
             {activeJob ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div className="rounded-lg bg-gray-950/80 p-3 border border-gray-850">
-                    <span className="text-gray-500 uppercase font-semibold text-[10px]">Keyword</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <p className="font-bold text-gray-200 text-sm">{parseKeywordAndArea(activeJob.keyword).keyword}</p>
+                  <div className="rounded-xl bg-[#F4F3EF] p-4 border border-[#E4E3DD]">
+                    <span className="text-gray-400 uppercase font-bold text-[9px]">Keyword</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="font-bold text-gray-800 text-sm">{parseKeywordAndArea(activeJob.keyword).keyword}</p>
                       {parseKeywordAndArea(activeJob.keyword).area && (
-                        <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 font-semibold text-[9px] uppercase">
+                        <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-bold text-[8px] uppercase">
                           📍 {parseKeywordAndArea(activeJob.keyword).area}
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="rounded-lg bg-gray-950/80 p-3 border border-gray-850">
-                    <span className="text-gray-500 uppercase font-semibold text-[10px]">City</span>
-                    <p className="font-bold text-gray-200 text-sm">{activeJob.city}</p>
+                  <div className="rounded-xl bg-[#F4F3EF] p-4 border border-[#E4E3DD]">
+                    <span className="text-gray-400 uppercase font-bold text-[9px]">City</span>
+                    <p className="font-bold text-gray-800 text-sm mt-1">{activeJob.city}</p>
                   </div>
                 </div>
 
                 {/* Progress bar */}
                 <div>
-                  <div className="flex justify-between text-xs font-medium text-gray-400 mb-1.5">
+                  <div className="flex justify-between text-xs font-bold text-gray-500 mb-1.5">
                     <span>Collecting details...</span>
                     <span>{activeJob.progress} / {activeJob.max_leads} Leads ({Math.round((activeJob.progress / activeJob.max_leads) * 100)}%)</span>
                   </div>
-                  <div className="w-full bg-gray-950 rounded-full h-3.5 overflow-hidden border border-gray-850 p-0.5">
+                  <div className="w-full bg-[#F4F3EF] rounded-full h-4 overflow-hidden p-0.5">
                     <div
-                      className="bg-purple-600 h-2 rounded-full transition-all duration-500"
+                      className="bg-[#1C1C1E] h-3 rounded-full transition-all duration-500"
                       style={{ width: `${Math.min(100, (activeJob.progress / activeJob.max_leads) * 100)}%` }}
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded-md bg-gray-950/40 p-2.5 border border-gray-850">
-                    <span className="text-gray-500 uppercase font-semibold text-[9px] block">ETA</span>
-                    <span className="font-bold text-gray-300">
+                  <div className="rounded-lg bg-gray-50 p-2.5 border border-[#E4E3DD]">
+                    <span className="text-gray-400 uppercase font-bold text-[8px] block">ETA</span>
+                    <span className="font-mono font-bold text-gray-700">
                       {activeJob.estimated_remaining_seconds 
                         ? `${Math.round(activeJob.estimated_remaining_seconds)}s` 
                         : 'Calculating...'}
                     </span>
                   </div>
-                  <div className="rounded-md bg-gray-950/40 p-2.5 border border-gray-850">
-                    <span className="text-gray-500 uppercase font-semibold text-[9px] block">Workers</span>
-                    <span className="font-bold text-gray-300">{activeJob.worker_count} Tab(s)</span>
+                  <div className="rounded-lg bg-gray-50 p-2.5 border border-[#E4E3DD]">
+                    <span className="text-gray-400 uppercase font-bold text-[8px] block">Workers</span>
+                    <span className="font-bold text-gray-700">{activeJob.worker_count} Tab(s)</span>
                   </div>
-                  <div className="rounded-md bg-gray-950/40 p-2.5 border border-gray-850">
-                    <span className="text-gray-500 uppercase font-semibold text-[9px] block">Errors</span>
-                    <span className="font-bold text-red-400">{activeJob.error_count}</span>
+                  <div className="rounded-lg bg-gray-50 p-2.5 border border-[#E4E3DD]">
+                    <span className="text-gray-400 uppercase font-bold text-[8px] block">Errors</span>
+                    <span className="font-bold text-red-500">{activeJob.error_count}</span>
                   </div>
                 </div>
 
-                <div className="rounded-lg bg-purple-950/20 border border-purple-900/30 p-3 text-xs flex items-center justify-between">
-                  <span className="text-purple-300">Current Listing:</span>
-                  <span className="font-bold text-white max-w-[200px] truncate">{activeJob.current_business || 'Starting...'}</span>
+                <div className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-3 text-xs flex items-center justify-between">
+                  <span className="text-gray-500 font-semibold">Current Listing:</span>
+                  <span className="font-bold text-gray-800 max-w-[200px] truncate">{activeJob.current_business || 'Starting...'}</span>
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => handlePauseJob(activeJob.id)}
-                    className="flex-1 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-xs font-semibold text-white py-2"
+                    className="flex-1 rounded-xl bg-yellow-500 hover:bg-yellow-600 text-xs font-bold uppercase tracking-wider text-white py-3 transition-colors"
                   >
                     ⏸️ Pause
                   </button>
                   <button
                     onClick={() => handleStopJob(activeJob.id)}
-                    className="flex-1 rounded-lg bg-red-600 hover:bg-red-500 text-xs font-semibold text-white py-2"
+                    className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 text-xs font-bold uppercase tracking-wider text-white py-3 transition-colors"
                   >
                     ⏹️ Stop
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="text-center py-12 text-gray-500 text-xs">
-                <p className="font-medium text-sm text-gray-400 mb-1">No active scraping job running</p>
+              <div className="text-center py-12 text-gray-400 text-xs font-medium">
+                <p className="font-bold text-sm text-gray-500 mb-1">No active scraping job running</p>
                 <p>Configure and queue a new job on the left panel to begin.</p>
               </div>
             )}
           </div>
 
-          {/* Live Leads Preview - reads from active job's scraped_leads JSONB (no extra API call) */}
+          {/* Live Leads Preview */}
           {activeJob && (activeJob.scraped_leads?.length ?? 0) > 0 && (
-            <div className="rounded-xl border border-purple-900/40 bg-purple-950/10 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-purple-300 text-sm flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
-                  Live Preview — {activeJob.scraped_leads!.length} leads extracted so far
+            <div className="rounded-2xl border border-purple-200 bg-purple-50/30 p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-purple-950 text-xs uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse" />
+                  Live Preview — {activeJob.scraped_leads!.length} Leads Extracted
                 </h3>
-                <span className="text-[9px] text-green-400 uppercase tracking-wider font-semibold">✓ Auto-saved to DB</span>
+                <span className="text-[10px] text-green-600 uppercase tracking-wider font-bold bg-green-50 border border-green-200 px-2 py-0.5 rounded">✓ Auto-saved to DB</span>
               </div>
-              <div className="overflow-x-auto max-h-[160px] overflow-y-auto">
-                <table className="w-full text-left text-[10px] border-collapse min-w-[600px]">
-                  <thead className="sticky top-0 bg-gray-950">
-                    <tr className="border-b border-purple-900/30 text-gray-500 font-semibold uppercase tracking-wider text-[9px]">
-                      <th className="pb-2 pr-3">Name</th>
-                      <th className="pb-2 pr-3">Phone</th>
-                      <th className="pb-2 pr-3">Address</th>
-                      <th className="pb-2 pr-3">Category</th>
-                      <th className="pb-2 pr-3">Rating</th>
-                      <th className="pb-2">Website</th>
+              <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
+                <table className="w-full text-left text-[11px] border-collapse min-w-[700px]">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b border-purple-200 text-purple-950 font-bold uppercase tracking-wider text-[9px]">
+                      <th className="pb-2.5 pr-4">Name</th>
+                      <th className="pb-2.5 pr-4">Phone</th>
+                      <th className="pb-2.5 pr-4">Email</th>
+                      <th className="pb-2.5 pr-4">Address</th>
+                      <th className="pb-2.5 pr-4">Category</th>
+                      <th className="pb-2.5 pr-4">Rating</th>
+                      <th className="pb-2.5">Website</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-purple-900/20 text-gray-300">
-                    {activeJob.scraped_leads!.slice(-10).map((lead, i) => (
-                      <tr key={i} className="hover:bg-purple-950/20">
-                        <td className="py-1.5 pr-3 font-medium text-white max-w-[130px] truncate">{lead.name}</td>
-                        <td className="py-1.5 pr-3 font-mono text-gray-400 text-[9px] whitespace-nowrap">{lead.phone || '—'}</td>
-                        <td className="py-1.5 pr-3 text-gray-400 max-w-[140px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
-                        <td className="py-1.5 pr-3 text-gray-400 max-w-[90px] truncate">{lead.category || '—'}</td>
-                        <td className="py-1.5 pr-3 text-yellow-400 whitespace-nowrap">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
-                        <td className="py-1.5 text-blue-400 max-w-[120px] truncate">
+                  <tbody className="divide-y divide-purple-100 text-gray-700">
+                    {activeJob.scraped_leads!.slice(-15).map((lead, i) => (
+                      <tr key={i} className="hover:bg-purple-50/50">
+                        <td className="py-2.5 pr-4 font-bold text-purple-950 max-w-[130px] truncate">{lead.name}</td>
+                        <td className="py-2.5 pr-4 font-mono text-gray-500 text-[10px] whitespace-nowrap">{lead.phone || '—'}</td>
+                        <td className="py-2.5 pr-4 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
+                        <td className="py-2.5 pr-4 text-gray-500 max-w-[140px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
+                        <td className="py-2.5 pr-4 text-gray-500 max-w-[90px] truncate">{lead.category || '—'}</td>
+                        <td className="py-2.5 pr-4 text-yellow-600 font-bold whitespace-nowrap">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
+                        <td className="py-2.5 text-blue-600 max-w-[120px] truncate font-semibold">
                           {lead.website
-                            ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-300">{lead.website.replace(/^https?:\/\//, '')}</a>
+                            ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-500">{lead.website.replace(/^https?:\/\//, '')}</a>
                             : '—'}
                         </td>
                       </tr>
@@ -576,42 +593,42 @@ export default function ScraperPage() {
           )}
 
           {/* Job History list */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
-            <h3 className="font-bold text-gray-200 text-lg mb-4">📜 Scrape Job History</h3>
+          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+            <h3 className="font-bold text-[#1C1C1E] text-md mb-4 uppercase tracking-wider text-[11px] text-gray-500">📜 Scrape Job History</h3>
             
             {loadingJobs ? (
-              <div className="text-center py-6 text-xs text-gray-500">Loading history...</div>
+              <div className="text-center py-6 text-xs text-gray-400">Loading history...</div>
             ) : jobs.length === 0 ? (
-              <div className="text-center py-6 text-xs text-gray-500">No jobs registered yet</div>
+              <div className="text-center py-6 text-xs text-gray-400">No jobs registered yet</div>
             ) : (
-              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
                 {jobs.map((job) => (
-                  <div key={job.id} className="rounded-lg border border-gray-850 bg-gray-950/30 p-4 space-y-3">
+                  <div key={job.id} className="rounded-xl border border-[#E4E3DD] bg-gray-50/50 p-4 space-y-3.5">
                     <div className="flex justify-between items-start text-xs">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-gray-200">
+                          <span className="font-bold text-gray-800">
                             {parseKeywordAndArea(job.keyword).keyword} in {job.city}
                           </span>
                           {parseKeywordAndArea(job.keyword).area && (
-                            <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 font-semibold text-[8px] uppercase">
+                            <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-bold text-[8px] uppercase">
                               📍 {parseKeywordAndArea(job.keyword).area}
                             </span>
                           )}
-                          <span className="text-[10px] text-gray-500">({job.current_provider})</span>
+                          <span className="text-[10px] text-gray-400">({job.current_provider})</span>
                         </div>
-                        <span className="text-[10px] text-gray-500">{new Date(job.created_at).toLocaleString()}</span>
+                        <span className="text-[10px] text-gray-400 mt-1 block font-medium">{new Date(job.created_at).toLocaleString()}</span>
                       </div>
                       
                       <div className="flex items-center gap-2">
                         {/* Status Badge */}
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
-                          ${job.status === 'completed' ? 'bg-green-950 text-green-400 border border-green-900' : ''}
-                          ${job.status === 'running' ? 'bg-blue-950 text-blue-400 border border-blue-900' : ''}
-                          ${job.status === 'paused' ? 'bg-yellow-950 text-yellow-400 border border-yellow-900' : ''}
-                          ${job.status === 'queued' ? 'bg-gray-800 text-gray-400' : ''}
-                          ${job.status === 'stopped' ? 'bg-orange-950 text-orange-400 border border-orange-900' : ''}
-                          ${job.status === 'failed' ? 'bg-red-950 text-red-400 border border-red-900' : ''}
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border
+                          ${job.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' : ''}
+                          ${job.status === 'running' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}
+                          ${job.status === 'paused' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : ''}
+                          ${job.status === 'queued' ? 'bg-gray-100 text-gray-500 border-gray-200' : ''}
+                          ${job.status === 'stopped' ? 'bg-orange-50 text-orange-700 border-orange-200' : ''}
+                          ${job.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' : ''}
                         `}>
                           {job.status}
                         </span>
@@ -619,14 +636,14 @@ export default function ScraperPage() {
                         {/* Toggle expand */}
                         <button
                           onClick={() => setSelectedJob(selectedJob?.id === job.id ? null : job)}
-                          className="px-2 py-1 text-[10px] bg-gray-800 text-gray-300 rounded hover:bg-gray-700"
+                          className="px-2 py-1 text-[9px] font-bold uppercase bg-white border border-[#E4E3DD] text-gray-600 rounded-lg hover:bg-gray-100"
                         >
-                          {selectedJob?.id === job.id ? 'Hide' : 'View Leads & Logs'}
+                          {selectedJob?.id === job.id ? 'Hide' : 'Leads'}
                         </button>
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center text-xs text-gray-400">
+                    <div className="flex justify-between items-center text-xs text-gray-500 font-medium">
                       <span>Leads: {job.progress} / {job.max_leads}</span>
                       <span>Duration: {job.duration_seconds ? `${job.duration_seconds}s` : 'N/A'}</span>
                     </div>
@@ -636,7 +653,7 @@ export default function ScraperPage() {
                       {job.status === 'paused' && (
                         <button
                           onClick={() => handleResumeJob(job.id)}
-                          className="px-2 py-1 text-[10px] bg-green-600 hover:bg-green-500 rounded text-white"
+                          className="px-2.5 py-1 text-[9px] font-bold uppercase bg-green-600 hover:bg-green-700 rounded-lg text-white"
                         >
                           ▶️ Resume
                         </button>
@@ -644,30 +661,29 @@ export default function ScraperPage() {
                       {['completed', 'stopped', 'failed'].includes(job.status) && (
                         <button
                           onClick={() => handleRetryJob(job.id)}
-                          className="px-2 py-1 text-[10px] bg-purple-600 hover:bg-purple-500 rounded text-white"
+                          className="px-2.5 py-1 text-[9px] font-bold uppercase bg-[#1C1C1E] hover:bg-[#252528] rounded-lg text-white"
                         >
                           🔄 Retry/Clone
                         </button>
                       )}
                     </div>
 
-                    {/* Scraped Leads + Save Panel (JSONB from job record — no extra API call) */}
+                    {/* Scraped Leads + Save Panel */}
                     {selectedJob?.id === job.id && (
                       <div className="mt-3 space-y-3">
-                        {/* Leads table with checkboxes */}
-                        <div className="rounded-lg bg-gray-950 border border-gray-800 p-3">
+                        <div className="rounded-xl bg-white border border-[#E4E3DD] p-4">
                           {(() => {
                             const leads = job.scraped_leads || []
                             return (
                               <>
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider">
+                                <div className="flex items-center justify-between mb-3 border-b border-[#E4E3DD] pb-2">
+                                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                                     📋 Scraped Leads ({leads.length})
                                   </span>
                                   {leads.length > 0 && (
                                     <a
                                       href="/leads"
-                                      className="px-3 py-1 text-[10px] font-semibold rounded bg-purple-650 hover:bg-purple-600 text-white transition-colors"
+                                      className="px-3 py-1.5 text-[9px] font-bold uppercase rounded-lg bg-[#1C1C1E] hover:bg-[#252528] text-white transition-colors"
                                     >
                                       📂 View on Leads Page
                                     </a>
@@ -675,7 +691,7 @@ export default function ScraperPage() {
                                 </div>
 
                                 {leads.length === 0 ? (
-                                  <p className="text-[10px] text-gray-600 py-3">
+                                  <p className="text-[10px] text-gray-400 py-3 font-semibold text-center">
                                     {job.status === 'running'
                                       ? 'Leads stream in here as scraping progresses...'
                                       : 'No leads extracted yet.'}
@@ -683,9 +699,9 @@ export default function ScraperPage() {
                                 ) : (
                                   <div>
                                     <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
-                                      <table className="w-full text-left text-[10px] border-collapse">
-                                        <thead className="sticky top-0 bg-gray-950">
-                                          <tr className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800 text-[9px]">
+                                      <table className="w-full text-left text-[10px] border-collapse min-w-[600px]">
+                                        <thead className="sticky top-0 bg-white">
+                                          <tr className="text-gray-400 font-bold uppercase tracking-wider border-b border-[#E4E3DD] text-[8px]">
                                             <th className="pb-1.5 pr-2">Name</th>
                                             <th className="pb-1.5 pr-2">Phone</th>
                                             <th className="pb-1.5 pr-2">Email</th>
@@ -695,19 +711,16 @@ export default function ScraperPage() {
                                             <th className="pb-1.5">Website</th>
                                           </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-900">
+                                        <tbody className="divide-y divide-gray-100 text-gray-700">
                                           {leads.slice(0, 10).map((lead, idx) => (
-                                            <tr
-                                              key={idx}
-                                              className="hover:bg-gray-900/60 transition-colors"
-                                            >
-                                              <td className="py-1.5 pr-2 font-medium text-white max-w-[120px] truncate">{lead.name}</td>
-                                              <td className="py-1.5 pr-2 font-mono text-gray-400 text-[9px]">{lead.phone || '—'}</td>
-                                              <td className="py-1.5 pr-2 text-purple-300 max-w-[120px] truncate">{lead.email || '—'}</td>
-                                              <td className="py-1.5 pr-2 text-gray-400 max-w-[120px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
-                                              <td className="py-1.5 pr-2 text-gray-400 max-w-[80px] truncate">{lead.category || '—'}</td>
-                                              <td className="py-1.5 pr-2 text-yellow-400">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
-                                              <td className="py-1.5 text-blue-400 max-w-[100px] truncate">
+                                            <tr key={idx} className="hover:bg-gray-50">
+                                              <td className="py-2 pr-2 font-bold text-gray-800 max-w-[120px] truncate">{lead.name}</td>
+                                              <td className="py-2 pr-2 font-mono text-gray-500 text-[9px]">{lead.phone || '—'}</td>
+                                              <td className="py-2 pr-2 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
+                                              <td className="py-2 pr-2 text-gray-500 max-w-[120px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
+                                              <td className="py-2 pr-2 text-gray-500 max-w-[80px] truncate">{lead.category || '—'}</td>
+                                              <td className="py-2 pr-2 text-yellow-600 font-bold">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
+                                              <td className="py-2 text-blue-600 max-w-[100px] truncate font-semibold">
                                                 {lead.website
                                                   ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
                                                   : '—'}
@@ -718,8 +731,8 @@ export default function ScraperPage() {
                                       </table>
                                     </div>
                                     {leads.length > 10 && (
-                                      <p className="text-[10px] text-gray-500 mt-2 italic text-center">
-                                        Showing first 10 of {leads.length} leads. View all of them on the <a href="/leads" className="text-purple-400 hover:text-purple-300 underline font-medium">Leads page</a>.
+                                      <p className="text-[10px] text-gray-400 mt-3 italic text-center font-medium">
+                                        Showing first 10 of {leads.length} leads. View all of them on the <a href="/leads" className="text-purple-600 hover:underline font-bold">Leads page</a>.
                                       </p>
                                     )}
                                   </div>
@@ -730,15 +743,15 @@ export default function ScraperPage() {
                         </div>
 
                         {/* Logs Stream */}
-                        <div className="rounded bg-black border border-purple-950/40 p-3">
-                          <span className="block text-[10px] font-semibold text-purple-400 uppercase mb-2">📟 Logs Stream</span>
-                          <div className="text-[10px] text-gray-400 font-mono space-y-1 max-h-[100px] overflow-y-auto">
+                        <div className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-4">
+                          <span className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">📟 Logs Stream</span>
+                          <div className="text-[10px] text-gray-600 font-mono space-y-1 max-h-[120px] overflow-y-auto">
                             {job.logs && job.logs.length > 0 ? (
                               [...job.logs].reverse().map((log, index) => (
                                 <p key={index} className="whitespace-pre-wrap">{log}</p>
                               ))
                             ) : (
-                              <p className="text-gray-600">No logs yet.</p>
+                              <p className="text-gray-400">No logs yet.</p>
                             )}
                           </div>
                         </div>
