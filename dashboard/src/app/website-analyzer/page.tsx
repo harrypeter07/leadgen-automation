@@ -17,6 +17,8 @@ interface AuditReport {
     technologies: string[]
     images_count: number
     missing_alt_count: number
+    page_size_kb?: number
+    resource_count?: number
   }
   social_links: string[]
   emails: string[]
@@ -223,7 +225,7 @@ export default function WebsiteAnalyzerPage() {
             <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
               <h3 className="font-bold text-[#1C1C1E] text-xs uppercase tracking-wider text-gray-500 border-b border-[#E4E3DD] pb-3">🛠️ Technology & Security Audit</h3>
               
-              <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                 <div className="bg-[#F4F3EF] p-4.5 rounded-2xl border border-[#E4E3DD] space-y-1">
                   <span className="text-gray-400 font-bold uppercase text-[9px] block">Load Time</span>
                   <span className="text-gray-800 font-black text-sm">{report.tech_stack.load_time_ms} ms</span>
@@ -231,6 +233,16 @@ export default function WebsiteAnalyzerPage() {
                 <div className="bg-[#F4F3EF] p-4.5 rounded-2xl border border-[#E4E3DD] space-y-1">
                   <span className="text-gray-400 font-bold uppercase text-[9px] block">SSL Connection</span>
                   <span className="text-gray-800 font-black text-sm">{report.tech_stack.ssl_enabled ? '🔒 HTTPS Secure' : '⚠️ Unsecure HTTP'}</span>
+                </div>
+                <div className="bg-[#F4F3EF] p-4.5 rounded-2xl border border-[#E4E3DD] space-y-1">
+                  <span className="text-gray-400 font-bold uppercase text-[9px] block">Page Size</span>
+                  <span className="text-gray-800 font-black text-sm">
+                    {report.tech_stack.page_size_kb ? `${(report.tech_stack.page_size_kb / 1024).toFixed(2)} MB` : '0 KB'}
+                  </span>
+                </div>
+                <div className="bg-[#F4F3EF] p-4.5 rounded-2xl border border-[#E4E3DD] space-y-1">
+                  <span className="text-gray-400 font-bold uppercase text-[9px] block">Request Count</span>
+                  <span className="text-gray-800 font-black text-sm">{report.tech_stack.resource_count || 0} assets</span>
                 </div>
               </div>
 

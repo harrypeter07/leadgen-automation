@@ -17,6 +17,18 @@ class WebsiteAnalyzer {
     logger.info(`[Website Analyzer] Modular Audit Initiated on: ${url}`);
     const startTime = Date.now();
 
+    // Track page weight and resource count
+    let totalBytes = 0;
+    let resourceCount = 0;
+    const responseHandler = response => {
+      resourceCount++;
+      const headers = response.headers();
+      if (headers['content-length']) {
+        totalBytes += parseInt(headers['content-length'], 10) || 0;
+      }
+    };
+    page.on('response', responseHandler);
+
     // Setup console error and request failure event hooks
     const consoleErrors = [];
     page.on('console', msg => {
@@ -58,7 +70,7 @@ class WebsiteAnalyzer {
       const uiux = await uiuxAnalyzer.analyze(page).catch(() => ({ score: 60, cta_count: 0, hero_exists: false, navigation_exists: false }));
       
       logger.info(`[Website Analyzer] Running client-side performance benchmarks...`);
-      const perf = await performanceAnalyzer.analyze(page, loadTimeMs).catch(() => ({ score: 70 }));
+      const perf = await performanceAnalyzer.analyze(page, loadTimeMs, { totalBytes, resourceCount }).catch(() => ({ score: 70 }));
       
       logger.info(`[Website Analyzer] Running accessibility compliance scans...`);
       const access = await accessibilityAnalyzer.analyze(page).catch(() => ({ score: 70, total_images: 0, missing_alt_images: 0 }));
@@ -177,6 +189,8 @@ class WebsiteAnalyzer {
         overall_score: overallScore,
         tech_stack: {
           load_time_ms: loadTimeMs,
+          page_size_kb: perf.page_size_kb || 0,
+          resource_count: perf.resource_count || 0,
           ssl_enabled: seo.ssl_enabled,
           technologies: tech.technologies,
           images_count: access.total_images,
@@ -195,6 +209,8 @@ class WebsiteAnalyzer {
     } catch (err) {
       logger.error(`[Website Analyzer] Modular Audit failed on ${url}: ${err.message}`);
       throw err;
+    } finally {
+      page.off('response', responseHandler);
     }
   }
 }

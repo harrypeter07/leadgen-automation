@@ -291,21 +291,42 @@ async function startWhatsApp() {
         isInitializing = false;
         clearTimeout(watchdogTimer);
 
-        const statusCode = lastDisconnect?.error instanceof Boom 
-          ? lastDisconnect.error.output.statusCode 
-          : null;
+        const statusCode = lastDisconnect?.error?.output?.statusCode || 
+          (lastDisconnect?.error instanceof Boom ? lastDisconnect.error.output.statusCode : null) ||
+          (lastDisconnect?.error?.data?.reason ? parseInt(lastDisconnect.error.data.reason) : null);
 
         console.log('⚠️ [EVENT] connection closed. lastDisconnect dump:');
         console.dir(lastDisconnect, { depth: null });
 
         const reason = lastDisconnect?.error?.message || 'unknown';
         lastDisconnectReason = reason;
-        addLog('warn', `Disconnected: ${reason}`);
+        addLog('warn', `Disconnected: ${reason} (Status: ${statusCode})`);
 
-        const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+        const isUnauthorized = statusCode === 401 || String(lastDisconnect?.error?.data?.reason) === '401';
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut || isUnauthorized;
+
+        if (isUnauthorized) {
+          addLog('warn', '401 Unauthorized session error detected. Purging auth session directory...');
+          const authDir = '/app/.wwebjs_auth';
+          if (fs.existsSync(authDir)) {
+            try {
+              fs.rmSync(authDir, { recursive: true, force: true });
+              addLog('warn', '✓ Session folder purged successfully.');
+            } catch (err) {
+              addLog('error', `Failed to purge session folder: ${err.message}`);
+            }
+          }
+        }
+
         if (isLoggedOut) {
           connectionState = 'disconnected';
-          addLog('warn', 'Logged out — will not auto-reconnect. Scan new QR via Connect WhatsApp after login restart.');
+          addLog('warn', 'Session terminated or logged out. Resetting socket to generate a fresh QR code...');
+          destroySocket().then(() => {
+            resetConnectionState();
+            // Automatically boot startWhatsApp to generate fresh QR
+            connectionState = 'connecting';
+            startWhatsApp();
+          });
         } else {
           connectionState = 'connecting';
           addLog('info', `Connection closed (status: ${statusCode}). Attempting auto-reconnect.`);
