@@ -1,3 +1,4 @@
+// dashboard/src/app/website-analyzer/page.tsx
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
@@ -124,21 +125,21 @@ export default function WebsiteAnalyzerPage() {
   }
 
   function getScoreColor(score: number) {
-    if (score >= 90) return 'text-green-400 border-green-500/30 bg-green-950/20'
-    if (score >= 70) return 'text-yellow-400 border-yellow-500/30 bg-yellow-950/20'
-    return 'text-red-400 border-red-500/30 bg-red-950/20'
+    if (score >= 90) return 'text-[#3B4D3C] bg-[#D4E0CD] border-[#B8C8B0]'
+    if (score >= 70) return 'text-[#5C451F] bg-[#F9D99A] border-[#E8C584]'
+    return 'text-red-700 bg-red-50 border-red-200'
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-[#2D2D2D] select-none">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">Website Audit & Analyzer</h1>
-        <p className="mt-1 text-sm text-gray-400">Extract tech stack, contacts, social links, SEO indicators, and compute optimization scores.</p>
+        <h1 className="text-3xl font-black text-[#1C1C1E] tracking-tight">Website Audit & Analyzer</h1>
+        <p className="mt-1 text-sm text-gray-500 font-medium">Extract tech stack, contacts, social links, SEO indicators, and compute optimization scores.</p>
       </div>
 
       {/* Input panel */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 max-w-2xl">
+      <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 max-w-2xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
         <form onSubmit={handleAudit} className="flex gap-4">
           <input
             type="url"
@@ -146,12 +147,12 @@ export default function WebsiteAnalyzerPage() {
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://example.com"
             required
-            className="flex-1 rounded-lg bg-gray-950 border border-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+            className="flex-1 rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-4 py-3 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500 placeholder-gray-400"
           />
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold text-white px-6 py-2.5 transition-colors flex items-center gap-2"
+            className="rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white px-6 py-3 transition-colors flex items-center gap-2"
           >
             {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             {loading ? 'Auditing...' : 'Run Audit'}
@@ -161,20 +162,19 @@ export default function WebsiteAnalyzerPage() {
 
       {/* Real-time Logger Console Terminal */}
       {(loading || logs.length > 0) && (
-        <div className="rounded-xl border border-gray-800 bg-gray-950 overflow-hidden max-w-2xl flex flex-col h-[200px]">
-          <div className="bg-gray-900/80 px-4 py-2 border-b border-gray-800 flex items-center justify-between">
-            <span className="font-mono text-[10px] text-gray-400 font-bold uppercase tracking-wider">📡 Audit Engine Console Logs</span>
+        <div className="rounded-2xl border border-[#E4E3DD] bg-white overflow-hidden max-w-2xl flex flex-col h-[200px] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+          <div className="bg-gray-50 px-4 py-3 border-b border-[#E4E3DD] flex items-center justify-between">
+            <span className="font-bold text-[10px] text-gray-400 uppercase tracking-wider">📡 Audit Engine Console Logs</span>
             {loading && (
-              <span className="text-[10px] text-purple-400 font-mono animate-pulse flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+              <span className="text-[10px] text-purple-600 font-bold uppercase tracking-wider animate-pulse flex items-center gap-1.5 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
                 Live streaming...
               </span>
             )}
           </div>
-          <div className="flex-1 p-4 font-mono text-[10px] text-gray-300 overflow-y-auto space-y-1 select-none">
+          <div className="flex-1 p-4 font-mono text-[10px] text-gray-600 overflow-y-auto space-y-1.5 bg-[#F4F3EF]/30 select-none">
             {logs.map((log, index) => (
               <div key={index} className="leading-relaxed break-all">
-                <span className={log.startsWith('❌') ? 'text-red-400' : 'text-gray-400'}>{log}</span>
+                <span className={log.startsWith('❌') ? 'text-red-650 font-bold' : 'text-gray-650'}>{log}</span>
               </div>
             ))}
             <div ref={logEndRef} />
@@ -187,55 +187,55 @@ export default function WebsiteAnalyzerPage() {
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left panel: Score cards */}
           <div className="lg:col-span-1 space-y-4">
-            <div className={`rounded-xl border p-6 text-center space-y-2 ${getScoreColor(report.overall_score)}`}>
-              <span className="text-[10px] font-bold uppercase tracking-widest block text-gray-400">Overall Score</span>
+            <div className={`rounded-2xl border p-6 text-center space-y-2 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] ${getScoreColor(report.overall_score)}`}>
+              <span className="text-[10px] font-bold uppercase tracking-widest block opacity-70">Overall Score</span>
               <span className="text-5xl font-black">{report.overall_score}</span>
             </div>
 
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5 space-y-3 text-xs">
-              <h4 className="font-bold text-gray-200 uppercase text-[10px] border-b border-gray-850 pb-2">Individual Pillars</h4>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">SEO Structure</span>
-                <span className="font-bold">{report.seo_score}/100</span>
+            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-5 space-y-3.5 text-xs shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+              <h4 className="font-bold text-gray-400 uppercase text-[9px] tracking-wider border-b border-[#E4E3DD] pb-2">Individual Pillars</h4>
+              <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+                <span className="text-gray-500 font-semibold">SEO Structure</span>
+                <span className="font-bold text-gray-800">{report.seo_score}/100</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+                <span className="text-gray-500 font-semibold">User Experience</span>
+                <span className="font-bold text-gray-800">{report.ux_score}/100</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+                <span className="text-gray-500 font-semibold">Performance Index</span>
+                <span className="font-bold text-gray-800">{report.performance_score}/100</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-400">User Experience</span>
-                <span className="font-bold">{report.ux_score}/100</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Performance Index</span>
-                <span className="font-bold">{report.performance_score}/100</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Accessibility Rating</span>
-                <span className="font-bold">{report.accessibility_score}/100</span>
+                <span className="text-gray-500 font-semibold">Accessibility Rating</span>
+                <span className="font-bold text-gray-800">{report.accessibility_score}/100</span>
               </div>
             </div>
           </div>
 
           {/* Right panel: Data Extraction Lists */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 space-y-6">
-              <h3 className="font-bold text-gray-200 text-sm border-b border-gray-850 pb-2">🛠️ Technology & Security Audit</h3>
+            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+              <h3 className="font-bold text-[#1C1C1E] text-xs uppercase tracking-wider text-gray-500 border-b border-[#E4E3DD] pb-3">🛠️ Technology & Security Audit</h3>
               
               <div className="grid grid-cols-2 gap-4 text-xs">
-                <div className="bg-gray-950/60 p-4 rounded-xl border border-gray-850 space-y-1">
-                  <span className="text-gray-500 font-semibold block">Load Time</span>
-                  <span className="text-gray-200 font-bold">{report.tech_stack.load_time_ms} ms</span>
+                <div className="bg-[#F4F3EF] p-4.5 rounded-2xl border border-[#E4E3DD] space-y-1">
+                  <span className="text-gray-400 font-bold uppercase text-[9px] block">Load Time</span>
+                  <span className="text-gray-800 font-black text-sm">{report.tech_stack.load_time_ms} ms</span>
                 </div>
-                <div className="bg-gray-950/60 p-4 rounded-xl border border-gray-850 space-y-1">
-                  <span className="text-gray-500 font-semibold block">SSL Secure Connection</span>
-                  <span className="text-gray-200 font-bold">{report.tech_stack.ssl_enabled ? '🔒 HTTPS Secure' : '⚠️ Unencrypted HTTP'}</span>
+                <div className="bg-[#F4F3EF] p-4.5 rounded-2xl border border-[#E4E3DD] space-y-1">
+                  <span className="text-gray-400 font-bold uppercase text-[9px] block">SSL Connection</span>
+                  <span className="text-gray-800 font-black text-sm">{report.tech_stack.ssl_enabled ? '🔒 HTTPS Secure' : '⚠️ Unsecure HTTP'}</span>
                 </div>
               </div>
 
               {/* Technologies list */}
               {report.tech_stack.technologies.length > 0 && (
-                <div className="space-y-2 text-xs">
-                  <span className="text-gray-500 font-semibold block">Detected Frameworks & Libraries</span>
+                <div className="space-y-3 pt-2">
+                  <span className="text-gray-500 text-xs font-bold uppercase tracking-wider text-[9px]">Detected Frameworks & Libraries</span>
                   <div className="flex flex-wrap gap-2">
                     {report.tech_stack.technologies.map(t => (
-                      <span key={t} className="px-2.5 py-1 bg-gray-950 border border-gray-850 text-gray-300 rounded font-mono text-[10px]">
+                      <span key={t} className="px-3 py-1 bg-[#F4F3EF] border border-[#E4E3DD] text-gray-700 rounded-lg font-mono font-bold text-[10px]">
                         {t}
                       </span>
                     ))}
@@ -245,41 +245,41 @@ export default function WebsiteAnalyzerPage() {
             </div>
 
             {/* Contacts & Social links */}
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6 space-y-6">
-              <h3 className="font-bold text-gray-200 text-sm border-b border-gray-850 pb-2">📞 Contact details & Social Footprints</h3>
+            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+              <h3 className="font-bold text-[#1C1C1E] text-xs uppercase tracking-wider text-gray-500 border-b border-[#E4E3DD] pb-3">📞 Contact details & Social Footprints</h3>
 
               <div className="grid md:grid-cols-2 gap-6 text-xs">
-                <div className="space-y-3">
+                <div className="space-y-3.5">
                   <h4 className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Contact Channels</h4>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {report.emails.map(e => (
-                      <div key={e} className="text-gray-200 break-all bg-gray-950/40 px-3 py-1.5 rounded border border-gray-900">✉️ {e}</div>
+                      <div key={e} className="text-gray-700 font-bold break-all bg-[#F4F3EF] px-3.5 py-2.5 rounded-xl border border-[#E4E3DD]">✉️ {e}</div>
                     ))}
                     {report.phone_numbers.map(p => (
-                      <div key={p} className="text-gray-200 break-all bg-gray-950/40 px-3 py-1.5 rounded border border-gray-900">📞 {p}</div>
+                      <div key={p} className="text-gray-700 font-bold break-all bg-[#F4F3EF] px-3.5 py-2.5 rounded-xl border border-[#E4E3DD]">📞 {p}</div>
                     ))}
                     {report.emails.length === 0 && report.phone_numbers.length === 0 && (
-                      <span className="text-gray-500 italic">No emails or phone numbers found on the homepage.</span>
+                      <span className="text-gray-450 italic font-semibold">No emails or phone numbers found on the homepage.</span>
                     )}
                   </div>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-3.5">
                   <h4 className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Social Footprints</h4>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {report.social_links.map(s => (
                       <a
                         key={s}
                         href={s}
                         target="_blank"
                         rel="noreferrer"
-                        className="block text-purple-400 hover:text-purple-300 hover:underline break-all bg-gray-950/40 px-3 py-1.5 rounded border border-gray-900"
+                        className="block text-blue-600 hover:text-blue-500 font-bold hover:underline break-all bg-[#F4F3EF] px-3.5 py-2.5 rounded-xl border border-[#E4E3DD]"
                       >
-                        🔗 {s}
+                        🔗 {s.replace(/^https?:\/\/(www\.)?/, '')}
                       </a>
                     ))}
                     {report.social_links.length === 0 && (
-                      <span className="text-gray-500 italic">No social media links detected.</span>
+                      <span className="text-gray-450 italic font-semibold">No social media links detected.</span>
                     )}
                   </div>
                 </div>

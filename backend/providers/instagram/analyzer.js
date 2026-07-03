@@ -6,13 +6,14 @@ const postsFetcher = require('./posts');
 const reelsFetcher = require('./reels');
 const engagementCalculator = require('./engagement');
 const insightsGenerator = require('./insights');
+const statsHelper = require('./statsHelper');
 
 class InstagramAnalyzer {
   constructor() {
     this.name = 'instagram';
   }
 
-  async audit(page, username) {
+  async audit(page, username, options = {}) {
     logger.info(`[Instagram Analyzer] Modular Profile Audit: @${username}`);
     const profileUrl = `https://www.instagram.com/${username}/`;
 
@@ -115,17 +116,27 @@ class InstagramAnalyzer {
       
       logger.info(`[Instagram Analyzer] Extracted: Name="${profile.display_name}", Followers=${profile.followers}, Following=${profile.following}`);
 
-      logger.info(`[Instagram Analyzer] Fetching public posts metrics...`);
-      const posts = await postsFetcher.fetch(page);
+      const scrapeHistory = options.scrapeHistory !== false;
+      const scrapeReels = options.scrapeReels !== false;
+
+      let posts = [];
+      if (scrapeHistory) {
+        logger.info(`[Instagram Analyzer] Fetching public posts metrics...`);
+        posts = await postsFetcher.fetch(page);
+      } else {
+        logger.info(`[Instagram Analyzer] Skipping post scraping per configuration.`);
+      }
       
-      logger.info(`[Instagram Analyzer] Fetching public reels metrics...`);
-      const reels = await reelsFetcher.fetch(page);
+      let reels = [];
+      if (scrapeReels) {
+        logger.info(`[Instagram Analyzer] Fetching public reels metrics...`);
+        reels = await reelsFetcher.fetch(page);
+      } else {
+        logger.info(`[Instagram Analyzer] Skipping reels scraping per configuration.`);
+      }
       
-      logger.info(`[Instagram Analyzer] Calculating engagement rates...`);
-      const er = engagementCalculator.calculate(profile, posts, reels);
-      
-      logger.info(`[Instagram Analyzer] Generating health and consistency scores...`);
-      const scores = insightsGenerator.generateScores(profile);
+      logger.info(`[Instagram Analyzer] Calculating advanced profile statistics and scores...`);
+      const analytics = statsHelper.calculate(profile, posts, reels, options);
 
       logger.info(`[Instagram Analyzer] Completed audit successfully for @${username}`);
       return {
@@ -138,10 +149,11 @@ class InstagramAnalyzer {
         following: profile.following,
         posts_count: profile.posts_count,
         verified: profile.verified,
-        health_score: scores.health_score,
-        consistency_score: scores.consistency_score,
-        engagement_rate: er,
-        posts: posts || []
+        health_score: analytics.insights.health_score,
+        consistency_score: analytics.insights.consistency_score,
+        engagement_rate: analytics.engagement_rate,
+        posts: posts || [],
+        analytics: analytics // Include full mathematical report
       };
 
     } catch (err) {

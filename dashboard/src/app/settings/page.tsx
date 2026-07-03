@@ -1,3 +1,4 @@
+// dashboard/src/app/settings/page.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -32,7 +33,7 @@ export default function SettingsPage() {
     }
   }
 
-  // Fetch true environment variable configuration status from server-side
+  // Fetch environment variable status
   async function fetchConfigStatus() {
     try {
       const res = await fetch('/api/health/config')
@@ -58,21 +59,16 @@ export default function SettingsPage() {
       const res = await fetch('/api/health/supabase')
       const latency = Date.now() - start
       if (res.ok) {
-        const data = await res.json()
-        if (data.connected) {
-          setSupabaseHealth({ status: 'connected', responseTime: latency })
-          toast.success(`Supabase connected successfully in ${latency}ms`)
-          fetchDbStats()
-        } else {
-          setSupabaseHealth({ status: 'disconnected', error: data.error || 'Connection failed' })
-          toast.error('Supabase connection failed')
-        }
+        setSupabaseHealth({ status: 'connected', responseTime: latency })
+        toast.success(`Supabase Database connected! (${latency}ms)`)
       } else {
-        setSupabaseHealth({ status: 'disconnected', error: 'HTTP error checking health' })
+        const data = await res.json()
+        setSupabaseHealth({ status: 'disconnected', error: data.error || 'Server error' })
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      setSupabaseHealth({ status: 'disconnected', error: message })
+      const msg = err instanceof Error ? err.message : 'Network error'
+      setSupabaseHealth({ status: 'disconnected', error: msg })
+      toast.error(`Database offline: ${msg}`)
     }
   }
 
@@ -83,20 +79,15 @@ export default function SettingsPage() {
       const res = await fetch('/api/health/n8n')
       const latency = Date.now() - start
       if (res.ok) {
-        const data = await res.json()
-        if (data.connected) {
-          setN8nHealth({ status: 'connected', responseTime: latency })
-          toast.success(`n8n health check passed in ${latency}ms`)
-        } else {
-          setN8nHealth({ status: 'disconnected', error: data.error || 'Webhook base unreachable' })
-          toast.error('n8n connection failed')
-        }
+        setN8nHealth({ status: 'connected', responseTime: latency })
+        toast.success(`n8n Trigger Webhook active! (${latency}ms)`)
       } else {
-        setN8nHealth({ status: 'disconnected', error: 'HTTP error checking health' })
+        setN8nHealth({ status: 'disconnected', error: 'Webhook inactive / unconfigured' })
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      setN8nHealth({ status: 'disconnected', error: message })
+      const msg = err instanceof Error ? err.message : 'Network error'
+      setN8nHealth({ status: 'disconnected', error: msg })
+      toast.error(`n8n offline: ${msg}`)
     }
   }
 
@@ -110,151 +101,148 @@ export default function SettingsPage() {
         const data = await res.json()
         if (data.ready) {
           setWhatsappHealth({ status: 'connected', responseTime: latency })
-          toast.success(`WhatsApp service ready! Latency: ${latency}ms`)
+          toast.success(`WhatsApp Client linked! (${latency}ms)`)
         } else {
-          setWhatsappHealth({ status: 'disconnected', error: data.error || 'Not authenticated' })
-          toast.error('WhatsApp service disconnected')
+          setWhatsappHealth({ status: 'disconnected', error: 'Service starting or offline' })
+          toast('WhatsApp service running but client socket is unauthenticated.', { icon: '⚠️' })
         }
       } else {
-        setWhatsappHealth({ status: 'disconnected', error: 'HTTP error checking health' })
+        setWhatsappHealth({ status: 'disconnected', error: 'Microservice disconnected' })
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      setWhatsappHealth({ status: 'disconnected', error: message })
+      const msg = err instanceof Error ? err.message : 'Network error'
+      setWhatsappHealth({ status: 'disconnected', error: msg })
+      toast.error(`WhatsApp Service offline: ${msg}`)
     }
   }
 
-  // 3. Clear test leads (starts with "Test%")
+  // 3. Maintenance Ops
   async function handleClearTestLeads() {
-    if (!confirm("Are you sure you want to permanently delete all leads starting with 'Test'?")) return
+    if (!confirm('This will permanently delete all leads starting with the name "Test" (e.g. Test Cafe). Continue?')) {
+      return
+    }
+
     setClearingLeads(true)
-    const toastId = toast.loading('Clearing test leads from database...')
+    const toastId = toast.loading('Purging testing records...')
     try {
-      const { error } = await supabaseBrowser
+      const { data, error } = await supabaseBrowser
         .from('leads')
-        .delete({ count: 'exact' })
+        .delete()
         .like('name', 'Test%')
+        .select()
 
       if (error) throw error
-
-      toast.success(`Successfully cleared test leads from database!`, { id: toastId })
+      const count = data?.length ?? 0
+      toast.success(`Successfully purged ${count} test leads!`, { id: toastId })
       fetchDbStats()
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to clear test leads'
-      toast.error(message, { id: toastId })
+      const msg = err instanceof Error ? err.message : 'Error purging test data'
+      toast.error(msg, { id: toastId })
     } finally {
       setClearingLeads(false)
     }
   }
 
-  // Copy .env.local template
-  function copyEnvTemplate() {
-    const template = `NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-WHATSAPP_SERVICE_URL=
-WHATSAPP_API_SECRET=
-N8N_WEBHOOK_BASE_URL=
-N8N_BASIC_AUTH=
-RESEND_API_KEY=
-N8N_AI_TRIGGER_URL=
-N8N_OUTREACH_TRIGGER_URL=
-`
-    navigator.clipboard.writeText(template)
-    toast.success('.env.local template copied!')
-  }
-
-  // Export All Leads
   function handleExportAll() {
     window.location.href = '/api/leads/export'
-    toast.success('Downloading CSV export...')
+    toast.success('Initiating full CSV backup download')
+  }
+
+  function copyEnvTemplate() {
+    const template = `NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+WHATSAPP_SERVICE_URL=http://localhost:3001
+WHATSAPP_API_SECRET=your-secret
+N8N_WEBHOOK_BASE_URL=https://n8n.yourdomain.app
+RESEND_API_KEY=re_your_key`
+    navigator.clipboard.writeText(template)
+    toast.success('Template copied to clipboard!')
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-[#2D2D2D] select-none">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">Control Panel Settings</h1>
-        <p className="mt-1 text-sm text-gray-400">Manage connections, configuration variables, and perform database maintenance</p>
+        <h1 className="text-3xl font-black text-[#1C1C1E] tracking-tight">System Settings</h1>
+        <p className="mt-1 text-sm text-gray-500 font-medium">Verify socket endpoints, inspect system variables, test database integrations, and manage backups.</p>
       </div>
 
-      {/* Section 1 - Connection Status */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-6 space-y-6">
-        <h3 className="font-bold text-gray-200 text-lg">🔧 Service Integrations Health</h3>
-        <div className="grid gap-4 sm:grid-cols-3">
+      {/* Section 1 - Healthchecks */}
+      <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+        <h3 className="font-bold text-[#1C1C1E] text-xs uppercase tracking-wider text-gray-500 border-b border-[#E4E3DD] pb-2">🌐 Microservice Health Diagnostics</h3>
+        
+        <div className="grid gap-6 sm:grid-cols-3">
           {/* Supabase Card */}
-          <div className="rounded-xl border border-gray-800 bg-gray-950 p-5 flex flex-col justify-between h-36">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Supabase DB</span>
-              {supabaseHealth.status === 'connected' ? (
-                <span className="text-green-400 font-bold text-sm">✓ Connected</span>
-              ) : supabaseHealth.status === 'disconnected' ? (
-                <span className="text-red-400 font-bold text-sm">✗ Error</span>
-              ) : (
-                <span className="text-gray-500 text-xs">Untested</span>
-              )}
+          <div className="rounded-2xl bg-[#F4F3EF] border border-[#E4E3DD] p-5 flex flex-col justify-between h-40">
+            <div>
+              <div className="flex justify-between items-center">
+                <h4 className="font-bold text-gray-800 text-sm">Supabase Database</h4>
+                <span className={`w-2.5 h-2.5 rounded-full ${
+                  supabaseHealth.status === 'connected' ? 'bg-green-500' :
+                  supabaseHealth.status === 'disconnected' ? 'bg-red-500' : 'bg-gray-400'
+                }`} />
+              </div>
+              <p className="text-[10px] text-gray-500 mt-2.5 leading-relaxed font-semibold">
+                {supabaseHealth.status === 'connected'
+                  ? `Response: ${supabaseHealth.responseTime}ms`
+                  : supabaseHealth.error || 'Click test below'}
+              </p>
             </div>
-            <p className="text-xs text-gray-400 truncate">
-              {supabaseHealth.status === 'connected'
-                ? `Response: ${supabaseHealth.responseTime}ms`
-                : supabaseHealth.error || 'Click test below'}
-            </p>
             <button
               onClick={testSupabase}
               disabled={supabaseHealth.status === 'testing'}
-              className="rounded-lg bg-gray-900 border border-gray-800 hover:bg-gray-800 text-[11px] font-semibold text-white py-1.5 transition-colors disabled:opacity-50"
+              className="w-full rounded-xl bg-white border border-[#E4E3DD] hover:bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-700 py-2.5 transition-colors shadow-sm disabled:opacity-50"
             >
               {supabaseHealth.status === 'testing' ? 'Testing...' : 'Test Connection'}
             </button>
           </div>
 
           {/* n8n Card */}
-          <div className="rounded-xl border border-gray-800 bg-gray-950 p-5 flex flex-col justify-between h-36">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">n8n Engine</span>
-              {n8nHealth.status === 'connected' ? (
-                <span className="text-green-400 font-bold text-sm">✓ Connected</span>
-              ) : n8nHealth.status === 'disconnected' ? (
-                <span className="text-red-400 font-bold text-sm">✗ Error</span>
-              ) : (
-                <span className="text-gray-500 text-xs">Untested</span>
-              )}
+          <div className="rounded-2xl bg-[#F4F3EF] border border-[#E4E3DD] p-5 flex flex-col justify-between h-40">
+            <div>
+              <div className="flex justify-between items-center">
+                <h4 className="font-bold text-gray-800 text-sm">n8n Engine Webhook</h4>
+                <span className={`w-2.5 h-2.5 rounded-full ${
+                  n8nHealth.status === 'connected' ? 'bg-green-500' :
+                  n8nHealth.status === 'disconnected' ? 'bg-red-500' : 'bg-gray-400'
+                }`} />
+              </div>
+              <p className="text-[10px] text-gray-500 mt-2.5 leading-relaxed font-semibold">
+                {n8nHealth.status === 'connected'
+                  ? `Response: ${n8nHealth.responseTime}ms`
+                  : n8nHealth.error || 'Click test below'}
+              </p>
             </div>
-            <p className="text-xs text-gray-400 truncate">
-              {n8nHealth.status === 'connected'
-                ? `Response: ${n8nHealth.responseTime}ms`
-                : n8nHealth.error || 'Click test below'}
-            </p>
             <button
               onClick={testN8n}
               disabled={n8nHealth.status === 'testing'}
-              className="rounded-lg bg-gray-900 border border-gray-800 hover:bg-gray-800 text-[11px] font-semibold text-white py-1.5 transition-colors disabled:opacity-50"
+              className="w-full rounded-xl bg-white border border-[#E4E3DD] hover:bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-700 py-2.5 transition-colors shadow-sm disabled:opacity-50"
             >
               {n8nHealth.status === 'testing' ? 'Testing...' : 'Test Connection'}
             </button>
           </div>
 
           {/* WhatsApp Card */}
-          <div className="rounded-xl border border-gray-800 bg-gray-950 p-5 flex flex-col justify-between h-36">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">WhatsApp Client</span>
-              {whatsappHealth.status === 'connected' ? (
-                <span className="text-green-400 font-bold text-sm">✓ Connected</span>
-              ) : whatsappHealth.status === 'disconnected' ? (
-                <span className="text-red-400 font-bold text-sm">✗ Error</span>
-              ) : (
-                <span className="text-gray-500 text-xs">Untested</span>
-              )}
+          <div className="rounded-2xl bg-[#F4F3EF] border border-[#E4E3DD] p-5 flex flex-col justify-between h-40">
+            <div>
+              <div className="flex justify-between items-center">
+                <h4 className="font-bold text-gray-800 text-sm">WhatsApp Socket</h4>
+                <span className={`w-2.5 h-2.5 rounded-full ${
+                  whatsappHealth.status === 'connected' ? 'bg-green-500' :
+                  whatsappHealth.status === 'disconnected' ? 'bg-red-500' : 'bg-gray-400'
+                }`} />
+              </div>
+              <p className="text-[10px] text-gray-500 mt-2.5 leading-relaxed font-semibold">
+                {whatsappHealth.status === 'connected'
+                  ? `Response: ${whatsappHealth.responseTime}ms`
+                  : whatsappHealth.error || 'Click test below'}
+              </p>
             </div>
-            <p className="text-xs text-gray-400 truncate">
-              {whatsappHealth.status === 'connected'
-                ? `Response: ${whatsappHealth.responseTime}ms`
-                : whatsappHealth.error || 'Click test below'}
-            </p>
             <button
               onClick={testWhatsapp}
               disabled={whatsappHealth.status === 'testing'}
-              className="rounded-lg bg-gray-900 border border-gray-800 hover:bg-gray-800 text-[11px] font-semibold text-white py-1.5 transition-colors disabled:opacity-50"
+              className="w-full rounded-xl bg-white border border-[#E4E3DD] hover:bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-700 py-2.5 transition-colors shadow-sm disabled:opacity-50"
             >
               {whatsappHealth.status === 'testing' ? 'Testing...' : 'Test Connection'}
             </button>
@@ -263,21 +251,21 @@ N8N_OUTREACH_TRIGGER_URL=
       </div>
 
       {/* Section 2 - Environment Variables Check */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-6 space-y-6">
+      <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="font-bold text-gray-200 text-lg">🔑 Environment Configuration</h3>
-            <p className="text-xs text-gray-400 mt-1">Status of required local and cloud deployment variables.</p>
+            <h3 className="font-bold text-[#1C1C1E] text-md uppercase tracking-wider text-gray-500">🔑 Environment Configuration</h3>
+            <p className="text-xs text-gray-400 mt-1 font-medium">Status of required local and cloud deployment variables.</p>
           </div>
           <button
             onClick={copyEnvTemplate}
-            className="rounded-lg bg-gray-900 border border-gray-800 hover:bg-gray-800 text-xs font-semibold text-gray-300 px-4 py-2 transition-colors self-start sm:self-auto"
+            className="rounded-xl bg-white border border-[#E4E3DD] hover:bg-gray-50 text-xs font-bold uppercase tracking-wider text-gray-700 px-4 py-2.5 transition-colors shadow-sm self-start sm:self-auto"
           >
-            📋 Copy .env.local Template
+            📋 Copy .env Template
           </button>
         </div>
 
-        <div className="rounded-xl border border-gray-800 bg-gray-950 p-5 divide-y divide-gray-800/60 text-xs">
+        <div className="rounded-2xl border border-[#E4E3DD] bg-gray-50 p-5 divide-y divide-[#E4E3DD]/60 text-xs font-medium">
           {[
             { key: 'NEXT_PUBLIC_SUPABASE_URL', desc: 'Supabase Project API URL' },
             { key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', desc: 'Supabase Anonymous Key' },
@@ -291,17 +279,17 @@ N8N_OUTREACH_TRIGGER_URL=
           ].map((item) => {
             const isConfigured = configStatus[item.key] === true
             return (
-              <div key={item.key} className="py-3 flex items-center justify-between gap-4">
+              <div key={item.key} className="py-3.5 flex items-center justify-between gap-4">
                 <div>
-                  <span className="font-mono text-gray-300 font-bold block">{item.key}</span>
-                  <span className="text-[11px] text-gray-500 mt-0.5 block">{item.desc}</span>
+                  <span className="font-mono text-gray-700 font-bold block">{item.key}</span>
+                  <span className="text-[10px] text-gray-450 mt-0.5 block font-bold uppercase tracking-wider">{item.desc}</span>
                 </div>
                 {isConfigured ? (
-                  <span className="font-semibold px-2 py-0.5 rounded text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 whitespace-nowrap">
+                  <span className="font-bold px-2 py-0.5 rounded text-[9px] bg-green-50 text-green-700 border border-green-200 uppercase tracking-wider whitespace-nowrap">
                     ✓ Configured
                   </span>
                 ) : (
-                  <span className="font-semibold px-2 py-0.5 rounded text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 whitespace-nowrap">
+                  <span className="font-bold px-2 py-0.5 rounded text-[9px] bg-red-50 text-red-700 border border-red-200 uppercase tracking-wider whitespace-nowrap">
                     ✗ Missing / Blank
                   </span>
                 )}
@@ -312,37 +300,37 @@ N8N_OUTREACH_TRIGGER_URL=
       </div>
 
       {/* Section 3 - Database Maintenance */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-6 space-y-6">
-        <h3 className="font-bold text-gray-200 text-lg">🗄️ Database Operations</h3>
+      <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+        <h3 className="font-bold text-[#1C1C1E] text-xs uppercase tracking-wider text-gray-500 border-b border-[#E4E3DD] pb-2">🗄️ Database Operations</h3>
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Database maintenance tools */}
-          <div className="rounded-xl bg-gray-950 border border-gray-800 p-5 flex flex-col justify-between h-40">
+          <div className="rounded-2xl bg-[#F4F3EF] border border-[#E4E3DD] p-5 flex flex-col justify-between h-44">
             <div>
-              <h4 className="font-bold text-white text-sm">Clean Testing Data</h4>
-              <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                Delete all rows where the lead name starts with the prefix <code className="text-purple-400 bg-gray-900 px-1 py-0.5 rounded font-mono">Test%</code>. Used to purge quick-adds during validation.
+              <h4 className="font-bold text-gray-800 text-sm">Clean Testing Data</h4>
+              <p className="text-xs text-gray-500 mt-2 leading-relaxed font-semibold">
+                Delete all rows where the lead name starts with the prefix <code className="text-[#1C1C1E] bg-[#ECEAE4] px-1 py-0.5 rounded font-mono font-bold">Test%</code>. Used to purge quick-adds during validation.
               </p>
             </div>
             <button
               onClick={handleClearTestLeads}
               disabled={clearingLeads || totalLeads === 0}
-              className="w-full rounded-lg bg-red-950/60 border border-red-900 text-red-400 hover:bg-red-900/40 disabled:opacity-50 text-xs font-semibold py-2 transition-colors duration-150"
+              className="w-full rounded-xl bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 disabled:opacity-50 text-xs font-bold uppercase tracking-wider py-3 transition-colors shadow-sm"
             >
               {clearingLeads ? 'Purging leads...' : 'Clear Test Leads'}
             </button>
           </div>
 
-          <div className="rounded-xl bg-gray-950 border border-gray-800 p-5 flex flex-col justify-between h-40">
+          <div className="rounded-2xl bg-[#F4F3EF] border border-[#E4E3DD] p-5 flex flex-col justify-between h-44">
             <div>
-              <h4 className="font-bold text-white text-sm">Bulk Export Database</h4>
-              <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+              <h4 className="font-bold text-gray-800 text-sm">Bulk Export Database</h4>
+              <p className="text-xs text-gray-500 mt-2 leading-relaxed font-semibold">
                 Compile and download the entire lead history database table (all pipeline statuses, dates, ratings, and locations) in a single CSV archive.
               </p>
             </div>
             <button
               onClick={handleExportAll}
               disabled={totalLeads === 0}
-              className="w-full rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-xs font-semibold py-2 text-white transition-colors duration-150"
+              className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-50 text-xs font-bold uppercase tracking-wider py-3 text-white transition-colors shadow-md"
             >
               Export All Leads (CSV)
             </button>

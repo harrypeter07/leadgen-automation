@@ -54,10 +54,10 @@ router.post('/website', async (req, res, next) => {
    * Test instagram analyzer.
    */
 router.post('/instagram', async (req, res, next) => {
-  const { username } = req.body || {};
+  const { username, timeframe, scrapeHistory, scrapeReels } = req.body || {};
   if (!username) return res.status(400).json({ success: false, error: 'username is required' });
 
-  logger.info(`[API Testing] Audit request for Instagram: @${username}`);
+  logger.info(`[API Testing] Audit request for Instagram: @${username} (Timeframe: ${timeframe}, History: ${scrapeHistory}, Reels: ${scrapeReels})`);
   
   let contextId = null;
   let pageId = null;
@@ -67,7 +67,7 @@ router.post('/instagram', async (req, res, next) => {
     const pageObj = await browserManager.newPage(contextId, contextObj.context);
     pageId = pageObj.pageId;
 
-    const report = await instagramAnalyzer.audit(pageObj.page, username);
+    const report = await instagramAnalyzer.audit(pageObj.page, username, { timeframe, scrapeHistory, scrapeReels });
     formatResponse(res, req, { report });
   } catch (err) {
     next(err);
