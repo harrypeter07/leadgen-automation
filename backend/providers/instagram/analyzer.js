@@ -63,20 +63,31 @@ class InstagramAnalyzer {
       });
       // ─────────────────────────────────────────────────────────────────────
 
-      await page.goto(profileUrl, { timeout: 20000, waitUntil: 'domcontentloaded' });
+      try {
+        await page.goto(profileUrl, { timeout: 30000, waitUntil: 'commit' });
+        // Wait for profile container to appear (header, main page content or verified badge)
+        await page.waitForSelector('main, h2, svg[aria-label="Verified"], div[role="main"]', { timeout: 15000 }).catch(() => {});
+      } catch (err) {
+        logger.warn(`[Instagram Analyzer] Navigation timed out or failed: ${err.message}. Checking DOM...`);
+      }
 
       // 2. Detect login wall OR home redirect (expired session cookie)
       let currentUrl = page.url();
       logger.info(`[Instagram Analyzer] Loaded page URL: ${currentUrl}`);
 
       // If redirected to home feed or login — session cookie is expired/invalid
-      const isOnProfile = currentUrl.includes(`/${username}`);
+      let isOnProfile = currentUrl.includes(`/${username}`);
       if (!isOnProfile) {
         if (currentUrl.includes('accounts/login') || currentUrl.replace(/\/$/, '') === 'https://www.instagram.com') {
           logger.warn(`[Instagram Analyzer] Session cookie redirected away from profile (URL: ${currentUrl}). Retrying without cookie...`);
           // Clear all cookies and retry as public user
           await page.context().clearCookies();
-          await page.goto(profileUrl, { timeout: 20000, waitUntil: 'domcontentloaded' });
+          try {
+            await page.goto(profileUrl, { timeout: 30000, waitUntil: 'commit' });
+            await page.waitForSelector('main, h2, svg[aria-label="Verified"]', { timeout: 15000 }).catch(() => {});
+          } catch (e) {
+            logger.warn(`[Instagram Analyzer] Public retry page.goto timed out: ${e.message}`);
+          }
           currentUrl = page.url();
           logger.info(`[Instagram Analyzer] Retry URL: ${currentUrl}`);
         }
@@ -87,7 +98,12 @@ class InstagramAnalyzer {
         logger.info(`[Instagram Analyzer] Initiating automated login sequence...`);
         const loginSuccess = await this.login(page);
         if (loginSuccess) {
-          await page.goto(profileUrl, { timeout: 20000, waitUntil: 'domcontentloaded' });
+          try {
+            await page.goto(profileUrl, { timeout: 30000, waitUntil: 'commit' });
+            await page.waitForSelector('main, h2, svg[aria-label="Verified"]', { timeout: 15000 }).catch(() => {});
+          } catch (e) {
+            logger.warn(`[Instagram Analyzer] Post-login page.goto timed out: ${e.message}`);
+          }
           currentUrl = page.url();
         }
       }
@@ -112,7 +128,7 @@ class InstagramAnalyzer {
       }
 
       // Wait for Instagram API calls to fire and be captured
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 3500));
 
       // Invoke scraper modules — pass captured API data to profileFetcher
       logger.info(`[Instagram Analyzer] Fetching profile metadata (followers, following, bio)...`);
