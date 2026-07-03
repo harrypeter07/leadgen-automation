@@ -21,6 +21,11 @@ interface AuditReport {
   social_links: string[]
   emails: string[]
   phone_numbers: string[]
+  screenshot_url?: string | null
+  broken_links?: { text: string; href: string; status: number }[]
+  console_errors?: string[]
+  failed_requests?: { url: string; error: string }[]
+  ui_issues?: { type: string; selector: string; message: string }[]
 }
 
 interface LogEntry {
@@ -285,6 +290,129 @@ export default function WebsiteAnalyzerPage() {
                 </div>
               </div>
             </div>
+
+            {/* QA Diagnostics: Broken Links, UI bugs & console exceptions */}
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Broken Links Table */}
+              {report.broken_links && report.broken_links.length > 0 && (
+                <div className="rounded-2xl border border-orange-200 bg-orange-50/10 p-6 space-y-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)]">
+                  <h3 className="font-bold text-orange-800 text-xs uppercase tracking-wider border-b border-orange-250 pb-2.5 flex items-center justify-between">
+                    <span>🔗 Broken Web Links ({report.broken_links.length})</span>
+                  </h3>
+                  <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
+                    <table className="w-full text-left text-[11px] border-collapse">
+                      <thead>
+                        <tr className="border-b border-orange-200 text-orange-950 font-bold uppercase tracking-wider text-[8px] sticky top-0 bg-white">
+                          <th className="pb-2">Label</th>
+                          <th className="pb-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-orange-100/50 text-gray-700">
+                        {report.broken_links.map((link, idx) => (
+                          <tr key={idx} className="hover:bg-orange-50/50">
+                            <td className="py-2 pr-3 truncate max-w-[120px] font-semibold text-orange-950" title={link.href}>
+                              {link.text || link.href}
+                            </td>
+                            <td className="py-2 font-mono font-bold text-red-650">
+                              {link.status === 504 ? 'Timeout' : `${link.status}`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Heuristic UI Layout Bugs */}
+              {report.ui_issues && report.ui_issues.length > 0 && (
+                <div className="rounded-2xl border border-yellow-200 bg-yellow-50/10 p-6 space-y-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)]">
+                  <h3 className="font-bold text-yellow-800 text-xs uppercase tracking-wider border-b border-yellow-250 pb-2.5">
+                    ⚠️ UI Layout & UX Warnings ({report.ui_issues.length})
+                  </h3>
+                  <div className="space-y-3.5 max-h-[220px] overflow-y-auto">
+                    {report.ui_issues.map((issue, idx) => (
+                      <div key={idx} className="text-[11px] leading-relaxed flex flex-col gap-1 border-b border-yellow-100/55 pb-2.5 last:border-b-0">
+                        <span className="font-bold text-yellow-950 capitalize">
+                          {issue.type.replace('_', ' ')}
+                        </span>
+                        <span className="text-gray-600">{issue.message}</span>
+                        <code className="text-[9px] font-mono bg-yellow-50 text-yellow-750 px-2 py-0.5 rounded truncate select-all">
+                          {issue.selector}
+                        </code>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Network Failed Requests & JS Console Errors */}
+            {((report.console_errors && report.console_errors.length > 0) || (report.failed_requests && report.failed_requests.length > 0)) && (
+              <div className="rounded-2xl border border-red-200 bg-red-50/10 p-6 space-y-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)]">
+                <h3 className="font-bold text-red-800 text-xs uppercase tracking-wider border-b border-red-250 pb-2.5">
+                  🚨 Console Errors & Broken Endpoints
+                </h3>
+                <div className="grid md:grid-cols-2 gap-6 text-xs">
+                  {/* Failed Network Requests */}
+                  {report.failed_requests && report.failed_requests.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[9px] font-bold text-red-700 uppercase tracking-wider block">Failed API/Resource Requests</span>
+                      <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
+                        {report.failed_requests.map((req, idx) => (
+                          <div key={idx} className="bg-red-50/60 p-2.5 rounded-xl border border-red-100 flex flex-col gap-0.5">
+                            <span className="font-mono text-[9px] text-gray-500 truncate" title={req.url}>{req.url}</span>
+                            <span className="font-bold text-red-950 text-[10px]">{req.error}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* JS Exceptions Console */}
+                  {report.console_errors && report.console_errors.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[9px] font-bold text-red-700 uppercase tracking-wider block">JS Script Exceptions (Stderr)</span>
+                      <div className="bg-[#1C1C1E] text-red-400 p-3.5 rounded-xl font-mono text-[9px] max-h-[160px] overflow-y-auto space-y-1.5 leading-relaxed select-all">
+                        {report.console_errors.map((err, idx) => (
+                          <div key={idx} className="break-all border-b border-red-950 pb-1 last:border-b-0">
+                            ❌ {err}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Desktop Page Capture */}
+            {report.screenshot_url && (
+              <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+                <h3 className="font-bold text-[#1C1C1E] text-xs uppercase tracking-wider text-gray-500 border-b border-[#E4E3DD] pb-3">
+                  📸 Webpage Visual Desktop Capture
+                </h3>
+                <div className="border border-[#E4E3DD] rounded-2xl overflow-hidden bg-gray-50 shadow-inner">
+                  {/* Browser Header frame */}
+                  <div className="bg-[#F4F3EF] border-b border-[#E4E3DD] px-4 py-2.5 flex items-center gap-2">
+                    <div className="flex gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-red-400" />
+                      <div className="w-2 h-2 rounded-full bg-yellow-400" />
+                      <div className="w-2 h-2 rounded-full bg-green-400" />
+                    </div>
+                    <div className="flex-1 bg-white rounded-lg border border-[#E4E3DD] px-3.5 py-0.5 text-[9px] text-gray-400 truncate max-w-sm font-mono">
+                      {report.url}
+                    </div>
+                  </div>
+                  {/* Screenshot render */}
+                  <img
+                    src={report.screenshot_url}
+                    alt="Audited homepage screenshot"
+                    className="w-full h-auto object-top object-cover max-h-[480px] bg-white"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
