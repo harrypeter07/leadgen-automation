@@ -11,7 +11,7 @@ export async function GET() {
   try {
     const res = await fetch(`${whatsappUrl}/status`, {
       headers: {
-        'x-api-secret': process.env.WHATSAPP_API_SECRET || '',
+        'x-api-secret': process.env.WHATSAPP_API_SECRET || process.env.API_SECRET || '',
       },
       next: { revalidate: 0 },
     })

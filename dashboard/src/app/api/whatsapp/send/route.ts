@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-secret': process.env.WHATSAPP_API_SECRET || '',
+        'x-api-secret': process.env.WHATSAPP_API_SECRET || process.env.API_SECRET || '',
       },
       body: JSON.stringify({ phone, message }),
       signal: controller.signal,

@@ -10,7 +10,7 @@ export async function POST() {
     const res = await fetch(`${whatsappUrl}/reconnect`, {
       method: 'POST',
       headers: {
-        'x-api-secret': process.env.WHATSAPP_API_SECRET || '',
+        'x-api-secret': process.env.WHATSAPP_API_SECRET || process.env.API_SECRET || '',
       },
     })
 
