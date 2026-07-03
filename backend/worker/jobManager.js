@@ -90,18 +90,24 @@ class JobManager {
 
         // Email Enrichment if enabled
         if (enrichEmails && lead.website) {
-          const emailPage = await context.newPage();
-          try {
-            logger.info(`[JobManager] Scraping email for ${lead.name} from: ${lead.website}`);
-            const email = await emailScraper.scrapeEmail(emailPage, lead.website);
-            if (email) {
-              lead.email = email;
-              logger.info(`[JobManager] ✅ Found email: ${email}`);
+          const emailPage = await context.newPage().catch(() => null);
+          if (emailPage) {
+            try {
+              logger.info(`[JobManager] Scraping email for ${lead.name} from: ${lead.website}`);
+              // Enforce 30-second absolute timeout for email scraping
+              const scrapePromise = emailScraper.scrapeEmail(emailPage, lead.website);
+              const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 30000));
+              
+              const email = await Promise.race([scrapePromise, timeoutPromise]);
+              if (email) {
+                lead.email = email;
+                logger.info(`[JobManager] ✅ Found email: ${email}`);
+              }
+            } catch (e) {
+              logger.warn(`[JobManager] Email enrichment failed for ${lead.website}: ${e.message}`);
+            } finally {
+              await emailPage.close().catch(() => {});
             }
-          } catch (e) {
-            logger.warn(`[JobManager] Email enrichment failed for ${lead.website}: ${e.message}`);
-          } finally {
-            await emailPage.close().catch(() => {});
           }
         }
 
