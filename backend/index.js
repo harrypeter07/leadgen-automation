@@ -30,6 +30,17 @@ app.use('/api/logs', require('./api/logs'));
 app.use('/api/leads', require('./api/leads'));
 app.use('/api/whatsapp-scan', require('./api/whatsappScan'));
 
+// Temp route to debug env vars on Railway
+app.get('/debug-env', (req, res) => {
+  res.json({
+    WHATSAPP_SERVICE_URL: process.env.WHATSAPP_SERVICE_URL || 'not set',
+    WHATSAPP_API_SECRET: process.env.WHATSAPP_API_SECRET ? 'configured (length: ' + process.env.WHATSAPP_API_SECRET.length + ')' : 'not set',
+    API_SECRET: process.env.API_SECRET ? 'configured (length: ' + process.env.API_SECRET.length + ')' : 'not set',
+    V3_BACKEND_URL: process.env.V3_BACKEND_URL || 'not set',
+    PORT: process.env.PORT || 'not set',
+  });
+});
+
 // System diagnostic health endpoints
 app.get('/health', (_req, res) => {
   const status = bootstrapManager.getSystemStatus();
