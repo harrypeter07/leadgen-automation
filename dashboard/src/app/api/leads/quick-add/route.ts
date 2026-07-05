@@ -28,6 +28,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const toTitleCase = (str: string) => {
+      if (!str) return ''
+      return str.toLowerCase().replace(/(?:^|\s|-)\S/g, match => match.toUpperCase()).trim()
+    }
+
     // Insert into database directly
     const { data: newLead, error: insertError } = await supabaseAdmin
       .from('leads')
@@ -36,7 +41,7 @@ export async function POST(request: NextRequest) {
           name: name.trim(),
           phone: finalPhone,
           email: email ? email.trim() : null,
-          city: city ? city.trim() : null,
+          city: city ? toTitleCase(city) : null,
           category: category ? category.trim() : null,
           website: website ? website.trim() : null,
           source: source || 'manual_entry',

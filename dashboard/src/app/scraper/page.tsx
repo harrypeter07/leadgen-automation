@@ -48,6 +48,8 @@ export default function ScraperPage() {
   const [maxLeads, setMaxLeads] = useState(25)
   const [workerCount, setWorkerCount] = useState(1)
   const [includeEmails, setIncludeEmails] = useState(false)
+  const [searchScope, setSearchScope] = useState<'city' | 'country' | 'global'>('city')
+  const [country, setCountry] = useState('')
   const [queuing, setQueuing] = useState(false)
 
   // Helper to parse keyword brackets notation
@@ -105,8 +107,16 @@ export default function ScraperPage() {
   // Queue a new job
   async function handleQueueJob(e: React.FormEvent) {
     e.preventDefault()
-    if (!keyword.trim() || !city.trim()) {
-      toast.error('Keyword and City are required')
+    if (!keyword.trim()) {
+      toast.error('Keyword is required')
+      return
+    }
+    if (searchScope === 'city' && !city.trim()) {
+      toast.error('City is required')
+      return
+    }
+    if (searchScope === 'country' && !country.trim()) {
+      toast.error('Country is required')
       return
     }
 
@@ -116,13 +126,20 @@ export default function ScraperPage() {
       // Append :email to provider if enrichment is checked
       const finalProvider = includeEmails ? `${provider}:email` : provider;
 
+      let finalCity = city.trim()
+      if (searchScope === 'global') {
+        finalCity = 'Global'
+      } else if (searchScope === 'country') {
+        finalCity = `Country: ${country.trim()}`
+      }
+
       const res = await fetch('/api/scraper/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keyword: keyword.trim(),
-          city: city.trim(),
-          area: area.trim() || undefined,
+          city: finalCity,
+          area: searchScope === 'global' ? undefined : (area.trim() || undefined),
           maxLeads,
           workerCount,
           provider: finalProvider
@@ -295,6 +312,7 @@ export default function ScraperPage() {
                   <option value="google_maps">🗺️ Google Maps Scraper</option>
                   <option value="google_search">🔍 Google Search Scraper</option>
                   <option value="instagram">📸 Instagram Scraper</option>
+                  <option value="tinyfish">🐠 TinyFish AI Web Scraper</option>
                 </select>
               </div>
 
@@ -311,27 +329,58 @@ export default function ScraperPage() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Area (Optional)</label>
-                <input
-                  type="text"
-                  value={area}
-                  onChange={(e) => setArea(e.target.value)}
-                  placeholder="e.g. Andheri, Bandra, Juhu"
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
-                />
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Search Scope</label>
+                <select
+                  value={searchScope}
+                  onChange={(e) => setSearchScope(e.target.value as 'city' | 'country' | 'global')}
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500"
+                >
+                  <option value="city">🏙️ City Search</option>
+                  <option value="country">🌍 Country Search</option>
+                  <option value="global">🌐 Global Search</option>
+                </select>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">City</label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="e.g. Mumbai, Nagpur, Pune"
-                  required
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
-                />
-              </div>
+              {searchScope !== 'global' && (
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Area (Optional)</label>
+                  <input
+                    type="text"
+                    value={area}
+                    onChange={(e) => setArea(e.target.value)}
+                    placeholder="e.g. Andheri, Bandra, Juhu"
+                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
+                  />
+                </div>
+              )}
+
+              {searchScope === 'city' && (
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">City</label>
+                  <input
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="e.g. Mumbai, Nagpur, Pune"
+                    required
+                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
+                  />
+                </div>
+              )}
+
+              {searchScope === 'country' && (
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Country</label>
+                  <input
+                    type="text"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    placeholder="e.g. Sweden, India, Germany"
+                    required
+                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

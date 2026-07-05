@@ -47,10 +47,20 @@ router.post('/start', async (req, res, next) => {
     // Automatically resume queue manager processing when queueing a new job
     queueManager.resume();
 
+    let finalCity = city;
+    if (city.startsWith('Country: ')) {
+      const rawCountry = city.replace('Country: ', '');
+      const corrected = countryCorrector.correctCountryName(rawCountry);
+      if (!corrected) {
+        return res.status(400).json({ success: false, error: 'Wrong input: Please enter a valid country name.' });
+      }
+      finalCity = `Country: ${corrected}`;
+    }
+
     const finalKeyword = area && area.trim() ? `${keyword.trim()} [Area: ${area.trim()}]` : keyword.trim();
     const job = await queueManager.enqueue({
       keyword: finalKeyword,
-      city,
+      city: finalCity,
       max_leads: maxLeads || 25,
       worker_count: workerCount || 1,
       current_provider: provider || 'google_maps'
@@ -71,6 +81,16 @@ router.post('/start-batch', async (req, res, next) => {
   try {
     queueManager.resume();
 
+    let finalCity = city;
+    if (city.startsWith('Country: ')) {
+      const rawCountry = city.replace('Country: ', '');
+      const corrected = countryCorrector.correctCountryName(rawCountry);
+      if (!corrected) {
+        return res.status(400).json({ success: false, error: 'Wrong input: Please enter a valid country name.' });
+      }
+      finalCity = `Country: ${corrected}`;
+    }
+
     const activeAreas = Array.isArray(areas) && areas.length > 0 ? areas : [null];
     const createdJobs = [];
 
@@ -80,7 +100,7 @@ router.post('/start-batch', async (req, res, next) => {
         const finalKeyword = area && area.trim() ? `${kw.trim()} [Area: ${area.trim()}]` : kw.trim();
         const job = await queueManager.enqueue({
           keyword: finalKeyword,
-          city,
+          city: finalCity,
           max_leads: maxLeads || 25,
           worker_count: workerCount || 1,
           current_provider: provider || 'google_maps'

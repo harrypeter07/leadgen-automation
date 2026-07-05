@@ -6,6 +6,10 @@ const logger = require('../worker/logger');
 class LeadsRepository {
   async upsert(leadData) {
     logger.debug(`[LeadsRepository] Upserting lead: ${leadData.name}`);
+
+    if (leadData.city) {
+      leadData.city = leadData.city.toLowerCase().replace(/(?:^|\s|-)\S/g, match => match.toUpperCase()).trim();
+    }
     
     if (leadData.phone) {
       try {

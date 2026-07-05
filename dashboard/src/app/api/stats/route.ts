@@ -51,7 +51,11 @@ export async function GET() {
 
       // 3. Top cities
       if (lead.city) {
-        const cleanedCity = lead.city.trim()
+        const toTitleCase = (str: string) => {
+          if (!str) return ''
+          return str.toLowerCase().replace(/(?:^|\s|-)\S/g, match => match.toUpperCase()).trim()
+        }
+        const cleanedCity = toTitleCase(lead.city)
         cityMap.set(cleanedCity, (cityMap.get(cleanedCity) ?? 0) + 1)
       }
 

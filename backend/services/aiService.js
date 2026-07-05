@@ -102,6 +102,52 @@ class AIService {
   }
 
   /**
+   * Extract structured lead contact details from raw page content fetched via TinyFish
+   * @param {string} content Raw webpage text/markdown
+   * @returns {Promise<{name: string, phone: string|null, email: string|null, address: string|null, category: string|null, website: string|null}>}
+   */
+  async extractLeadFromText(content) {
+    const prompt = `
+      Extract key contact details from the following website content.
+      Return the output as a clean JSON object containing:
+      1. "name": The business name / title (string, e.g. "Netlight Consulting").
+      2. "phone": Main contact phone number normalized (string or null).
+      3. "email": General contact email address (string or null).
+      4. "address": Street address or office location (string or null).
+      5. "category": Industry / Category (string or null, e.g. "Software Consultant").
+      6. "website": The official website URL (string or null).
+
+      Website content:
+      ${content.substring(0, 4000)}
+
+      JSON format expected:
+      {
+        "name": "string",
+        "phone": "string" or null,
+        "email": "string" or null,
+        "address": "string" or null,
+        "category": "string" or null,
+        "website": "string" or null
+      }
+    `;
+
+    try {
+      const responseJsonText = await geminiClient.generateContent(prompt, true);
+      return JSON.parse(responseJsonText);
+    } catch (err) {
+      logger.warn({ error: err.message }, '[AI Service] Failed to parse JSON contact info from Gemini.');
+      return {
+        name: 'Unknown Business',
+        phone: null,
+        email: null,
+        address: null,
+        category: null,
+        website: null
+      };
+    }
+  }
+
+  /**
    * Classify the next conversation stage based on memory and chat logs
    * @param {string} currentStage Current stage
    * @param {Array<{direction: string, body: string}>} messages Recent message logs

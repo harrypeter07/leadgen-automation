@@ -75,80 +75,104 @@ class JobManager {
       logs.push(`[${new Date().toISOString()}] Found ${totalItems} elements. Extracting ${limit} leads...`);
       await scrapeJobRepository.update(job.id, { logs });
 
-      // 3. Details Extraction Loop — seenKeys prevents any in-memory duplicates
+      // 3. Details Extraction Loop — seenKeys prevents any in-memory duplicates (Concurrent Pool Execution!)
       const seenKeys = new Set();
+      const concurrencyLimit = 5;
+      const indices = Array.from({ length: limit }, (_, idx) => idx);
 
-      for (let i = 0; i < limit; i++) {
+      const processIndex = async (i) => {
         if (this.activeAborts.get(job.id) === true) {
-          throw new Error('JOB_ABORTED');
+          return;
         }
 
-        const raw = await provider.extract(page, i, job.version || 'v2');
-        if (!raw) continue;
+        try {
+          const raw = await provider.extract(page, i, job.version || 'v2');
+          if (!raw) return;
 
-        const lead = provider.normalize(raw, job.city);
+          const lead = provider.normalize(raw, job.city);
 
-        // Deduplicate in memory: skip if same name+phone seen before
-        const dedupeKey = `${(lead.name || '').toLowerCase().trim()}|${(lead.phone || '').replace(/\s/g, '')}`;
-        if (seenKeys.has(dedupeKey)) {
-          logger.warn(`[JobManager] Duplicate skipped in-memory: ${lead.name} (${lead.phone})`);
-          continue;
-        }
-        seenKeys.add(dedupeKey);
+          // Deduplicate in memory: skip if same name+phone seen before
+          const dedupeKey = `${(lead.name || '').toLowerCase().trim()}|${(lead.phone || '').replace(/\s/g, '')}`;
+          if (seenKeys.has(dedupeKey)) {
+            logger.warn(`[JobManager] Duplicate skipped in-memory: ${lead.name} (${lead.phone})`);
+            return;
+          }
+          seenKeys.add(dedupeKey);
 
-        // Email Enrichment if enabled
-        if (enrichEmails && lead.website) {
-          const emailPage = await context.newPage().catch(() => null);
-          if (emailPage) {
-            try {
-              logger.info(`[JobManager] Scraping email for ${lead.name} from: ${lead.website}`);
-              // Enforce 30-second absolute timeout for email scraping
-              const scrapePromise = emailScraper.scrapeEmail(emailPage, lead.website);
-              const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 30000));
-              
-              const email = await Promise.race([scrapePromise, timeoutPromise]);
-              if (email) {
-                lead.email = email;
-                logger.info(`[JobManager] ✅ Found email: ${email}`);
+          // Email Enrichment if enabled
+          if (enrichEmails && lead.website) {
+            const emailPage = await context.newPage().catch(() => null);
+            if (emailPage) {
+              try {
+                logger.info(`[JobManager] Scraping email for ${lead.name} from: ${lead.website}`);
+                // Enforce 30-second absolute timeout for email scraping
+                const scrapePromise = emailScraper.scrapeEmail(emailPage, lead.website);
+                const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 30000));
+                
+                const email = await Promise.race([scrapePromise, timeoutPromise]);
+                if (email) {
+                  lead.email = email;
+                  logger.info(`[JobManager] ✅ Found email: ${email}`);
+                }
+              } catch (e) {
+                logger.warn(`[JobManager] Email enrichment failed for ${lead.website}: ${e.message}`);
+              } finally {
+                await emailPage.close().catch(() => {});
               }
-            } catch (e) {
-              logger.warn(`[JobManager] Email enrichment failed for ${lead.website}: ${e.message}`);
-            } finally {
-              await emailPage.close().catch(() => {});
             }
           }
+
+          // Write to leads database in real-time
+          try {
+            await leadsRepository.upsert({ ...lead, job_id: job.id });
+          } catch (dbErr) {
+            logger.error(`[JobManager] Real-time save failed for ${lead.name}: ${dbErr.message}`);
+          }
+
+          scrapedLeads.push(lead);
+
+          const elapsed = (Date.now() - startTime) / 1000;
+          const avg = elapsed / scrapedLeads.length;
+          const estRemaining = Math.round(avg * (limit - scrapedLeads.length));
+
+          // Single update: progress + accumulated leads
+          const currentFresh = await scrapeJobRepository.getById(job.id);
+          const loopLogs = currentFresh ? (currentFresh.logs || []) : [];
+          loopLogs.push(`[${new Date().toISOString()}] Extracted: ${lead.name} (${lead.phone || 'no phone'})`);
+
+          await scrapeJobRepository.update(job.id, {
+            progress: scrapedLeads.length,
+            current_business: lead.name,
+            estimated_remaining_seconds: estRemaining,
+            duration_seconds: Math.round(elapsed),
+            scraped_leads: scrapedLeads,
+            logs: loopLogs
+          });
+
+          eventBus.publish('job.progress', { jobId: job.id, progress: scrapedLeads.length, maxLeads: limit });
+          logger.info(`[JobManager] [${scrapedLeads.length}/${limit}] Extracted: ${lead.name}`);
+        } catch (err) {
+          logger.error(`[JobManager] Error extracting lead at index ${i}: ${err.message}`);
         }
+      };
 
-        // Write to leads database in real-time (upsert handles DB-level duplicates too)
-        try {
-          await leadsRepository.upsert({ ...lead, job_id: job.id });
-        } catch (dbErr) {
-          logger.error(`[JobManager] Real-time save failed for ${lead.name}: ${dbErr.message}`);
+      // Simple concurrent queue execution pool
+      const pool = [];
+      const queue = [...indices];
+
+      const worker = async () => {
+        while (queue.length > 0) {
+          const item = queue.shift();
+          if (item !== undefined) {
+            await processIndex(item);
+          }
         }
+      };
 
-        scrapedLeads.push(lead);
-
-        const elapsed = (Date.now() - startTime) / 1000;
-        const avg = elapsed / (i + 1);
-        const estRemaining = Math.round(avg * (limit - (i + 1)));
-
-        // Single update: progress + accumulated leads (replaces old separate leadsRepository.upsert)
-        const currentFresh = await scrapeJobRepository.getById(job.id);
-        const loopLogs = currentFresh.logs || [];
-        loopLogs.push(`[${new Date().toISOString()}] Extracted: ${lead.name} (${lead.phone || 'no phone'})`);
-
-        await scrapeJobRepository.update(job.id, {
-          progress: scrapedLeads.length,
-          current_business: lead.name,
-          estimated_remaining_seconds: estRemaining,
-          duration_seconds: Math.round(elapsed),
-          scraped_leads: scrapedLeads, // JSONB column — full array written each time
-          logs: loopLogs
-        });
-
-        eventBus.publish('job.progress', { jobId: job.id, progress: scrapedLeads.length, maxLeads: limit });
-        logger.info(`[JobManager] [${scrapedLeads.length}/${limit}] Extracted: ${lead.name}`);
+      for (let w = 0; w < Math.min(concurrencyLimit, limit); w++) {
+        pool.push(worker());
       }
+      await Promise.all(pool);
 
       // 4. Mark Job completed — keep scraped_leads for user to review & save
       const finalFresh = await scrapeJobRepository.getById(job.id);

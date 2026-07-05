@@ -22,6 +22,24 @@ pool.on('error', (err) => {
   logger.error(`[Database] Idle pool client encountered unexpected error: ${err.message}`);
 });
 
+function sanitizeParams(params) {
+  if (!params || !Array.isArray(params)) return params;
+  return params.map(val => {
+    if (typeof val === 'string') {
+      return val.replace(/\u0000/g, '');
+    }
+    if (typeof val === 'object' && val !== null) {
+      try {
+        const str = JSON.stringify(val).replace(/\u0000/g, '');
+        return JSON.parse(str);
+      } catch (e) {
+        return val;
+      }
+    }
+    return val;
+  });
+}
+
 module.exports = {
   pool,
 
@@ -35,8 +53,9 @@ module.exports = {
    */
   async query(text, params = [], repoName = 'Database', opName = 'query') {
     const start = Date.now();
+    const cleanParams = sanitizeParams(params);
     try {
-      const res = await pool.query(text, params);
+      const res = await pool.query(text, cleanParams);
       const duration = Date.now() - start;
       logger.info({
         repository: repoName,

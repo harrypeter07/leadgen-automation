@@ -12,9 +12,22 @@ class GoogleMapsProvider {
   }
 
   async search(page, query) {
-    const searchTerm = query.area 
-      ? `${query.keyword} in ${query.area}, ${query.city}`
-      : `${query.keyword} in ${query.city}`;
+    let searchTerm = query.keyword;
+    const cityVal = query.city || '';
+
+    if (cityVal === 'Global') {
+      searchTerm = query.keyword;
+    } else if (cityVal.startsWith('Country: ')) {
+      const countryName = cityVal.replace('Country: ', '');
+      searchTerm = query.area
+        ? `${query.keyword} in ${query.area}, ${countryName}`
+        : `${query.keyword} in ${countryName}`;
+    } else {
+      searchTerm = query.area 
+        ? `${query.keyword} in ${query.area}, ${cityVal}`
+        : `${query.keyword} in ${cityVal}`;
+    }
+
     const encoded = encodeURIComponent(searchTerm);
     const mapsUrl = `https://www.google.com/maps/search/${encoded}`;
     

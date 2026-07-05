@@ -80,7 +80,7 @@ export default function LeadsPage() {
         setScanPolling(prev => { if (prev) clearInterval(prev); return null })
         if (data.checked > 0) {
           toast.success(`✅ WA Scan done! ${data.waCount} on WhatsApp, ${data.noWaCount} not on WA.`)
-          fetchLeads() // refresh badges
+          fetchLeads(true) // refresh badges
         }
       }
     } catch {
@@ -185,8 +185,8 @@ export default function LeadsPage() {
   }
 
   // Fetch leads via server-side API route (service role key — bypasses RLS)
-  async function fetchLeads() {
-    setLoading(true)
+  async function fetchLeads(silent = false) {
+    if (!silent) setLoading(true)
     try {
       const params = new URLSearchParams({
         page:    String(page),
@@ -210,7 +210,7 @@ export default function LeadsPage() {
       console.error('[Leads Page] fetchLeads error:', message)
       toast.error(message)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -265,7 +265,7 @@ export default function LeadsPage() {
         throw new Error(errorData.error || 'Failed to update status')
       }
       toast.success('Status updated!', { id: toastId })
-      fetchLeads()
+      fetchLeads(true)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to update status'
       toast.error(message, { id: toastId })
@@ -286,7 +286,7 @@ export default function LeadsPage() {
         throw new Error(errorData.error || 'Failed to delete lead')
       }
       toast.success('Lead deleted!', { id: toastId })
-      fetchLeads()
+      fetchLeads(true)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete lead'
       toast.error(message, { id: toastId })
@@ -315,7 +315,7 @@ export default function LeadsPage() {
         throw new Error(errorData.error || 'Failed to send WhatsApp message')
       }
       toast.success('WhatsApp outreach sent successfully!', { id: toastId })
-      fetchLeads()
+      fetchLeads(true)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to send WhatsApp'
       toast.error(message, { id: toastId })
@@ -344,7 +344,7 @@ export default function LeadsPage() {
         throw new Error(errorData.error || 'Failed to send email')
       }
       toast.success('Outreach email sent successfully!', { id: toastId })
-      fetchLeads()
+      fetchLeads(true)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to send email'
       toast.error(message, { id: toastId })
@@ -398,7 +398,7 @@ export default function LeadsPage() {
 
     toast.success(`Outreach done: ${successCount} sent, ${failCount} failed.`, { id: toastId })
     setSelectedIds([])
-    fetchLeads()
+    fetchLeads(true)
   }
 
   async function handleBulkMarkReplied() {
@@ -419,7 +419,7 @@ export default function LeadsPage() {
 
     toast.success(`Successfully marked ${successCount} leads as Replied.`, { id: toastId })
     setSelectedIds([])
-    fetchLeads()
+    fetchLeads(true)
   }
 
   async function handleBulkDelete() {
@@ -436,7 +436,7 @@ export default function LeadsPage() {
 
     toast.success(`Successfully deleted ${successCount} leads.`, { id: toastId })
     setSelectedIds([])
-    fetchLeads()
+    fetchLeads(true)
   }
 
   // Export CSV
@@ -779,7 +779,7 @@ export default function LeadsPage() {
             })
             if (!res.ok) throw new Error('Research failed')
             toast.success('Research completed and profile synchronized', { id: toastId })
-            fetchLeads()
+            fetchLeads(true)
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Research failed'
             toast.error(msg, { id: toastId })
@@ -798,7 +798,7 @@ export default function LeadsPage() {
             })
             if (!res.ok) throw new Error('Failed to generate outreach copy')
             toast.success('AI outreach message copy drafted', { id: toastId })
-            fetchLeads()
+            fetchLeads(true)
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Failed to generate copy'
             toast.error(msg, { id: toastId })
