@@ -67,7 +67,8 @@ router.post('/facebook', async (req, res) => {
       return formatResponse(res, { email: null, phone: null, website: null });
     }
 
-    const aboutUrl = facebookUrl.includes('?') ? `${facebookUrl}&v=info` : `${facebookUrl}/about`;
+    const cleanUrl = facebookUrl.endsWith('/') ? facebookUrl.slice(0, -1) : facebookUrl;
+    const aboutUrl = cleanUrl.includes('?') ? `${cleanUrl}&v=info` : `${cleanUrl}/about`;
     logger.info(`[Enrich API] Fetching Facebook About Page: "${aboutUrl}"`);
     
     let text = '';
@@ -91,7 +92,9 @@ router.post('/facebook', async (req, res) => {
 
     // Extract details via regex
     const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-    const phoneMatch = text.match(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+    
+    // Support US 10-digit, SG 8-digit, and general international phone numbers
+    const phoneMatch = text.match(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}/) || text.match(/\+?\d[\d\s.-]{7,15}\d/);
     
     let website = null;
     const urlMatches = text.match(/https?:\/\/[^\s$.?#].[^\s]*/g) || [];
