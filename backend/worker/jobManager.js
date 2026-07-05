@@ -14,6 +14,7 @@ const FacebookProvider = require('../providers/facebook/provider');
 const RedditProvider = require('../providers/reddit/provider');
 const LinkedInProvider = require('../providers/linkedin/provider');
 const TinyFishProvider = require('../providers/tinyfish/provider');
+const InstagramProvider = require('../providers/instagram/provider');
 const emailScraper = require('../services/emailScraper');
 
 class JobManager {
@@ -25,7 +26,8 @@ class JobManager {
       'facebook': new FacebookProvider(),
       'reddit': new RedditProvider(),
       'linkedin': new LinkedInProvider(),
-      'tinyfish': new TinyFishProvider()
+      'tinyfish': new TinyFishProvider(),
+      'instagram': new InstagramProvider()
     };
   }
 

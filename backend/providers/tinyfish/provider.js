@@ -55,11 +55,25 @@ class TinyFishProvider {
       address: aiExtracted.address || null,
       category: aiExtracted.category || null,
       website: aiExtracted.website || item.url || item.website || '',
-      snippet: item.snippet || item.description || ''
+      snippet: item.snippet || item.description || '',
+      contact_name: aiExtracted.contact_name || null,
+      contact_role: aiExtracted.contact_role || null,
+      social_links: Array.isArray(aiExtracted.social_links) ? aiExtracted.social_links : []
     };
   }
 
   normalize(raw, city) {
+    let finalNotes = '';
+    if (raw.contact_name) {
+      finalNotes += `Contact: ${raw.contact_name}${raw.contact_role ? ` (${raw.contact_role})` : ''}\n`;
+    }
+    if (Array.isArray(raw.social_links) && raw.social_links.length > 0) {
+      finalNotes += `Socials: ${raw.social_links.join(', ')}\n`;
+    }
+    if (raw.snippet) {
+      finalNotes += `Snippet: ${raw.snippet}\n`;
+    }
+
     return {
       name: raw.name,
       phone: raw.phone,
@@ -68,7 +82,7 @@ class TinyFishProvider {
       city: city ? city.toLowerCase().replace(/(?:^|\s|-)\S/g, match => match.toUpperCase()).trim() : '',
       category: raw.category || '',
       website: raw.website,
-      notes: raw.snippet || '',
+      notes: finalNotes.trim() || null,
       source: 'tinyfish',
       status: 'new'
     };

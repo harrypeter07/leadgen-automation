@@ -68,9 +68,7 @@ class BackgroundWorkers {
             // Trigger the research engine asynchronously
             intelligenceService.runBusinessResearch(lead.id)
               .then(async () => {
-                // Update lead status to 'qualified' or 'audited'
-                await db.query("UPDATE leads SET status = 'qualified' WHERE id = $1;", [lead.id]);
-                logger.info(`[Research Worker] Lead ${lead.id} research completed and qualified.`);
+                logger.info(`[Research Worker] Lead ${lead.id} research completed.`);
               })
               .catch(err => {
                 logger.error(`[Research Worker Error] Lead ${lead.id} audit failed: ${err.message}`);

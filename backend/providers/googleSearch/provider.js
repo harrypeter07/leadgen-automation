@@ -17,7 +17,7 @@ class GoogleSearchProvider {
   }
 
   async collect(page, maxLeads) {
-    const links = await page.evalOnSelectorAll(
+    const links = await page.$$eval(
       '#search a[href^="http"]',
       els => els.map(e => e.href)
     );

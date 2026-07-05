@@ -116,9 +116,12 @@ class AIService {
       4. "address": Street address or office location (string or null).
       5. "category": Industry / Category (string or null, e.g. "Software Consultant").
       6. "website": The official website URL (string or null).
+      7. "contact_name": The key contact person's name (e.g. founder, owner, CEO, manager, director) if mentioned (string or null).
+      8. "contact_role": The job role/title of this key contact person (string or null).
+      9. "social_links": Array of social media URLs (LinkedIn, Facebook, Instagram, Twitter/X) found on the page (array of strings).
 
       Website content:
-      ${content.substring(0, 4000)}
+      ${content.substring(0, 5000)}
 
       JSON format expected:
       {
@@ -127,7 +130,10 @@ class AIService {
         "email": "string" or null,
         "address": "string" or null,
         "category": "string" or null,
-        "website": "string" or null
+        "website": "string" or null,
+        "contact_name": "string" or null,
+        "contact_role": "string" or null,
+        "social_links": ["string"]
       }
     `;
 
@@ -142,7 +148,10 @@ class AIService {
         email: null,
         address: null,
         category: null,
-        website: null
+        website: null,
+        contact_name: null,
+        contact_role: null,
+        social_links: []
       };
     }
   }
@@ -182,6 +191,76 @@ class AIService {
       return JSON.parse(responseJsonText);
     } catch (err) {
       return { nextStage: currentStage, nextAction: 'Follow up with lead on previous message.' };
+    }
+  }
+
+  /**
+   * Plan Instagram search queries targeted at finding profiles
+   */
+  async planInstagramSearch(keyword, city) {
+    const prompt = `
+      You are an expert lead generation assistant. Your goal is to find Instagram profiles of businesses or professionals matching the keyword "${keyword}" in "${city}".
+      Generate exactly 3 different Google search queries using search operators (like site:instagram.com) that will return matching profiles.
+      Make sure to target profile bios, usernames, and relevant hashtags in your queries.
+      
+      Return the output as a clean JSON object containing:
+      "queries": ["string", "string", "string"]
+      
+      Example output format:
+      {
+        "queries": [
+          "site:instagram.com \\"dentist\\" \\"Stockholm\\"",
+          "site:instagram.com \\"dental clinic\\" Stockholm",
+          "site:instagram.com \\"#stockholmdentist\\""
+        ]
+      }
+    `;
+
+    try {
+      const responseJsonText = await geminiClient.generateContent(prompt, true);
+      const parsed = JSON.parse(responseJsonText);
+      return Array.isArray(parsed.queries) ? parsed.queries : [];
+    } catch (err) {
+      logger.warn({ error: err.message }, '[AI Service] Failed to plan Instagram search queries via Gemini.');
+      return [
+        `site:instagram.com ${keyword} "${city}"`,
+        `site:instagram.com "${city}" ${keyword} profile`,
+        `site:instagram.com "#${keyword.replace(/\s+/g, '').toLowerCase()}" "${city}"`
+      ];
+    }
+  }
+
+  /**
+   * Extract contact information and lead details from Instagram profile bio text
+   */
+  async extractInstagramLead(displayName, bio, text) {
+    const prompt = `
+      Extract contact information and lead details from this Instagram profile.
+      Display Name: ${displayName}
+      Bio: ${bio}
+      Additional text: ${text}
+      
+      Return a clean JSON object containing:
+      1. "phone": Any phone number or WhatsApp contact (string or null).
+      2. "email": Any email address found (string or null).
+      3. "address": Location / city / address details (string or null).
+      4. "category": Business category or industry (string or null).
+      
+      JSON format expected:
+      {
+        "phone": "string" or null,
+        "email": "string" or null,
+        "address": "string" or null,
+        "category": "string" or null
+      }
+    `;
+
+    try {
+      const responseJsonText = await geminiClient.generateContent(prompt, true);
+      return JSON.parse(responseJsonText);
+    } catch (err) {
+      logger.warn({ error: err.message }, '[AI Service] Failed to parse Instagram lead via Gemini.');
+      return { phone: null, email: null, address: null, category: null };
     }
   }
 }

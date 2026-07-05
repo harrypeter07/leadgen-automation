@@ -58,11 +58,55 @@ router.post('/start', async (req, res, next) => {
       finalCity = `Country: ${corrected}`;
     }
 
+    // Auto-split batch chunking strategy for Country & Global queries to prevent local timeouts
+    let targetCities = [];
+    const limitVal = maxLeads || 25;
+
+    if (finalCity === 'Global') {
+      targetCities = ['New York', 'London', 'Sydney', 'Mumbai', 'Toronto', 'Berlin', 'Tokyo', 'Singapore'];
+    } else if (finalCity.startsWith('Country: ')) {
+      const countryName = finalCity.replace('Country: ', '');
+      const countryCities = {
+        'Sweden': ['Stockholm', 'Gothenburg', 'Malmo', 'Uppsala'],
+        'India': ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai'],
+        'United States': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix'],
+        'United Kingdom': ['London', 'Birmingham', 'Leeds', 'Glasgow', 'Manchester'],
+        'Canada': ['Toronto', 'Montreal', 'Vancouver', 'Calgary'],
+        'Australia': ['Sydney', 'Melbourne', 'Brisbane', 'Perth'],
+        'Germany': ['Berlin', 'Hamburg', 'Munich', 'Cologne'],
+        'France': ['Paris', 'Marseille', 'Lyon', 'Toulouse'],
+        'United Arab Emirates': ['Dubai', 'Abu Dhabi', 'Sharjah']
+      };
+      targetCities = countryCities[countryName] || [];
+    }
+
+    if (targetCities.length > 0) {
+      const chunkLeads = Math.max(5, Math.ceil(limitVal / targetCities.length));
+      const createdJobs = [];
+      
+      for (const tCity of targetCities) {
+        const finalKeyword = area && area.trim() ? `${keyword.trim()} [Area: ${area.trim()}]` : keyword.trim();
+        const job = await queueManager.enqueue({
+          keyword: finalKeyword,
+          city: tCity,
+          max_leads: chunkLeads,
+          worker_count: workerCount || 1,
+          current_provider: provider || 'google_maps'
+        });
+        createdJobs.push(job.id);
+      }
+      
+      return formatResponse(res, req, {
+        jobIds: createdJobs,
+        message: `Search query split successfully into ${createdJobs.length} city-level jobs (${chunkLeads} leads each).`
+      });
+    }
+
     const finalKeyword = area && area.trim() ? `${keyword.trim()} [Area: ${area.trim()}]` : keyword.trim();
     const job = await queueManager.enqueue({
       keyword: finalKeyword,
       city: finalCity,
-      max_leads: maxLeads || 25,
+      max_leads: limitVal,
       worker_count: workerCount || 1,
       current_provider: provider || 'google_maps'
     });

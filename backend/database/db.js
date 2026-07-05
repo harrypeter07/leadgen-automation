@@ -26,11 +26,11 @@ function sanitizeParams(params) {
   if (!params || !Array.isArray(params)) return params;
   return params.map(val => {
     if (typeof val === 'string') {
-      return val.replace(/\u0000/g, '');
+      return val.replace(/\u0000/g, '').replace(/\\u0000/gi, '');
     }
     if (typeof val === 'object' && val !== null) {
       try {
-        const str = JSON.stringify(val).replace(/\u0000/g, '');
+        const str = JSON.stringify(val).replace(/\u0000/g, '').replace(/\\u0000/gi, '');
         return JSON.parse(str);
       } catch (e) {
         return val;
@@ -88,10 +88,11 @@ module.exports = {
    * @returns {Promise<import('pg').QueryResult>}
    */
   async execute(tx, text, params = [], repoName = 'Database', opName = 'query') {
+    const cleanParams = sanitizeParams(params);
     if (tx) {
       const start = Date.now();
       try {
-        const res = await tx.query(text, params);
+        const res = await tx.query(text, cleanParams);
         const duration = Date.now() - start;
         logger.info({
           repository: repoName,
