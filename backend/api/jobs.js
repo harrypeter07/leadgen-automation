@@ -6,6 +6,7 @@ const jobManager = require('../worker/jobManager');
 const workerManager = require('../worker/workerManager');
 const metrics = require('../worker/metrics');
 const scrapeJobRepository = require('../repositories/scrapeJobRepository');
+const countryCorrector = require('../modules/countryCorrector');
 
 const router = express.Router();
 

@@ -333,7 +333,8 @@ export default function TinyFishPage() {
 
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to queue job')
+        const errMsg = typeof data.error === 'object' && data.error ? data.error.message : data.error;
+        throw new Error(errMsg || 'Failed to queue job')
       }
 
       toast.success('TinyFish scraper job successfully queued!', { id: toastId })
