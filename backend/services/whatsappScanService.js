@@ -121,6 +121,13 @@ async function runScan(filter = {}) {
             scanState.errCount++;
             break;
           }
+          if (res.status === 404) {
+            addLog(`[ERROR] HTTP 404 from WhatsApp Service. The service is likely running an outdated codebase version. Please go to your Railway Dashboard and manually trigger a redeploy of the 'whatsapp-service' container.`);
+            scanState.errCount++;
+            scanState.checked++;
+            await sleep(scanState.intervalMs);
+            continue;
+          }
           addLog(`${lead.name}: HTTP ${res.status} — ${body.error || 'unknown error'}. Skipping.`);
           scanState.errCount++;
           scanState.checked++;
@@ -149,7 +156,10 @@ async function runScan(filter = {}) {
           if (isWA) scanState.waCount++; else scanState.noWaCount++;
         }
       } catch (err) {
-        const msg = err.name === 'TimeoutError' ? 'Request timed out' : err.message;
+        let msg = err.name === 'TimeoutError' ? 'Request timed out' : err.message;
+        if (msg.includes('fetch failed')) {
+          msg = `[ERROR] Connection failed. Please check that your WHATSAPP_SERVICE_URL (${WHATSAPP_SERVICE_URL()}) environment variable is correct and the service is online.`;
+        }
         addLog(`${lead.name}: ${msg}. Skipping.`);
         scanState.errCount++;
       }
