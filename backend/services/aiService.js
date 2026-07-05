@@ -1,131 +1,6 @@
 // backend/services/aiService.js
-const axios = require('axios');
-const crypto = require('crypto');
+const geminiClient = require('../providers/gemini/client');
 const logger = require('../worker/logger');
-
-// Simple in-memory cache to prevent redundant Gemini call costs
-const responseCache = new Map();
-const MAX_CACHE_SIZE = 100;
-
-/**
- * Cache helper that limits size
- * @param {string} key Cache key (sha256 hash)
- * @param {string} value Value to cache
- */
-function cacheSet(key, value) {
-  if (responseCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = responseCache.keys().next().value;
-    responseCache.delete(firstKey); // evict oldest entry
-  }
-  responseCache.set(key, value);
-}
-
-/**
- * Execute an async operation with exponential backoff retries
- * @template T
- * @param {function(): Promise<T>} fn Async function to run
- * @param {number} [retries=3] Retries limit
- * @param {number} [delay=1000] Initial delay in ms
- * @returns {Promise<T>}
- */
-async function callWithRetry(fn, retries = 3, delay = 1000) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (i === retries - 1) {
-        throw err;
-      }
-      const sleepTime = delay * Math.pow(2, i);
-      logger.warn({
-        attempt: i + 1,
-        maxRetries: retries,
-        nextRetryDelayMs: sleepTime,
-        error: err.message
-      }, `[AI Service] Temporary error calling Gemini API. Retrying...`);
-      await new Promise(resolve => setTimeout(resolve, sleepTime));
-    }
-  }
-}
-
-/**
- * Call the Gemini REST API with the provided prompt
- * @param {string} prompt Prompt content
- * @param {boolean} [jsonMode=false] Expect JSON format output
- * @returns {Promise<string>} Model response text
- */
-async function callGemini(prompt, jsonMode = false) {
-  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
-  if (!apiKey) {
-    logger.warn('[AI Service] GEMINI_API_KEY is not set. Falling back to mock responses.');
-    return jsonMode ? '{"error": "Mock fallback: Gemini key not configured"}' : 'Mock response: Hello from AI service!';
-  }
-
-  // Create hash of prompt to look up in cache
-  const hash = crypto.createHash('sha256').update(`${prompt}_json=${jsonMode}`).digest('hex');
-  if (responseCache.has(hash)) {
-    logger.info({ cacheHit: true }, '[AI Service] Cache hit for Gemini query.');
-    return responseCache.get(hash);
-  }
-
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-  const requestBody = {
-    contents: [
-      {
-        parts: [
-          { text: prompt }
-        ]
-      }
-    ],
-    generationConfig: {}
-  };
-
-  if (jsonMode) {
-    requestBody.generationConfig.responseMimeType = 'application/json';
-  }
-
-  const start = Date.now();
-
-  try {
-    const responseText = await callWithRetry(async () => {
-      const response = await axios.post(endpoint, requestBody, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 8000 // 8-second timeout limit
-      });
-
-      const candidate = response.data?.candidates?.[0];
-      const textResult = candidate?.content?.parts?.[0]?.text;
-
-      if (!textResult) {
-        throw new Error('Invalid/empty response structure returned from Gemini API.');
-      }
-
-      return textResult.trim();
-    });
-
-    const latency = Date.now() - start;
-    logger.info({
-      externalApi: 'Gemini',
-      latencyMs: latency,
-      success: true,
-      cacheHit: false
-    }, `[AI Service] Gemini call completed successfully in ${latency}ms`);
-
-    cacheSet(hash, responseText);
-    return responseText;
-  } catch (err) {
-    const latency = Date.now() - start;
-    logger.error({
-      externalApi: 'Gemini',
-      latencyMs: latency,
-      success: false,
-      error: err.message,
-      stack: err.stack
-    }, `[AI Service Error] Gemini call failed after ${latency}ms: ${err.message}`);
-    throw err;
-  }
-}
 
 class AIService {
   /**
@@ -156,7 +31,7 @@ class AIService {
       Draft the next message to send (just output the message text directly):
     `;
 
-    return callGemini(prompt, false);
+    return geminiClient.generateContent(prompt, false);
   }
 
   /**
@@ -184,7 +59,7 @@ class AIService {
     `;
 
     try {
-      const responseJsonText = await callGemini(prompt, true);
+      const responseJsonText = await geminiClient.generateContent(prompt, true);
       return JSON.parse(responseJsonText);
     } catch (err) {
       logger.warn({ error: err.message }, '[AI Service] Failed to parse JSON observations from Gemini. Returning fallback structure.');
@@ -193,6 +68,36 @@ class AIService {
         insights: [],
         objections: []
       };
+    }
+  }
+
+  /**
+   * Classify user inbound message sentiment/intent
+   * @param {string} body Message body
+   * @returns {Promise<{classification: string, explanation: string}>}
+   */
+  async classifyInboundMessage(body) {
+    const prompt = `
+      Classify the following user message intent into one of these categories:
+      - 'positive': The user is interested, wants a meeting, demo, or to book a call.
+      - 'neutral': The user is asking questions, requesting more details, or neither positive nor negative.
+      - 'negative': The user is not interested, or declined the offer.
+      - 'stop': The user explicitly asks to stop messaging, unsubscribe, or remove from the list.
+
+      User Message: "${body}"
+
+      Return a JSON object:
+      {
+        "classification": "positive|neutral|negative|stop",
+        "explanation": "brief reason"
+      }
+    `;
+
+    try {
+      const responseJsonText = await geminiClient.generateContent(prompt, true);
+      return JSON.parse(responseJsonText);
+    } catch (err) {
+      return { classification: 'neutral', explanation: 'Fallback classification on parse failure.' };
     }
   }
 
@@ -227,7 +132,7 @@ class AIService {
     `;
 
     try {
-      const responseJsonText = await callGemini(prompt, true);
+      const responseJsonText = await geminiClient.generateContent(prompt, true);
       return JSON.parse(responseJsonText);
     } catch (err) {
       return { nextStage: currentStage, nextAction: 'Follow up with lead on previous message.' };

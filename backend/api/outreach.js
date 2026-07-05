@@ -22,4 +22,7 @@ router.post('/meetings', (req, res, next) => outreachController.scheduleMeeting(
 // 6. Fetch memory records, observations, and research context for a lead
 router.get('/memory/:leadId', (req, res, next) => outreachController.getMemory(req, res, next));
 
+// 7. Trigger manual website audit & social discovery research
+router.post('/research', (req, res, next) => outreachController.runResearch(req, res, next));
+
 module.exports = router;

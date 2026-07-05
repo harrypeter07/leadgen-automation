@@ -1,5 +1,6 @@
 // backend/repositories/businessRepository.js
 const db = require('../database/db');
+const cache = require('../modules/cache');
 const { handleDbError } = require('../database/dbErrorHandler');
 
 /**
@@ -84,7 +85,12 @@ class BusinessRepository {
 
     try {
       const res = await db.execute(tx, text, params, 'BusinessRepository', 'update');
-      return res.rows[0] || null;
+      const updated = res.rows[0] || null;
+      if (updated) {
+        cache.delete(`bp_id:${id}`);
+        cache.delete(`bp_lead_id:${updated.lead_id}`);
+      }
+      return updated;
     } catch (err) {
       throw handleDbError(err, 'BusinessRepository.update');
     }
@@ -97,10 +103,19 @@ class BusinessRepository {
    * @returns {Promise<BusinessProfile|null>}
    */
   async findById(id, tx = null) {
+    if (!tx) {
+      const cached = cache.get(`bp_id:${id}`);
+      if (cached) return cached;
+    }
     const text = `SELECT * FROM business_profiles WHERE id = $1;`;
     try {
       const res = await db.execute(tx, text, [id], 'BusinessRepository', 'findById');
-      return res.rows[0] || null;
+      const profile = res.rows[0] || null;
+      if (!tx && profile) {
+        cache.set(`bp_id:${id}`, profile, 120);
+        cache.set(`bp_lead_id:${profile.lead_id}`, profile, 120);
+      }
+      return profile;
     } catch (err) {
       throw handleDbError(err, 'BusinessRepository.findById');
     }
@@ -113,10 +128,19 @@ class BusinessRepository {
    * @returns {Promise<BusinessProfile|null>}
    */
   async findByLeadId(leadId, tx = null) {
+    if (!tx) {
+      const cached = cache.get(`bp_lead_id:${leadId}`);
+      if (cached) return cached;
+    }
     const text = `SELECT * FROM business_profiles WHERE lead_id = $1;`;
     try {
       const res = await db.execute(tx, text, [leadId], 'BusinessRepository', 'findByLeadId');
-      return res.rows[0] || null;
+      const profile = res.rows[0] || null;
+      if (!tx && profile) {
+        cache.set(`bp_id:${profile.id}`, profile, 120);
+        cache.set(`bp_lead_id:${leadId}`, profile, 120);
+      }
+      return profile;
     } catch (err) {
       throw handleDbError(err, 'BusinessRepository.findByLeadId');
     }
@@ -131,7 +155,12 @@ class BusinessRepository {
   async delete(id, tx = null) {
     const text = `DELETE FROM business_profiles WHERE id = $1 RETURNING id;`;
     try {
+      const profile = await this.findById(id, tx);
       const res = await db.execute(tx, text, [id], 'BusinessRepository', 'delete');
+      if (profile) {
+        cache.delete(`bp_id:${id}`);
+        cache.delete(`bp_lead_id:${profile.lead_id}`);
+      }
       return res.rowCount > 0;
     } catch (err) {
       throw handleDbError(err, 'BusinessRepository.delete');

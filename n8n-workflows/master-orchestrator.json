@@ -1,0 +1,519 @@
+{
+  "name": "Outreach Master Orchestrator V4",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e1f2g3h4-0001-4000-8000-000000000001",
+      "name": "Lead Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 100],
+      "webhookId": "leadgen-intake-webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "inbound-whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e1f2g3h4-0002-4000-8000-000000000002",
+      "name": "WhatsApp Inbound Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 260],
+      "webhookId": "leadgen-inbound-wa-webhook"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "e1f2g3h4-0003-4000-8000-000000000003",
+      "name": "15-Min Followup Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 420]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "e1f2g3h4-0004-4000-8000-000000000004",
+      "name": "6-Hour Maintenance Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 580]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Standardize Event Metadata & Payload Contracts ────────────────────\nconst items = $input.all();\nconst nodeName = $execution.triggerSource || 'Cron';\nlet event = 'followup_due';\nlet payload = {};\n\nif (nodeName.includes('Intake')) {\n  event = 'lead_intake';\n  payload = items[0].json.body || {};\n} else if (nodeName.includes('WhatsApp Inbound')) {\n  event = 'inbound_message';\n  payload = items[0].json.body || {};\n} else if (nodeName.includes('6-Hour')) {\n  event = 'ghost_detection';\n  payload = {};\n}\n\n// Generate random UUID mockup for event tracing\nconst generateUUID = () => {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n};\n\nreturn [{\n  json: {\n    eventId: generateUUID(),\n    correlationId: $execution.id || generateUUID(),\n    timestamp: new Date().toISOString(),\n    version: '4.0.0',\n    source: nodeName,\n    event: event,\n    payload: payload\n  }\n}];"
+      },
+      "id": "e1f2g3h4-0005-4000-8000-000000000005",
+      "name": "Normalize Trigger Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [360, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/workflows/orchestrate",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-api-secret", "value": "={{ $env.API_SECRET }}" },
+            { "name": "x-correlation-id", "value": "={{ $json.correlationId }}" },
+            { "name": "x-execution-id", "value": "={{ $execution.id }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": {{ JSON.stringify($json.event) }},\n  \"payload\": {{ JSON.stringify($json.payload) }}\n}",
+        "options": {}
+      },
+      "id": "e1f2g3h4-0006-4000-8000-000000000006",
+      "name": "Call Backend Orchestrator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [580, 300],
+      "retryOnFail": true,
+      "maxRetries": 3,
+      "delayBetweenRetries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Extract Actions Array for Split in Batches Loop ─────────────────────\nconst res = $input.first().json.data || {};\nconst correlationId = $node[\"Normalize Trigger Payload\"].json.correlationId;\n\nlet actionsList = [];\nif (Array.isArray(res.actions)) {\n  actionsList = res.actions;\n} else if (res.nextAction && res.nextAction !== 'NONE') {\n  actionsList = [{\n    type: res.nextAction,\n    payload: res.actionPayload || {}\n  }];\n}\n\n// Wrap array in items format required for Split in Batches\nreturn actionsList.map(action => ({\n  json: {\n    type: action.type,\n    payload: action.payload || {},\n    correlationId: correlationId\n  }\n}));"
+      },
+      "id": "e1f2g3h4-0014-4000-8000-000000000014",
+      "name": "Extract Actions List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "e1f2g3h4-0015-4000-8000-000000000015",
+      "name": "Split Actions Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [1020, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "SEND_WHATSAPP",
+                    "operator": "equals"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Send WhatsApp"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "SEND_EMAIL",
+                    "operator": "equals"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Send Email"
+            }
+          ]
+        },
+        "fallbackOutput": "Log & Skip"
+      },
+      "id": "e1f2g3h4-0007-4000-8000-000000000007",
+      "name": "Action Router Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.1,
+      "position": [1240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHATSAPP_SERVICE_URL }}/send",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-api-secret", "value": "={{ $env.API_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"phone\": {{ JSON.stringify($json.payload.phone) }},\n  \"message\": {{ JSON.stringify($json.payload.message) }}\n}",
+        "options": {}
+      },
+      "id": "e1f2g3h4-0008-4000-8000-000000000008",
+      "name": "Dispatch WhatsApp Outbound",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1480, 160],
+      "retryOnFail": true,
+      "maxRetries": 3,
+      "delayBetweenRetries": 3000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/outreach/message/inbound",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-api-secret", "value": "={{ $env.API_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"leadId\": {{ JSON.stringify($json.payload.leadId) }},\n  \"body\": {{ JSON.stringify($json.payload.body) }},\n  \"channel\": \"email\"\n}",
+        "options": {}
+      },
+      "id": "e1f2g3h4-0009-4000-8000-000000000009",
+      "name": "Dispatch Email Outbound",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1480, 420],
+      "retryOnFail": true,
+      "maxRetries": 3,
+      "delayBetweenRetries": 3000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/workflows/orchestrate",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-api-secret", "value": "={{ $env.API_SECRET }}" },
+            { "name": "x-correlation-id", "value": "={{ $json.correlationId }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": \"action_completed\",\n  \"payload\": {\n    \"leadId\": {{ JSON.stringify($json.payload.leadId) }},\n    \"actionType\": {{ JSON.stringify($json.type) }},\n    \"status\": \"success\",\n    \"messageId\": {{ JSON.stringify($json.payload.messageId) }}\n  }\n}",
+        "options": {}
+      },
+      "id": "e1f2g3h4-0016-4000-8000-000000000016",
+      "name": "Action Success Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1800, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/workflows/orchestrate",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-api-secret", "value": "={{ $env.API_SECRET }}" },
+            { "name": "x-correlation-id", "value": "={{ $json.correlationId }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": \"action_failed\",\n  \"payload\": {\n    \"leadId\": {{ JSON.stringify($json.payload.leadId) }},\n    \"actionType\": {{ JSON.stringify($json.type) }},\n    \"error\": \"Action execution failed\",\n    \"messageId\": {{ JSON.stringify($json.payload.messageId) }}\n  }\n}",
+        "options": {}
+      },
+      "id": "e1f2g3h4-0017-4000-8000-000000000017",
+      "name": "Action Failure Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1800, 560]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"completed\",\n  \"executionId\": {{ JSON.stringify($execution.id) }},\n  \"timestamp\": {{ JSON.stringify(new Date().toISOString()) }}\n}",
+        "options": {}
+      },
+      "id": "e1f2g3h4-0010-4000-8000-000000000010",
+      "name": "Respond Webhook Call",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1240, 580]
+    },
+    {
+      "parameters": {
+        "content": "## n8n Master Orchestrator V4\nThis version loops through `actions[]` sequentially using a Split-In-Batches loop, callback callbacks to report status back to the backend, and is fully parameterized with env keys."
+      },
+      "id": "e1f2g3h4-0011-4000-8000-000000000011",
+      "name": "Orchestration Explainer Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [560, 80]
+    },
+    {
+      "parameters": {},
+      "id": "e1f2g3h4-0012-4000-8000-000000000012",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [100, 780]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/logs",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-api-secret", "value": "={{ $env.API_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"level\": \"ERROR\",\n  \"message\": \"n8n Master Orchestrator V4 execution failure\",\n  \"error\": {{ JSON.stringify($json.error) }}\n}",
+        "options": {}
+      },
+      "id": "e1f2g3h4-0013-4000-8000-000000000013",
+      "name": "Log Workflow Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 780]
+    }
+  ],
+  "connections": {
+    "Lead Intake Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Trigger Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Inbound Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Trigger Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "15-Min Followup Cron": {
+      "main": [
+        [
+          {
+            "node": "Normalize Trigger Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6-Hour Maintenance Cron": {
+      "main": [
+        [
+          {
+            "node": "Normalize Trigger Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Trigger Payload": {
+      "main": [
+        [
+          {
+            "node": "Call Backend Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Backend Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Extract Actions List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Actions List": {
+      "main": [
+        [
+          {
+            "node": "Split Actions Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Actions Loop": {
+      "main": [
+        [
+          {
+            "node": "Action Router Switch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Webhook Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Router Switch": {
+      "main": [
+        [
+          {
+            "node": "Dispatch WhatsApp Outbound",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatch Email Outbound",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Action Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch WhatsApp Outbound": {
+      "main": [
+        [
+          {
+            "node": "Action Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Action Failure Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Email Outbound": {
+      "main": [
+        [
+          {
+            "node": "Action Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Action Failure Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Success Callback": {
+      "main": [
+        [
+          {
+            "node": "Split Actions Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Failure Callback": {
+      "main": [
+        [
+          {
+            "node": "Split Actions Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Log Workflow Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e1f2g3h4-0000-0000-0000-000000000000"
+}

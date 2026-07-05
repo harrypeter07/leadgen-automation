@@ -5,6 +5,9 @@ const supabase = require('../database/connection');
 const browserManager = require('./browserManager');
 const workerManager = require('./workerManager');
 const queueManager = require('./queueManager');
+const db = require('../database/db');
+const fs = require('fs');
+const path = require('path');
 
 class BootstrapManager {
   constructor() {
@@ -74,40 +77,45 @@ class BootstrapManager {
   }
 
   async bootstrapDatabase() {
-    logger.info('[Bootstrap] Step 2: Verifying Supabase connection...');
+    logger.info('[Bootstrap] Step 2: Verifying PostgreSQL connection and running migrations...');
     const startDb = Date.now();
-    
-    if (!supabase) {
-      this.status.database.status = 'Degraded';
-      this.status.database.message = 'Supabase client could not be created (missing environment variables).';
-      logger.error(`❌ [Bootstrap] Database check failed: ${this.status.database.message}`);
-      return;
-    }
-
     try {
-      // Run a simple query to verify the connection works
-      const { data, error } = await supabase
-        .from('scrape_jobs')
-        .select('count')
-        .limit(1);
+      // Ensure migrations_log table exists
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS migrations_log (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL UNIQUE,
+          executed_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      const MIGRATION_NAME = '01_conversation_intelligence';
+      const checkRes = await db.query('SELECT * FROM migrations_log WHERE name = $1;', [MIGRATION_NAME]);
+      
+      if (checkRes.rows.length === 0) {
+        logger.info('[Bootstrap] Migration "01_conversation_intelligence" is not applied. Applying now...');
+        const upFilePath = path.join(__dirname, '..', 'database', 'migrations', '01_conversation_intelligence.sql');
+        const sql = fs.readFileSync(upFilePath, 'utf8');
+        
+        await db.transaction(async (tx) => {
+          await tx.query(sql);
+          await tx.query('INSERT INTO migrations_log (name) VALUES ($1);', [MIGRATION_NAME]);
+        }, 'BootstrapMigrations');
+        logger.info('[Bootstrap] Migration applied successfully.');
+      } else {
+        logger.info('[Bootstrap] Migration "01_conversation_intelligence" is already up to date.');
+      }
 
       const duration = Date.now() - startDb;
       this.status.database.latency_ms = duration;
-
-      if (error) {
-        // Table might not exist but connection works, or query failed
-        this.status.database.status = 'Connected (Query Failed)';
-        this.status.database.message = error.message;
-        logger.warn(`⚠️ [Bootstrap] Supabase connection active but query failed in ${duration}ms: ${error.message}`);
-      } else {
-        this.status.database.status = 'Connected';
-        this.status.database.message = 'Connection and table select verified successfully.';
-        logger.info(`✓ [Bootstrap] Supabase connection verified successfully in ${duration}ms.`);
-      }
+      this.status.database.status = 'Connected';
+      this.status.database.message = 'PostgreSQL connection and migration verified.';
+      logger.info(`✓ [Bootstrap] PostgreSQL connection verified in ${duration}ms.`);
     } catch (err) {
       this.status.database.status = 'Offline';
       this.status.database.message = err.message;
-      logger.error(`❌ [Bootstrap] Supabase connection failed: ${err.message}`);
+      logger.error(`❌ [Bootstrap] PostgreSQL connection/migration failed: ${err.message}`);
+      throw err;
     }
   }
 
@@ -130,14 +138,19 @@ class BootstrapManager {
   }
 
   async bootstrapWorkers() {
-    logger.info('[Bootstrap] Step 4: Initializing Engine Worker Loop...');
+    logger.info('[Bootstrap] Step 4: Initializing Engine Worker Loop and Background CRONs...');
     const startWorkers = Date.now();
     try {
       workerManager.initialize(async () => {
         return await queueManager.dequeue();
       });
+      
+      // Start background cron loops (research, followups, ghost, retries, cleanup)
+      const backgroundWorkers = require('./backgroundWorkers');
+      backgroundWorkers.start();
+
       this.status.workers.status = 'Active';
-      logger.info(`✓ [Bootstrap] Core engine worker pool initialized in ${Date.now() - startWorkers}ms.`);
+      logger.info(`✓ [Bootstrap] Core engine worker pool and background loops initialized in ${Date.now() - startWorkers}ms.`);
     } catch (err) {
       this.status.workers.status = 'Failed';
       logger.error(`❌ [Bootstrap] Worker pool initialization failed: ${err.message}`);

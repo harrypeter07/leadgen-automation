@@ -8,6 +8,7 @@ const followupRepo = require('../repositories/followupRepository');
 const memoryRepo = require('../repositories/memoryRepository');
 const leadsRepository = require('../repositories/leadsRepository');
 const aiService = require('./aiService');
+const conversationEngine = require('./conversationEngine');
 const logger = require('../worker/logger');
 
 // Environment helpers
@@ -45,7 +46,7 @@ class OutreachService {
       }
 
       // 3. Create conversation state
-      let state = await conversationRepo.findByLeadId(leadId, tx);
+      let state = await conversationRepo.findByLeadId(leadId, tx, true);
       if (!state) {
         state = await conversationRepo.create({
           business_id: profile.id,
@@ -257,44 +258,44 @@ class OutreachService {
    */
   async handleInboundMessage(leadId, messageData) {
     logger.info({ leadId, channel: messageData.channel }, '[Outreach Service] Processing incoming message...');
-
-    const profile = await businessRepo.findByLeadId(leadId);
-    if (!profile) {
-      throw new Error(`Business profile not found for lead ID ${leadId}.`);
-    }
-
-    const state = await conversationRepo.findByLeadId(leadId);
-    if (!state) {
-      throw new Error(`Conversation state not initialized for lead ID ${leadId}.`);
-    }
-
-    // Insert inbound message record
-    const messageRecord = await conversationRepo.createMessage({
-      conversation_state_id: state.id,
-      direction: 'inbound',
-      channel: messageData.channel,
-      sender: messageData.sender || 'lead',
-      recipient: 'system',
-      body: messageData.body
-    });
-
-    // Fetch message history for AI context
-    const messages = await conversationRepo.getMessages(state.id);
-
-    // Call AI service to classify the next stage and next actions
-    const classification = await aiService.classifyStage(state.current_stage, messages);
-
-    // Process memory updates based on inbound message content
-    const memory = await memoryRepo.findByLeadId(leadId);
-    const insights = memory ? (memory.key_insights || []) : [];
     
-    // Look for positive intent or calendar keywords
-    const isMeetingKeywords = /\b(schedule|meet|call|calendar|zoom|time|tomorrow|agenda)\b/i.test(messageData.body);
-    if (isMeetingKeywords) {
-      insights.push(`Lead expressed interest in scheduling a meeting: "${messageData.body.substring(0, 50)}..."`);
-    }
+    return await db.transaction(async (tx) => {
+      const profile = await businessRepo.findByLeadId(leadId, tx);
+      if (!profile) {
+        throw new Error(`Business profile not found for lead ID ${leadId}.`);
+      }
 
-    await db.transaction(async (tx) => {
+      const state = await conversationRepo.findByLeadId(leadId, tx, true);
+      if (!state) {
+        throw new Error(`Conversation state not initialized for lead ID ${leadId}.`);
+      }
+
+      // Insert inbound message record
+      const messageRecord = await conversationRepo.createMessage({
+        conversation_state_id: state.id,
+        direction: 'inbound',
+        channel: messageData.channel,
+        sender: messageData.sender || 'lead',
+        recipient: 'system',
+        body: messageData.body
+      }, tx);
+
+      // Fetch message history for AI context
+      const messages = await conversationRepo.getMessages(state.id, tx);
+
+      // Call conversation engine to classify the next stage and next actions
+      const classification = await conversationEngine.resolveNextAction(state.current_stage, messageData.body);
+
+      // Process memory updates based on inbound message content
+      const memory = await memoryRepo.findByLeadId(leadId, tx);
+      const insights = memory ? (memory.key_insights || []) : [];
+      
+      // Look for positive intent or calendar keywords
+      const isMeetingKeywords = /\b(schedule|meet|call|calendar|zoom|time|tomorrow|agenda)\b/i.test(messageData.body);
+      if (isMeetingKeywords) {
+        insights.push(`Lead expressed interest in scheduling a meeting: "${messageData.body.substring(0, 50)}..."`);
+      }
+
       // Update state
       await conversationRepo.update(state.id, {
         current_stage: classification.nextStage,
@@ -314,13 +315,13 @@ class OutreachService {
           summary: `Inbound memory initialization.`
         }, tx);
       }
-    }, 'OutreachService.handleInboundMessage');
 
-    const updatedState = await conversationRepo.findById(state.id);
-    return {
-      state: updatedState,
-      receivedMessage: messageRecord
-    };
+      const updatedState = await conversationRepo.findById(state.id, tx);
+      return {
+        state: updatedState,
+        receivedMessage: messageRecord
+      };
+    }, 'OutreachService.handleInboundMessage');
   }
 
   /**

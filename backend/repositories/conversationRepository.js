@@ -156,14 +156,19 @@ class ConversationRepository {
    * Find a conversation state by the associated lead ID (joins through business_profiles)
    * @param {string} leadId Lead ID (UUID)
    * @param {import('pg').ClientBase} [tx] Optional transaction client
+   * @param {boolean} [forUpdate=false] Add FOR UPDATE OF cs lock inside active transactions
    * @returns {Promise<ConversationState|null>}
    */
-  async findByLeadId(leadId, tx = null) {
-    const text = `
+  async findByLeadId(leadId, tx = null, forUpdate = false) {
+    let text = `
       SELECT cs.* FROM conversation_states cs
       JOIN business_profiles bp ON cs.business_id = bp.id
-      WHERE bp.lead_id = $1;
+      WHERE bp.lead_id = $1
     `;
+    if (forUpdate && tx) {
+      text += ` FOR UPDATE OF cs`;
+    }
+    text += ';';
     try {
       const res = await db.execute(tx, text, [leadId], 'ConversationRepository', 'findByLeadId');
       return res.rows[0] || null;

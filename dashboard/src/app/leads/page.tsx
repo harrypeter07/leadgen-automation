@@ -1,11 +1,10 @@
-// dashboard/src/app/leads/page.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { formatDistanceToNow } from 'date-fns'
 import type { Lead, LeadStatus } from '@/types/lead'
-import StatusBadge from './components/StatusBadge'
+import LeadsTable from './components/LeadsTable'
+import OutreachModal from './components/OutreachModal'
 
 const PER_PAGE = 25
 
@@ -43,7 +42,7 @@ export default function LeadsPage() {
 
   // Modal State
   const [selectedLeadForModal, setSelectedLeadForModal] = useState<Lead | null>(null)
-  const [modalTab, setModalTab] = useState<'whatsapp' | 'email'>('whatsapp')
+  const [modalTab, setModalTab] = useState<'whatsapp' | 'email' | 'timeline'>('whatsapp')
 
   // Row Action Menu State
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
@@ -755,240 +754,65 @@ export default function LeadsPage() {
       )}
 
       {/* Table Section */}
-      <div className="rounded-2xl border border-[#E4E3DD] bg-white overflow-hidden shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-[#E4E3DD]/60 text-xs">
-            <thead className="bg-gray-50/50">
-              <tr className="text-left text-gray-400 uppercase tracking-wider text-[9px] font-bold">
-                <th className="px-5 py-4 text-left w-12">
-                  <input
-                    type="checkbox"
-                    checked={leads.length > 0 && selectedIds.length === leads.length}
-                    onChange={handleSelectAll}
-                    className="rounded border-[#E4E3DD] bg-gray-50 text-gray-900 focus:ring-gray-400 w-4 h-4 cursor-pointer"
-                    aria-label="Select all leads"
-                  />
-                </th>
-                <th className="px-5 py-4 font-bold">Name</th>
-                <th className="px-5 py-4 font-bold">Phone</th>
-                <th className="px-5 py-4 font-bold">Email</th>
-                <th className="px-5 py-4 font-bold">Website</th>
-                <th className="px-5 py-4 font-bold">City</th>
-                <th className="px-5 py-4 font-bold">Category</th>
-                <th className="px-5 py-4 font-bold">Status</th>
-                <th className="px-5 py-4 font-bold text-center">AI Message</th>
-                <th className="px-5 py-4 font-bold">Created</th>
-                <th className="px-5 py-4 font-bold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E4E3DD]/50 text-gray-700">
-              {loading ? (
-                <tr>
-                  <td colSpan={11} className="px-5 py-16 text-center text-gray-400">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <span className="w-8 h-8 border-4 border-gray-700 border-t-transparent rounded-full animate-spin" />
-                      Loading pipeline leads...
-                    </div>
-                  </td>
-                </tr>
-              ) : leads.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="px-5 py-12 text-center text-gray-400 font-semibold">
-                    No leads match the filter criteria.
-                  </td>
-                </tr>
-              ) : (
-                leads.map((lead) => {
-                  const isChecked = selectedIds.includes(lead.id)
-                  const isAiReady = !!lead.ai_message_whatsapp
-                  const isRowActionLoading = actionLoadingId === lead.id
-                  const isDropdownActive = activeMenuId === lead.id
-
-                  return (
-                    <tr key={lead.id} className={`hover:bg-[#F4F3EF]/30 transition-colors duration-150 ${isChecked ? 'bg-purple-50/20' : ''}`}>
-                      <td className="px-5 py-3.5">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => handleSelectRow(lead.id, e.target.checked)}
-                          className="rounded border-[#E4E3DD] bg-gray-50 text-gray-900 focus:ring-gray-400 w-4 h-4 cursor-pointer"
-                          aria-label={`Select ${lead.name}`}
-                        />
-                      </td>
-                      <td className="px-5 py-3.5 font-bold text-gray-900 max-w-[150px] truncate" title={lead.name}>
-                        {lead.name}
-                      </td>
-                      <td className="px-5 py-3.5 font-mono text-[10px] text-gray-500">
-                        {lead.phone ? (() => {
-                          const isWhatsApp = lead.notes?.includes('[WhatsApp: Yes]');
-                          const isNotWhatsApp = lead.notes?.includes('[WhatsApp: No]');
-                          const cleanedPhone = lead.phone.replace(/\D/g, '');
-
-                          if (isWhatsApp) {
-                            return (
-                              <a
-                                href={`https://wa.me/${cleanedPhone}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:underline text-green-700 font-bold flex items-center gap-1.5"
-                                title="Open in WhatsApp"
-                              >
-                                <span>{lead.phone}</span>
-                                <span className="text-[9px] bg-green-50 text-green-700 px-1 py-0.5 rounded border border-green-200">WA</span>
-                              </a>
-                            )
-                          }
-
-                          if (isNotWhatsApp) {
-                            return (
-                              <button
-                                onClick={() => copyToClipboard(lead.phone!, 'Phone')}
-                                className="hover:underline text-gray-400 flex items-center gap-1.5"
-                                title="Click to copy (Not on WhatsApp)"
-                              >
-                                <span>{lead.phone}</span>
-                                <span className="text-[9px] bg-gray-100 text-gray-400 px-1 py-0.5 rounded border border-gray-200">No-WA</span>
-                              </button>
-                            )
-                          }
-
-                          return (
-                            <button
-                              onClick={() => copyToClipboard(lead.phone!, 'Phone')}
-                              className="hover:underline hover:text-[#1C1C1E]"
-                              title="Click to copy"
-                            >
-                              {lead.phone}
-                            </button>
-                          )
-                        })() : '—'}
-                      </td>
-                      <td className="px-5 py-3.5 max-w-[130px] truncate text-gray-500">
-                        {lead.email ? (
-                          <a
-                            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${lead.email}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:underline text-purple-700 font-semibold"
-                            title="Compose in Gmail"
-                          >
-                            {lead.email}
-                          </a>
-                        ) : '—'}
-                      </td>
-                      <td className="px-5 py-3.5 max-w-[120px] truncate font-semibold text-blue-600">
-                        {lead.website ? (
-                          <a
-                            href={lead.website}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="hover:underline"
-                            title={lead.website}
-                          >
-                            {lead.website.replace(/^https?:\/\//i, '')}
-                          </a>
-                        ) : '—'}
-                      </td>
-                      <td className="px-5 py-3.5 text-gray-500 font-medium">{lead.city || '—'}</td>
-                      <td className="px-5 py-3.5 text-gray-400 font-bold uppercase tracking-wider text-[9px] max-w-[100px] truncate" title={lead.category || undefined}>
-                        {lead.category || '—'}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge status={lead.status} />
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
-                        {isAiReady ? (
-                          <button
-                            onClick={() => {
-                              setSelectedLeadForModal(lead)
-                              setModalTab('whatsapp')
-                            }}
-                            className="px-2.5 py-1 rounded bg-green-50 text-green-700 border border-green-200 text-[9px] font-bold uppercase tracking-wider hover:bg-green-100 transition-colors"
-                            title="View AI Copy details"
-                          >
-                            ✓ Ready
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Empty</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-gray-400 font-medium whitespace-nowrap text-[10px]">
-                        {formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}
-                      </td>
-                      <td className="px-5 py-3.5 text-right relative">
-                        {isRowActionLoading ? (
-                          <span className="inline-block w-4 h-4 border-2 border-gray-700 border-t-transparent rounded-full animate-spin mr-2" />
-                        ) : (
-                          <div className="inline-block text-left">
-                            <button
-                              onClick={() => setActiveMenuId(isDropdownActive ? null : lead.id)}
-                              className="px-2 py-1 text-gray-500 hover:text-[#1C1C1E] font-bold text-sm bg-gray-50 rounded-lg hover:bg-gray-100 border border-[#E4E3DD] transition-all"
-                              aria-label="Lead action options"
-                            >
-                              •••
-                            </button>
-
-                            {/* Dropdown Options */}
-                            {isDropdownActive && (
-                              <>
-                                <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)} />
-                                <div className="absolute right-0 mt-1 w-44 rounded-xl border border-[#E4E3DD] bg-white shadow-xl z-20 overflow-hidden text-left py-1 text-xs">
-                                  {isAiReady && (
-                                    <button
-                                      onClick={() => handleSendWhatsapp(lead)}
-                                      className="flex items-center w-full px-4 py-2 hover:bg-gray-50 font-bold text-gray-700 text-left"
-                                    >
-                                      💬 Send WhatsApp
-                                    </button>
-                                  )}
-                                  {lead.email && lead.ai_message_email_subject && (
-                                    <button
-                                      onClick={() => handleSendEmail(lead)}
-                                      className="flex items-center w-full px-4 py-2 hover:bg-gray-50 font-bold text-gray-700 text-left"
-                                    >
-                                      📧 Send Email Outreach
-                                    </button>
-                                  )}
-                                  <div className="border-t border-[#E4E3DD]/60 my-1" />
-                                  <button
-                                    onClick={() => handleUpdateStatus(lead.id, 'converted')}
-                                    className="flex items-center w-full px-4 py-2 hover:bg-green-50 text-green-700 font-bold text-left"
-                                  >
-                                    ✓ Mark Converted
-                                  </button>
-                                  <button
-                                    onClick={() => handleUpdateStatus(lead.id, 'replied')}
-                                    className="flex items-center w-full px-4 py-2 hover:bg-amber-50 text-amber-700 font-bold text-left"
-                                  >
-                                    ★ Mark Replied
-                                  </button>
-                                  <button
-                                    onClick={() => handleUpdateStatus(lead.id, 'skip')}
-                                    className="flex items-center w-full px-4 py-2 hover:bg-gray-50 text-gray-400 font-bold text-left"
-                                  >
-                                    ⏹ Mark Skipped
-                                  </button>
-                                  <div className="border-t border-[#E4E3DD]/60 my-1" />
-                                  <button
-                                    onClick={() => handleDeleteLead(lead.id)}
-                                    className="flex items-center w-full px-4 py-2 hover:bg-red-50 text-red-700 font-bold text-left"
-                                  >
-                                    🗑️ Delete Lead
-                                  </button>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <LeadsTable
+        leads={leads}
+        loading={loading}
+        selectedIds={selectedIds}
+        actionLoadingId={actionLoadingId}
+        activeMenuId={activeMenuId}
+        onSelectAll={handleSelectAll}
+        onSelectRow={handleSelectRow}
+        onOpenOutreachModal={(lead, tab) => {
+          setSelectedLeadForModal(lead)
+          setModalTab(tab)
+        }}
+        onCopyText={copyToClipboard}
+        onToggleMenu={setActiveMenuId}
+        onTriggerResearch={async (lead) => {
+          setActionLoadingId(lead.id)
+          const toastId = toast.loading(`Auditing ${lead.name}...`)
+          try {
+            const res = await fetch('/api/backend-v3/outreach/research', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ leadId: lead.id }),
+            })
+            if (!res.ok) throw new Error('Research failed')
+            toast.success('Research completed and profile synchronized', { id: toastId })
+            fetchLeads()
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Research failed'
+            toast.error(msg, { id: toastId })
+          } finally {
+            setActionLoadingId(null)
+          }
+        }}
+        onTriggerMessage={async (lead) => {
+          setActionLoadingId(lead.id)
+          const toastId = toast.loading(`Generating copy for ${lead.name}...`)
+          try {
+            const res = await fetch(`/api/leads/${lead.id}/status`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'new' }),
+            })
+            if (!res.ok) throw new Error('Failed to generate outreach copy')
+            toast.success('AI outreach message copy drafted', { id: toastId })
+            fetchLeads()
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Failed to generate copy'
+            toast.error(msg, { id: toastId })
+          } finally {
+            setActionLoadingId(null)
+          }
+        }}
+        onMarkReplied={async (lead) => {
+          handleUpdateStatus(lead.id, 'replied')
+        }}
+        onDeleteRow={async (lead) => {
+          handleDeleteLead(lead.id)
+        }}
+      />
 
       {/* Pagination Bar */}
       {!loading && totalLeads > 0 && (
@@ -1018,101 +842,14 @@ export default function LeadsPage() {
 
       {/* AI Message Viewer Modal */}
       {selectedLeadForModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedLeadForModal(null)} />
-          
-          <div className="relative w-full max-w-lg rounded-2xl border border-[#E4E3DD] bg-white shadow-2xl overflow-hidden animate-fade-in text-[#2D2D2D]">
-            {/* Modal Header */}
-            <div className="border-b border-[#E4E3DD] px-6 py-4 flex items-center justify-between bg-gray-50/50">
-              <div>
-                <h3 className="text-lg font-black text-gray-900">AI Outreach Editor</h3>
-                <p className="text-xs text-gray-400 mt-0.5 font-bold uppercase tracking-wider">{selectedLeadForModal.name}</p>
-              </div>
-              <button
-                onClick={() => setSelectedLeadForModal(null)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-                aria-label="Close modal"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Modal Tabs */}
-            <div className="flex border-b border-[#E4E3DD] text-xs font-bold uppercase tracking-wider">
-              <button
-                onClick={() => setModalTab('whatsapp')}
-                className={`flex-1 text-center py-3.5 border-b-2 transition-all ${
-                  modalTab === 'whatsapp'
-                    ? 'border-[#1C1C1E] text-gray-900 bg-gray-50/30'
-                    : 'border-transparent text-gray-450 hover:text-gray-700'
-                }`}
-              >
-                💬 WhatsApp Message
-              </button>
-              <button
-                onClick={() => setModalTab('email')}
-                className={`flex-1 text-center py-3.5 border-b-2 transition-all ${
-                  modalTab === 'email'
-                    ? 'border-[#1C1C1E] text-gray-900 bg-gray-50/30'
-                    : 'border-transparent text-gray-450 hover:text-gray-700'
-                }`}
-              >
-                📧 Email Copy
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6 max-h-[350px] overflow-y-auto">
-              {modalTab === 'whatsapp' ? (
-                <div className="space-y-4">
-                  {/* WhatsApp style preview bubble */}
-                  <div className="rounded-xl bg-[#E5DDD5] p-4 border border-[#D8CFC7] shadow-inner">
-                    <div className="max-w-[85%] rounded-xl bg-white p-3 text-xs text-gray-800 relative shadow-sm border border-white">
-                      <span className="block whitespace-pre-wrap leading-relaxed">{selectedLeadForModal.ai_message_whatsapp || 'No WhatsApp Copy Generated'}</span>
-                      <span className="block text-[9px] text-gray-400 text-right mt-1.5 font-bold">just now</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      handleSendWhatsapp(selectedLeadForModal)
-                      setSelectedLeadForModal(null)
-                    }}
-                    disabled={!selectedLeadForModal.phone || !selectedLeadForModal.ai_message_whatsapp}
-                    className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 text-white font-bold uppercase tracking-wider py-3 text-xs transition-colors shadow-sm"
-                  >
-                    🚀 Send WhatsApp Now
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-3 rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-4 text-xs">
-                    <div>
-                      <span className="text-[9px] text-gray-400 block font-bold uppercase tracking-wider">Subject</span>
-                      <p className="text-gray-900 font-bold mt-1 text-sm">{selectedLeadForModal.ai_message_email_subject || 'No Subject Generated'}</p>
-                    </div>
-                    <hr className="border-[#E4E3DD]/60" />
-                    <div>
-                      <span className="text-[9px] text-gray-400 block font-bold uppercase tracking-wider">Body</span>
-                      <p className="whitespace-pre-wrap text-gray-700 mt-1 text-xs leading-relaxed">{selectedLeadForModal.ai_message_email_body || 'No Email Body Generated'}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      handleSendEmail(selectedLeadForModal)
-                      setSelectedLeadForModal(null)
-                    }}
-                    disabled={!selectedLeadForModal.email || !selectedLeadForModal.ai_message_email_subject}
-                    className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 text-white font-bold uppercase tracking-wider py-3 text-xs transition-colors shadow-sm"
-                  >
-                    🚀 Send Email Now
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <OutreachModal
+          lead={selectedLeadForModal}
+          modalTab={modalTab}
+          onClose={() => setSelectedLeadForModal(null)}
+          onSetTab={setModalTab}
+          onSendWhatsapp={handleSendWhatsapp}
+          onSendEmail={handleSendEmail}
+        />
       )}
     </div>
   )

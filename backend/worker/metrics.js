@@ -11,6 +11,13 @@ class MetricsTracker {
     this.totalRetries = 0;
     this.totalDuration = 0;
     this.providerDurations = new Map(); // provider -> array of timings
+
+    // AI Metrics
+    this.totalAICalls = 0;
+    this.totalAIInputTokens = 0;
+    this.totalAIOutputTokens = 0;
+    this.totalAICost = 0;
+    this.totalAIDuration = 0;
   }
 
   recordJobExecution(provider, durationMs, success = true) {
@@ -29,6 +36,14 @@ class MetricsTracker {
 
   recordRetry() {
     this.totalRetries++;
+  }
+
+  recordAICall(model, durationMs, inputTokens, outputTokens, cost) {
+    this.totalAICalls++;
+    this.totalAIInputTokens += inputTokens;
+    this.totalAIOutputTokens += outputTokens;
+    this.totalAICost += cost;
+    this.totalAIDuration += durationMs;
   }
 
   getMetrics() {
@@ -66,6 +81,13 @@ class MetricsTracker {
         : 0,
       provider_average_times_ms: providerTimes,
       retries: this.totalRetries,
+
+      // Export AI metrics
+      ai_calls_count: this.totalAICalls,
+      ai_total_input_tokens: this.totalAIInputTokens,
+      ai_total_output_tokens: this.totalAIOutputTokens,
+      ai_total_cost_usd: parseFloat(this.totalAICost.toFixed(6)),
+      ai_average_duration_ms: this.totalAICalls > 0 ? Math.round(this.totalAIDuration / this.totalAICalls) : 0
     };
   }
 }
