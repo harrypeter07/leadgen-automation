@@ -40,6 +40,18 @@ class BackgroundWorkers {
     if (config.features.research) {
       const researchInterval = setInterval(async () => {
         try {
+          // Check if any scrape job is currently running
+          const runningJobCheck = await db.query(
+            "SELECT id FROM scrape_jobs WHERE status = 'running' LIMIT 1;",
+            [],
+            'ResearchWorker',
+            'checkRunningJobs'
+          );
+          if (runningJobCheck.rows.length > 0) {
+            logger.info('[Research Worker] Scraper is running. Skipping background research loop to conserve CPU/RAM.');
+            return;
+          }
+
           const queryText = `
             SELECT l.id FROM leads l
             LEFT JOIN business_profiles bp ON l.id = bp.lead_id

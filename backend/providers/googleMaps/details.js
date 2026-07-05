@@ -30,7 +30,7 @@ class GoogleMapsDetails {
       detailPage = await page.context().newPage();
       
       // Navigate to details page directly
-      await detailPage.goto(href, { timeout: 20000, waitUntil: 'domcontentloaded' });
+      await detailPage.goto(href, { timeout: 30000, waitUntil: 'domcontentloaded' });
 
       const detailTitle = await detailPage.title().catch(() => '');
       if (detailTitle.toLowerCase().includes('unusual traffic') || detailTitle.toLowerCase().includes('captcha')) {

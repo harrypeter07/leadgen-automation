@@ -77,7 +77,7 @@ class JobManager {
 
       // 3. Details Extraction Loop — seenKeys prevents any in-memory duplicates (Concurrent Pool Execution!)
       const seenKeys = new Set();
-      const concurrencyLimit = 5;
+      const concurrencyLimit = job.worker_count || 1;
       const indices = Array.from({ length: limit }, (_, idx) => idx);
 
       const processIndex = async (i) => {
