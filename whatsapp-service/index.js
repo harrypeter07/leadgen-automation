@@ -528,6 +528,32 @@ app.post('/disconnect', async (req, res) => {
   }
 });
 
+app.post('/on-whatsapp', async (req, res) => {
+  const apiSecret = (req.headers['x-api-secret'] || '').trim();
+  const expectedSecret = (process.env.WHATSAPP_API_SECRET || process.env.API_SECRET || '').trim();
+  if (apiSecret !== expectedSecret) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  const { phone } = req.body || {};
+  if (!phone) {
+    return res.status(400).json({ success: false, error: 'phone is required' });
+  }
+
+  if (!isReady || !sock) {
+    return res.status(503).json({ success: false, error: 'WhatsApp not ready. Scan QR first.' });
+  }
+
+  try {
+    const cleanedPhone = String(phone).replace(/\D/g, '');
+    const results = await sock.onWhatsApp(cleanedPhone);
+    const exists = results && results.length > 0 && results[0].exists;
+    res.json({ success: true, exists: !!exists, details: results ? results[0] : null });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/send', async (req, res) => {
   const apiSecret = (req.headers['x-api-secret'] || '').trim();
   const expectedSecret = (process.env.WHATSAPP_API_SECRET || process.env.API_SECRET || '').trim();

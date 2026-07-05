@@ -19,6 +19,11 @@ function resolveBackendPath(subPath: string): string {
   const saveLeadsMatch = subPath.match(/^([0-9a-f-]{36})\/save-leads$/)
   if (saveLeadsMatch) return `/api/jobs/${saveLeadsMatch[1]}/save-leads`
 
+  // /api/scraper/whatsapp-scan/start|stop|status → /api/whatsapp-scan/start etc.
+  if (subPath.startsWith('whatsapp-scan/')) {
+    return `/api/${subPath}`
+  }
+
   // /api/scraper/start|pause|stop|resume|retry → /api/jobs/start etc.
   return `/api/jobs/${subPath}`
 }

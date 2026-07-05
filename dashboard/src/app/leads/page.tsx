@@ -50,6 +50,111 @@ export default function LeadsPage() {
 
   // Loader state for row actions
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+  // ─── Background WA Scan State ──────────────────────────────────────────────
+  type ScanStatus = {
+    running: boolean
+    aborted: boolean
+    startedAt: string | null
+    total: number
+    checked: number
+    waCount: number
+    noWaCount: number
+    errCount: number
+    currentName: string | null
+    currentPhone: string | null
+    logs: string[]
+  }
+  const [scanStatus, setScanStatus]         = useState<ScanStatus | null>(null)
+  const [scanPolling, setScanPolling]       = useState<ReturnType<typeof setInterval> | null>(null)
+  const [scanPanelOpen, setScanPanelOpen]   = useState(false)
+
+  // Poll backend scan status every 3 seconds while scan is running
+  async function pollScanStatus() {
+    try {
+      const res = await fetch('/api/scraper/whatsapp-scan/status')
+      if (!res.ok) return
+      const data: ScanStatus = await res.json()
+      setScanStatus(data)
+
+      if (!data.running) {
+        // Scan finished — stop polling and refresh leads to show new badges
+        setScanPolling(prev => { if (prev) clearInterval(prev); return null })
+        if (data.checked > 0) {
+          toast.success(`✅ WA Scan done! ${data.waCount} on WhatsApp, ${data.noWaCount} not on WA.`)
+          fetchLeads() // refresh badges
+        }
+      }
+    } catch {
+      // ignore transient errors
+    }
+  }
+
+  // Start polling
+  function startPolling() {
+    const iv = setInterval(pollScanStatus, 3000)
+    setScanPolling(iv)
+    return iv
+  }
+
+  // Stop polling on unmount
+  useEffect(() => {
+    return () => { if (scanPolling) clearInterval(scanPolling) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanPolling])
+
+  // On mount: check if a scan is already running (e.g. started in prev tab)
+  useEffect(() => {
+    pollScanStatus().then(() => {
+      setScanStatus(prev => {
+        if (prev?.running) { setScanPanelOpen(true); startPolling() }
+        return prev
+      })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleStartWAScan() {
+    if (scanStatus?.running) {
+      setScanPanelOpen(true)
+      return
+    }
+    setScanPanelOpen(true)
+
+    const res = await fetch('/api/scraper/whatsapp-scan/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id:     selectedJobId || undefined,
+        city:       city.trim()  || undefined,
+        intervalMs: 5000,
+      }),
+    })
+    const data = await res.json()
+
+    if (!res.ok) {
+      if (res.status === 409) {
+        toast('A scan is already running!', { icon: '⚠️' })
+        setScanStatus(data.status)
+        startPolling()
+        return
+      }
+      toast.error(data.error || 'Failed to start scan')
+      return
+    }
+
+    toast.success('🔍 WhatsApp scan started in background!')
+    await pollScanStatus()
+    startPolling()
+  }
+
+  async function handleStopWAScan() {
+    const res = await fetch('/api/scraper/whatsapp-scan/stop', { method: 'POST' })
+    if (res.ok) {
+      toast('⏹ Stop signal sent — finishing current lead…', { icon: '⏸' })
+      await pollScanStatus()
+    }
+  }
+
 
   function copyToClipboard(text: string, type: string) {
     navigator.clipboard.writeText(text)
@@ -370,6 +475,38 @@ export default function LeadsPage() {
           <p className="mt-1 text-sm text-gray-500 font-medium">Total Active Leads: {totalLeads}</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* WA Scan Button */}
+          <button
+            onClick={handleStartWAScan}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${
+              scanStatus?.running
+                ? 'bg-yellow-500 hover:bg-yellow-600 text-white animate-pulse'
+                : 'bg-green-600 hover:bg-green-700 text-white'
+            }`}
+          >
+            {scanStatus?.running ? `🔍 Scanning ${scanStatus.checked}/${scanStatus.total}…` : '🔍 Identify WhatsApp'}
+          </button>
+
+          {/* Stop button shown only while running */}
+          {scanStatus?.running && (
+            <button
+              onClick={handleStopWAScan}
+              className="flex items-center gap-2 rounded-xl bg-red-500 hover:bg-red-600 text-white px-3 py-2.5 text-xs font-bold uppercase tracking-wider shadow-sm transition-all"
+            >
+              ⏹ Stop
+            </button>
+          )}
+
+          {/* Scan log panel toggle */}
+          {scanStatus && (
+            <button
+              onClick={() => setScanPanelOpen(v => !v)}
+              className="flex items-center gap-1 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-gray-600 px-3 py-2.5 text-xs font-bold uppercase tracking-wider shadow-sm transition-all"
+            >
+              📋 Logs
+            </button>
+          )}
+
           <button
             onClick={handleExportCsv}
             disabled={totalLeads === 0}
@@ -379,6 +516,45 @@ export default function LeadsPage() {
           </button>
         </div>
       </div>
+
+      {/* ── WA Scan Live Progress Panel ─────────────────────────────────────── */}
+      {scanStatus && scanPanelOpen && (
+        <div className="bg-gray-900 text-green-300 rounded-2xl p-4 shadow-lg border border-gray-700">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              🔍 WhatsApp Scan
+              {scanStatus.running ? (
+                <span className="bg-yellow-500 text-yellow-900 text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse">LIVE</span>
+              ) : (
+                <span className="bg-gray-600 text-gray-200 text-[10px] px-2 py-0.5 rounded-full font-black">DONE</span>
+              )}
+            </h3>
+            <button onClick={() => setScanPanelOpen(false)} className="text-gray-400 hover:text-white text-lg">✕</button>
+          </div>
+          {/* Progress Bar */}
+          <div className="mb-3">
+            <div className="flex justify-between text-[11px] text-gray-400 mb-1">
+              <span>{scanStatus.checked}/{scanStatus.total} checked</span>
+              <span>✅ {scanStatus.waCount} WA · ❌ {scanStatus.noWaCount} No-WA · ⚠️ {scanStatus.errCount} err</span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2">
+              <div
+                className="bg-green-500 h-2 rounded-full transition-all duration-700"
+                style={{ width: scanStatus.total > 0 ? `${Math.round((scanStatus.checked / scanStatus.total) * 100)}%` : '0%' }}
+              />
+            </div>
+          </div>
+          {scanStatus.currentName && (
+            <p className="text-[11px] text-yellow-300 mb-2">⏳ Currently: {scanStatus.currentName} ({scanStatus.currentPhone})</p>
+          )}
+          {/* Logs */}
+          <div className="max-h-40 overflow-y-auto font-mono text-[10px] space-y-0.5">
+            {(scanStatus.logs ?? []).slice(0, 20).map((line, i) => (
+              <div key={i} className="text-gray-300 leading-relaxed">{line}</div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filter Bar (Sticky Top) */}
       <div className="sticky top-0 z-20 bg-[#F4F3EF]/90 backdrop-blur-md py-2 border-b border-[#E4E3DD]/40">
@@ -643,25 +819,61 @@ export default function LeadsPage() {
                         {lead.name}
                       </td>
                       <td className="px-5 py-3.5 font-mono text-[10px] text-gray-500">
-                        {lead.phone ? (
-                          <button
-                            onClick={() => copyToClipboard(lead.phone!, 'Phone')}
-                            className="hover:underline hover:text-[#1C1C1E]"
-                            title="Click to copy"
-                          >
-                            {lead.phone}
-                          </button>
-                        ) : '—'}
+                        {lead.phone ? (() => {
+                          const isWhatsApp = lead.notes?.includes('[WhatsApp: Yes]');
+                          const isNotWhatsApp = lead.notes?.includes('[WhatsApp: No]');
+                          const cleanedPhone = lead.phone.replace(/\D/g, '');
+
+                          if (isWhatsApp) {
+                            return (
+                              <a
+                                href={`https://wa.me/${cleanedPhone}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:underline text-green-700 font-bold flex items-center gap-1.5"
+                                title="Open in WhatsApp"
+                              >
+                                <span>{lead.phone}</span>
+                                <span className="text-[9px] bg-green-50 text-green-700 px-1 py-0.5 rounded border border-green-200">WA</span>
+                              </a>
+                            )
+                          }
+
+                          if (isNotWhatsApp) {
+                            return (
+                              <button
+                                onClick={() => copyToClipboard(lead.phone!, 'Phone')}
+                                className="hover:underline text-gray-400 flex items-center gap-1.5"
+                                title="Click to copy (Not on WhatsApp)"
+                              >
+                                <span>{lead.phone}</span>
+                                <span className="text-[9px] bg-gray-100 text-gray-400 px-1 py-0.5 rounded border border-gray-200">No-WA</span>
+                              </button>
+                            )
+                          }
+
+                          return (
+                            <button
+                              onClick={() => copyToClipboard(lead.phone!, 'Phone')}
+                              className="hover:underline hover:text-[#1C1C1E]"
+                              title="Click to copy"
+                            >
+                              {lead.phone}
+                            </button>
+                          )
+                        })() : '—'}
                       </td>
                       <td className="px-5 py-3.5 max-w-[130px] truncate text-gray-500">
                         {lead.email ? (
-                          <button
-                            onClick={() => copyToClipboard(lead.email!, 'Email')}
-                            className="hover:underline hover:text-[#1C1C1E] text-purple-700 font-semibold"
-                            title="Click to copy"
+                          <a
+                            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${lead.email}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:underline text-purple-700 font-semibold"
+                            title="Compose in Gmail"
                           >
                             {lead.email}
-                          </button>
+                          </a>
                         ) : '—'}
                       </td>
                       <td className="px-5 py-3.5 max-w-[120px] truncate font-semibold text-blue-600">
