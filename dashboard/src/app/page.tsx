@@ -377,7 +377,16 @@ export default function HomeDashboard() {
                 </div>
                 <div className="mt-5 pt-3 border-t border-gray-100 text-[10px] text-gray-400 flex items-center justify-between font-medium">
                   <span className="capitalize">{lead.source.replace(/_/g, ' ')}</span>
-                  <span>{formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}</span>
+                  <span>
+                    {lead.created_at ? (() => {
+                      try {
+                        const d = new Date(lead.created_at);
+                        return isNaN(d.getTime()) ? '—' : formatDistanceToNow(d, { addSuffix: true });
+                      } catch {
+                        return '—';
+                      }
+                    })() : '—'}
+                  </span>
                 </div>
               </div>
             ))}

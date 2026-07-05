@@ -1,6 +1,7 @@
 // backend/worker/backgroundWorkers.js
 const db = require('../database/db');
 const logger = require('./logger');
+const config = require('../modules/config');
 const outreachService = require('../services/outreachService');
 const intelligenceService = require('../services/intelligenceService');
 const conversationEngine = require('../services/conversationEngine');
@@ -8,6 +9,7 @@ const conversationEngine = require('../services/conversationEngine');
 class BackgroundWorkers {
   constructor() {
     this.intervals = [];
+    this.processingLeads = new Set();
   }
 
   /**
@@ -17,50 +19,62 @@ class BackgroundWorkers {
     logger.info('[Background Workers] Starting background worker loops...');
 
     // 1. Follow-up Queue Processor Loop (every 15 seconds)
-    const followupInterval = setInterval(async () => {
-      try {
-        const res = await outreachService.processFollowupQueue();
-        if (res.processedCount > 0) {
-          logger.info(`[Follow-up Worker] Processed ${res.processedCount} due followup(s).`);
+    if (config.features.followups) {
+      const followupInterval = setInterval(async () => {
+        try {
+          const res = await outreachService.processFollowupQueue();
+          if (res.processedCount > 0) {
+            logger.info(`[Follow-up Worker] Processed ${res.processedCount} due followup(s).`);
+          }
+        } catch (err) {
+          logger.error(`[Follow-up Worker Error] Execution failed: ${err.message}`);
         }
-      } catch (err) {
-        logger.error(`[Follow-up Worker Error] Execution failed: ${err.message}`);
-      }
-    }, 15000);
-    this.intervals.push(followupInterval);
+      }, 15000);
+      this.intervals.push(followupInterval);
+    } else {
+      logger.info('[Background Workers] Follow-ups worker is disabled via feature flags.');
+    }
 
     // 2. Automated Business Research Worker (every 30 seconds)
     // Dequeues leads with status 'new' and executes Playwright scrapers + social finders
-    const researchInterval = setInterval(async () => {
-      try {
-        const queryText = `
-          SELECT l.id FROM leads l
-          LEFT JOIN business_profiles bp ON l.id = bp.lead_id
-          WHERE l.status = 'new' AND bp.id IS NULL
-          LIMIT 2;
-        `;
-        const res = await db.query(queryText, [], 'ResearchWorker', 'getPendingLeads');
-        const pendingLeads = res.rows;
+    if (config.features.research) {
+      const researchInterval = setInterval(async () => {
+        try {
+          const queryText = `
+            SELECT l.id FROM leads l
+            LEFT JOIN business_profiles bp ON l.id = bp.lead_id
+            WHERE l.status = 'new' AND bp.id IS NULL
+            LIMIT 2;
+          `;
+          const res = await db.query(queryText, [], 'ResearchWorker', 'getPendingLeads');
+          const pendingLeads = res.rows.filter(l => !this.processingLeads.has(l.id));
 
-        for (const lead of pendingLeads) {
-          logger.info(`[Research Worker] Automating research audit for lead: ${lead.id}`);
-          
-          // Trigger the research engine asynchronously
-          intelligenceService.runBusinessResearch(lead.id)
-            .then(async () => {
-              // Update lead status to 'qualified' or 'audited'
-              await db.query("UPDATE leads SET status = 'qualified' WHERE id = $1;", [lead.id]);
-              logger.info(`[Research Worker] Lead ${lead.id} research completed and qualified.`);
-            })
-            .catch(err => {
-              logger.error(`[Research Worker Error] Lead ${lead.id} audit failed: ${err.message}`);
-            });
+          for (const lead of pendingLeads) {
+            this.processingLeads.add(lead.id);
+            logger.info(`[Research Worker] Automating research audit for lead: ${lead.id}`);
+            
+            // Trigger the research engine asynchronously
+            intelligenceService.runBusinessResearch(lead.id)
+              .then(async () => {
+                // Update lead status to 'qualified' or 'audited'
+                await db.query("UPDATE leads SET status = 'qualified' WHERE id = $1;", [lead.id]);
+                logger.info(`[Research Worker] Lead ${lead.id} research completed and qualified.`);
+              })
+              .catch(err => {
+                logger.error(`[Research Worker Error] Lead ${lead.id} audit failed: ${err.message}`);
+              })
+              .finally(() => {
+                this.processingLeads.delete(lead.id);
+              });
+          }
+        } catch (err) {
+          logger.error(`[Research Worker Loop Error] ${err.message}`);
         }
-      } catch (err) {
-        logger.error(`[Research Worker Loop Error] ${err.message}`);
-      }
-    }, 30000);
-    this.intervals.push(researchInterval);
+      }, 30000);
+      this.intervals.push(researchInterval);
+    } else {
+      logger.info('[Background Workers] Research worker is disabled via feature flags.');
+    }
 
     // 3. Ghost Detection & Conversation Loop (every 6 hours)
     const ghostInterval = setInterval(async () => {

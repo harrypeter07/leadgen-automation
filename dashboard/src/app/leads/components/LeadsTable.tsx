@@ -195,7 +195,14 @@ export default function LeadsTable({
                       )}
                     </td>
                     <td className="px-5 py-3.5 text-gray-400 font-medium whitespace-nowrap text-[10px]">
-                      {formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}
+                      {lead.created_at ? (() => {
+                        try {
+                          const d = new Date(lead.created_at);
+                          return isNaN(d.getTime()) ? '—' : formatDistanceToNow(d, { addSuffix: true });
+                        } catch {
+                          return '—';
+                        }
+                      })() : '—'}
                     </td>
                     <td className="px-5 py-3.5 text-right relative">
                       {isRowActionLoading ? (

@@ -666,7 +666,14 @@ export default function WhatsappManagerPage() {
                           </span>
                         </td>
                         <td className="py-3 text-gray-405 font-medium">
-                          {lead.whatsapp_sent_at ? formatDistanceToNow(new Date(lead.whatsapp_sent_at), { addSuffix: true }) : '—'}
+                          {lead.whatsapp_sent_at ? (() => {
+                            try {
+                              const d = new Date(lead.whatsapp_sent_at);
+                              return isNaN(d.getTime()) ? '—' : formatDistanceToNow(d, { addSuffix: true });
+                            } catch {
+                              return '—';
+                            }
+                          })() : '—'}
                         </td>
                       </tr>
                     ))
