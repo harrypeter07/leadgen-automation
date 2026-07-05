@@ -23,6 +23,7 @@ app.use(sanitizeMiddleware);
 
 // Mount Routes
 app.use('/api/jobs', require('./api/jobs'));
+app.use('/api/enrich', require('./api/enrich'));
 app.use('/api/metrics', require('./api/metrics'));
 app.use('/api/providers', require('./api/providers'));
 app.use('/api/health', require('./api/health'));

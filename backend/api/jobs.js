@@ -291,12 +291,11 @@ router.post('/start-batch', async (req, res, next) => {
           worker_count: workerCount || 1,
           current_provider: provider || 'google_maps'
         });
-        createdJobs.push({ jobId: job.id, keyword: finalKeyword });
+        createdJobs.push({ jobId: job.id, keyword: kw.trim(), area: area || null });
       }
     }
 
-    formatResponse(res, req, {
-      message: `Batch job successfully queued. Spawned ${createdJobs.length} scrape jobs.`,
+    res.json({
       jobs: createdJobs
     });
   } catch (err) {
