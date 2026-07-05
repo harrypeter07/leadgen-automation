@@ -1,0 +1,103 @@
+// backend/services/emailService.js
+// -------------------------------------------------------
+// Unified email sender. Priority:
+//  1. Nodemailer SMTP (Gmail App Password) — no domain needed
+//  2. Resend REST API — requires verified domain for external recipients
+//  3. Mock/log — falls back gracefully when neither is configured
+// -------------------------------------------------------
+const nodemailer = require('nodemailer');
+const axios = require('axios');
+const logger = require('../worker/logger');
+
+// ── helpers ──────────────────────────────────────────────
+
+/**
+ * Build a Nodemailer SMTP transporter from env vars.
+ * Returns null if credentials are not configured.
+ */
+function buildNodemailerTransport() {
+  const gmailUser = (process.env.NODEMAILER_USER || '').trim();
+  const gmailPass = (process.env.NODEMAILER_APP_PASSWORD || '').trim();
+  if (!gmailUser || !gmailPass) return null;
+
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: gmailUser,
+      pass: gmailPass,   // Gmail App Password (not your normal password)
+    },
+  });
+}
+
+// ── public API ────────────────────────────────────────────
+
+/**
+ * Send an email. Tries Nodemailer first, then Resend, then mock.
+ *
+ * @param {object} opts
+ * @param {string} opts.to        - recipient email address
+ * @param {string} opts.subject   - email subject
+ * @param {string} opts.html      - HTML body
+ * @param {string} [opts.text]    - Plain-text body fallback
+ * @returns {Promise<{provider: string, response: any, mock: boolean}>}
+ */
+async function sendEmail({ to, subject, html, text }) {
+  // ── 1. Try Nodemailer / Gmail SMTP ──────────────────────
+  const transport = buildNodemailerTransport();
+  if (transport) {
+    const gmailUser = process.env.NODEMAILER_USER.trim();
+    const fromName  = process.env.NODEMAILER_FROM_NAME || 'Outreach';
+    try {
+      const info = await transport.sendMail({
+        from: `"${fromName}" <${gmailUser}>`,
+        to,
+        subject,
+        html,
+        text: text || html.replace(/<[^>]+>/g, ''),
+      });
+      logger.info({ to, messageId: info.messageId }, '[EmailService] Sent via Nodemailer/Gmail');
+      return { provider: 'nodemailer', response: { messageId: info.messageId }, mock: false };
+    } catch (err) {
+      logger.warn({ to, error: err.message }, '[EmailService] Nodemailer failed — trying Resend fallback');
+    }
+  }
+
+  // ── 2. Try Resend REST API ───────────────────────────────
+  const resendKey = (process.env.RESEND_API_KEY || '').trim();
+  if (resendKey) {
+    const fromEmail = (process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev').trim();
+    const fromName  = process.env.NODEMAILER_FROM_NAME || 'Outreach';
+    try {
+      const res = await axios.post(
+        'https://api.resend.com/emails',
+        {
+          from: `${fromName} <${fromEmail}>`,
+          to,
+          subject,
+          html,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 6000,
+        }
+      );
+      logger.info({ to, id: res.data.id }, '[EmailService] Sent via Resend');
+      return { provider: 'resend', response: res.data, mock: false };
+    } catch (err) {
+      logger.warn({ to, error: err.message }, '[EmailService] Resend also failed');
+    }
+  }
+
+  // ── 3. Mock / no-op ─────────────────────────────────────
+  logger.warn({ to }, '[EmailService] No email provider configured — email not sent (mock mode)');
+  return {
+    provider: 'mock',
+    response: { note: 'Neither Nodemailer nor Resend is configured. Set NODEMAILER_USER + NODEMAILER_APP_PASSWORD or RESEND_API_KEY.' },
+    mock: true,
+  };
+}
+
+module.exports = { sendEmail };

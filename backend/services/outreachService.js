@@ -10,6 +10,7 @@ const leadsRepository = require('../repositories/leadsRepository');
 const aiService = require('./aiService');
 const conversationEngine = require('./conversationEngine');
 const logger = require('../worker/logger');
+const { sendEmail } = require('./emailService');
 
 // Environment helpers
 const WHATSAPP_SERVICE_URL = () => (process.env.WHATSAPP_SERVICE_URL || '').replace(/\/$/, '');
@@ -195,25 +196,13 @@ class OutreachService {
                   gatewayResponse = { mock: true, note: 'WhatsApp Service URL not set.' };
                 }
               } else {
-                // Email via Resend API
-                const resendKey = (process.env.RESEND_API_KEY || '').trim();
-                if (resendKey) {
-                  const res = await axios.post('https://api.resend.com/emails', {
-                    from: 'Outreach <onboarding@resend.dev>',
-                    to: recipient,
-                    subject: 'Partnership Inquiry - Growth Audit',
-                    html: `<p>${draftText.replace(/\n/g, '<br>')}</p>`
-                  }, {
-                    headers: {
-                      'Authorization': `Bearer ${resendKey}`,
-                      'Content-Type': 'application/json'
-                    },
-                    timeout: 6000
-                  });
-                  gatewayResponse = res.data;
-                } else {
-                  gatewayResponse = { mock: true, note: 'Resend API key not set.' };
-                }
+                // Email via unified emailService (Nodemailer → Resend fallback)
+                const emailResult = await sendEmail({
+                  to: recipient,
+                  subject: 'Partnership Inquiry - Growth Audit',
+                  html: `<p>${draftText.replace(/\n/g, '<br>')}</p>`,
+                });
+                gatewayResponse = emailResult;
               }
             } catch (err) {
               status = 'failed';
