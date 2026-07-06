@@ -5,7 +5,9 @@ import {
   Conversation,
   AnalyticsSnapshot,
   MediaAsset,
-  AccessToken
+  Lead,
+  Contact,
+  Broadcast
 } from '../types/models';
 
 export interface PublishingProvider {
@@ -42,9 +44,15 @@ export interface MediaProvider {
 
 export interface AIProvider {
   generateText(prompt: string, systemInstructions?: string): Promise<string>;
-  analyzeIntent(text: string): Promise<{ intent: string; confidence: number; entities: Record<string, string> }>;
+  analyzeIntent(text: string): Promise<{ intent: 'positive' | 'neutral' | 'negative' | 'spam' | 'stop'; confidence: number }>;
+  extractEntities(text: string): Promise<Record<string, string>>;
+  extractLeadDetails(text: string): Promise<Partial<Contact> & { budget?: number; timeline?: string }>;
   summarizeConversation(messages: Message[]): Promise<string>;
   analyzeSentiment(text: string): Promise<'positive' | 'neutral' | 'negative'>;
+  translateText(text: string, targetLanguage: string): Promise<string>;
+  checkSpam(text: string): Promise<boolean>;
+  retrieveKnowledgeBase(query: string): Promise<{ answer: string; sourceUrls: string[] }>;
+  recommendAction(conversationId: string): Promise<{ actionType: string; confidence: number; reason: string }>;
 }
 
 export interface StorageProvider {
@@ -56,4 +64,13 @@ export interface StorageProvider {
 export interface NotificationProvider {
   sendSystemNotification(userId: string, title: string, body: string): Promise<void>;
   sendEmailNotification(email: string, subject: string, bodyHtml: string): Promise<void>;
+}
+
+export interface CRMProvider {
+  syncLead(lead: Lead): Promise<{ externalId: string; status: string }>;
+  syncContact(contact: Contact): Promise<{ externalId: string }>;
+}
+
+export interface OutreachProvider {
+  sendBroadcast(broadcast: Broadcast, token: string): Promise<{ success: boolean; platformId?: string; error?: string }>;
 }

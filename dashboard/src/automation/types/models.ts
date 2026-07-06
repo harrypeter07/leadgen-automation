@@ -35,6 +35,12 @@ export interface ConnectedAccount {
   status: 'connected' | 'disconnected' | 'expired' | 'needs_reauth';
   connectedAt: Date;
   expiresAt?: Date;
+  connectionHealth?: {
+    status: 'good' | 'failing' | 'dead';
+    lastCheckedAt: Date;
+    errorMessage?: string;
+  };
+  scopes?: string[];
 }
 
 export interface FacebookPage {
@@ -67,6 +73,10 @@ export interface WhatsAppAccount {
   verifiedName: string;
 }
 
+// ======================================
+// DOMAIN 1: BUSINESS COMMUNICATION
+// ======================================
+
 export interface Conversation {
   id: string;
   workspaceId: string;
@@ -75,6 +85,14 @@ export interface Conversation {
   status: 'open' | 'pending' | 'closed';
   lastActivityAt: Date;
   tags: string[];
+  leadStatus?: 'new' | 'nurtured' | 'proposal_sent' | 'demo_scheduled' | 'closed_won' | 'closed_lost';
+  assignedUserId?: string;
+  internalNotes?: string;
+  aiSummary?: string;
+  intent?: 'positive' | 'neutral' | 'negative' | 'spam' | 'stop';
+  priority?: 'high' | 'medium' | 'low';
+  readStatus?: 'read' | 'unread';
+  typingIndicatorActive?: boolean;
 }
 
 export interface Message {
@@ -85,14 +103,197 @@ export interface Message {
   timestamp: Date;
   status: 'sent' | 'delivered' | 'read' | 'failed';
   attachments: Attachment[];
+  messageType: 'text' | 'image' | 'video' | 'audio' | 'document' | 'location' | 'template' | 'interactive';
+  templateId?: string;
+  quickReplyPayload?: string;
 }
 
 export interface Attachment {
   id: string;
   messageId: string;
-  type: 'image' | 'video' | 'audio' | 'file';
+  type: 'image' | 'video' | 'audio' | 'file' | 'location';
   url: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  fileName?: string;
 }
+
+// ======================================
+// LEAD MANAGEMENT (CRM)
+// ======================================
+
+export interface Contact {
+  id: string;
+  workspaceId: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  socialHandles?: {
+    instagram?: string;
+    facebook?: string;
+  };
+  createdAt: Date;
+}
+
+export interface Company {
+  id: string;
+  workspaceId: string;
+  name: string;
+  website?: string;
+  industry?: string;
+  address?: string;
+}
+
+export interface Lead {
+  id: string;
+  workspaceId: string;
+  contactId: string;
+  companyId?: string;
+  pipelineStageId: string;
+  score: number; // 0 - 100 Lead scoring
+  source: 'google_maps' | 'website_audit' | 'instagram' | 'inbound' | 'manual';
+  status: 'active' | 'archived' | 'converted' | 'lost';
+  estimatedValue?: number;
+  createdAt: Date;
+}
+
+export interface PipelineStage {
+  id: string;
+  workspaceId: string;
+  name: string;
+  orderIndex: number;
+}
+
+export interface Opportunity {
+  id: string;
+  leadId: string;
+  title: string;
+  amount: number;
+  stage: string;
+  probability: number;
+  expectedCloseDate?: Date;
+}
+
+export interface Activity {
+  id: string;
+  leadId: string;
+  userId: string;
+  type: 'call' | 'email' | 'meeting' | 'note' | 'system_audit';
+  notes: string;
+  createdAt: Date;
+}
+
+export interface Reminder {
+  id: string;
+  leadId: string;
+  userId: string;
+  title: string;
+  dueAt: Date;
+  completed: boolean;
+}
+
+// ======================================
+// OUTREACH CAMPAIGNS
+// ======================================
+
+export interface Audience {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description?: string;
+}
+
+export interface Segment {
+  id: string;
+  audienceId: string;
+  name: string;
+  filters: Record<string, any>;
+}
+
+export interface Campaign {
+  id: string;
+  workspaceId: string;
+  name: string;
+  status: 'draft' | 'scheduled' | 'running' | 'paused' | 'completed';
+  channel: 'whatsapp' | 'email' | 'messenger' | 'instagram';
+  templateId?: string;
+  segmentId?: string;
+  rateLimitPerMinute: number;
+  createdAt: Date;
+}
+
+export interface Sequence {
+  id: string;
+  campaignId: string;
+  name: string;
+  steps: SequenceStep[];
+}
+
+export interface SequenceStep {
+  id: string;
+  sequenceId: string;
+  stepIndex: number;
+  delayHours: number;
+  templateId: string;
+}
+
+export interface Broadcast {
+  id: string;
+  campaignId: string;
+  recipientId: string;
+  status: 'pending' | 'sending' | 'sent' | 'failed' | 'read';
+  errorDetails?: string;
+  sentAt?: Date;
+}
+
+// ======================================
+// WORKFLOW ENGINE (n8n Jobs)
+// ======================================
+
+export interface AutomationJob {
+  id: string;
+  workspaceId: string;
+  workflowId: string;
+  jobType: 'publish_content' | 'reply_conversation' | 'generate_caption' | 'extract_lead' | 'sync_analytics';
+  payload: Record<string, any>;
+  status: 'created' | 'sent_to_n8n' | 'executing' | 'succeeded' | 'failed' | 'retrying';
+  retryPolicy?: RetryPolicy;
+  createdAt: Date;
+}
+
+export interface WorkflowTrigger {
+  id: string;
+  workflowId: string;
+  triggerType: 'webhook' | 'event' | 'schedule';
+  triggerConfig: Record<string, any>;
+}
+
+export interface WorkflowExecution {
+  id: string;
+  workflowId: string;
+  executionId: string; // n8n execution ID
+  status: 'success' | 'running' | 'error' | 'aborted';
+  startedAt: Date;
+  finishedAt?: Date;
+  logs?: string;
+}
+
+export interface RetryPolicy {
+  maxAttempts: number;
+  currentAttempt: number;
+  backoffFactorMs: number;
+}
+
+export interface JobResult {
+  jobId: string;
+  status: 'success' | 'error';
+  outputData?: Record<string, any>;
+  errorMessage?: string;
+}
+
+// ======================================
+// GENERAL SUPPORTING MODELS
+// ======================================
 
 export interface MediaAsset {
   id: string;
@@ -130,25 +331,6 @@ export interface PostHistory {
   errorDetails?: string;
 }
 
-export interface Workflow {
-  id: string;
-  workspaceId: string;
-  name: string;
-  triggerType: 'webhook' | 'event' | 'schedule';
-  triggerConfig: Record<string, any>;
-  isActive: boolean;
-  createdAt: Date;
-}
-
-export interface WorkflowExecution {
-  id: string;
-  workflowId: string;
-  status: 'running' | 'completed' | 'failed';
-  startedAt: Date;
-  finishedAt?: Date;
-  error?: string;
-}
-
 export interface WebhookSubscription {
   id: string;
   platform: 'facebook' | 'instagram' | 'messenger' | 'whatsapp';
@@ -163,16 +345,6 @@ export interface OAuthToken {
   connectedAccountId: string;
   accessToken: string;
   refreshToken?: string;
-  expiresAt?: Date;
-}
-
-export interface AccessToken {
-  token: string;
-  expiresAt?: Date;
-}
-
-export interface RefreshToken {
-  token: string;
   expiresAt?: Date;
 }
 
@@ -195,6 +367,8 @@ export interface AnalyticsSnapshot {
     messagesCount: number;
     growth: number;
     responseTimeSeconds: number;
+    leadConversionRate?: number;
+    publishingSuccessRate?: number;
   };
 }
 
@@ -228,14 +402,6 @@ export interface Folder {
   workspaceId: string;
   name: string;
   parentId?: string;
-}
-
-export interface Campaign {
-  id: string;
-  workspaceId: string;
-  name: string;
-  description?: string;
-  createdAt: Date;
 }
 
 export interface Draft {

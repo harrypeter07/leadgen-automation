@@ -7,7 +7,13 @@ import {
   AnalyticsSnapshot,
   User,
   AuditLog,
-  Notification
+  Notification,
+  Lead,
+  Contact,
+  Campaign,
+  Sequence,
+  AutomationJob,
+  WorkflowExecution
 } from '../types/models';
 
 export interface OAuthService {
@@ -35,6 +41,11 @@ export interface ConversationService {
   sendMessage(message: Message): Promise<Message>;
   getConversationMessages(conversationId: string): Promise<Message[]>;
   listConversations(workspaceId: string): Promise<Conversation[]>;
+  updateConversationMetadata(conversationId: string, metadata: Partial<Conversation>): Promise<Conversation>;
+  assignUser(conversationId: string, userId: string): Promise<void>;
+  archiveConversation(conversationId: string): Promise<void>;
+  closeConversation(conversationId: string): Promise<void>;
+  logInternalNote(conversationId: string, note: string): Promise<void>;
 }
 
 export interface MessageExtractionService {
@@ -89,6 +100,52 @@ export interface NotificationService {
 export interface AuditService {
   logAction(log: Partial<AuditLog>): Promise<void>;
   getLogs(workspaceId: string): Promise<AuditLog[]>;
+}
+
+// ======================================
+// CRM & LEAD MANAGEMENT SERVICES
+// ======================================
+
+export interface CRMService {
+  createLead(lead: Partial<Lead>): Promise<Lead>;
+  updateLeadStage(leadId: string, stageId: string): Promise<Lead>;
+  getLeadTimeline(leadId: string): Promise<any[]>;
+  assignLead(leadId: string, userId: string): Promise<void>;
+  addLeadNote(leadId: string, note: string): Promise<void>;
+  scoreLead(leadId: string): Promise<number>;
+  searchLeads(workspaceId: string, query: string): Promise<Lead[]>;
+}
+
+// ======================================
+// OUTREACH CAMPAIGN SERVICES
+// ======================================
+
+export interface CampaignService {
+  createCampaign(campaign: Partial<Campaign>): Promise<Campaign>;
+  startCampaign(campaignId: string): Promise<void>;
+  pauseCampaign(campaignId: string): Promise<void>;
+  getCampaignAnalytics(campaignId: string): Promise<any>;
+}
+
+export interface SequenceService {
+  createSequence(sequence: Partial<Sequence>): Promise<Sequence>;
+  triggerSequenceForContact(sequenceId: string, contactId: string): Promise<void>;
+}
+
+// ======================================
+// WORKFLOW JOB & n8n CONNECTOR SERVICES
+// ======================================
+
+export interface JobQueueService {
+  createJob(job: Partial<AutomationJob>): Promise<AutomationJob>;
+  processJob(jobId: string): Promise<void>;
+  getJobStatus(jobId: string): Promise<AutomationJob>;
+  listJobs(workspaceId: string): Promise<AutomationJob[]>;
+}
+
+export interface n8nConnectorService {
+  sendPayloadToWorkflow(webhookUrl: string, payload: any): Promise<{ success: boolean; executionId?: string }>;
+  fetchExecutionLogs(executionId: string): Promise<WorkflowExecution>;
 }
 export class MockOAuthService implements OAuthService {
   async getAuthorizationUrl(platform: string, workspaceId: string): Promise<string> {
