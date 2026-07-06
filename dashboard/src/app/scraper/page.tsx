@@ -663,32 +663,65 @@ export default function ScraperPage() {
               <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
                 <table className="w-full text-left text-[11px] border-collapse min-w-[700px]">
                   <thead className="sticky top-0 bg-white">
-                    <tr className="border-b border-purple-200 text-purple-950 font-bold uppercase tracking-wider text-[9px]">
-                      <th className="pb-2.5 pr-4">Name</th>
-                      <th className="pb-2.5 pr-4">Phone</th>
-                      <th className="pb-2.5 pr-4">Email</th>
-                      <th className="pb-2.5 pr-4">Address</th>
-                      <th className="pb-2.5 pr-4">Category</th>
-                      <th className="pb-2.5 pr-4">Rating</th>
-                      <th className="pb-2.5">Website</th>
-                    </tr>
+                    {activeJob.current_provider.includes('instagram') ? (
+                      <tr className="border-b border-purple-200 text-purple-950 font-bold uppercase tracking-wider text-[9px]">
+                        <th className="pb-2.5 pr-4">User</th>
+                        <th className="pb-2.5 pr-4">Followers</th>
+                        <th className="pb-2.5 pr-4">Following</th>
+                        <th className="pb-2.5 pr-4">Est. Reach</th>
+                        <th className="pb-2.5 pr-4">Verified</th>
+                        <th className="pb-2.5 pr-4">Email</th>
+                        <th className="pb-2.5 pr-4">Phone</th>
+                        <th className="pb-2.5 pr-4">Bio</th>
+                        <th className="pb-2.5">Website</th>
+                      </tr>
+                    ) : (
+                      <tr className="border-b border-purple-200 text-purple-950 font-bold uppercase tracking-wider text-[9px]">
+                        <th className="pb-2.5 pr-4">Name</th>
+                        <th className="pb-2.5 pr-4">Phone</th>
+                        <th className="pb-2.5 pr-4">Email</th>
+                        <th className="pb-2.5 pr-4">Address</th>
+                        <th className="pb-2.5 pr-4">Category</th>
+                        <th className="pb-2.5 pr-4">Rating</th>
+                        <th className="pb-2.5">Website</th>
+                      </tr>
+                    )}
                   </thead>
                   <tbody className="divide-y divide-purple-100 text-gray-700">
-                    {activeJob.scraped_leads!.slice(-15).map((lead, i) => (
-                      <tr key={i} className="hover:bg-purple-50/50">
-                        <td className="py-2.5 pr-4 font-bold text-purple-950 max-w-[130px] truncate">{lead.name}</td>
-                        <td className="py-2.5 pr-4 font-mono text-gray-500 text-[10px] whitespace-nowrap">{lead.phone || '—'}</td>
-                        <td className="py-2.5 pr-4 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
-                        <td className="py-2.5 pr-4 text-gray-500 max-w-[140px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
-                        <td className="py-2.5 pr-4 text-gray-500 max-w-[90px] truncate">{lead.category || '—'}</td>
-                        <td className="py-2.5 pr-4 text-yellow-600 font-bold whitespace-nowrap">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
-                        <td className="py-2.5 text-blue-600 max-w-[120px] truncate font-semibold">
-                          {lead.website
-                            ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-500">{lead.website.replace(/^https?:\/\//, '')}</a>
-                            : '—'}
-                        </td>
-                      </tr>
-                    ))}
+                    {activeJob.scraped_leads!.slice(-15).map((lead, i) => {
+                      const isInsta = activeJob.current_provider.includes('instagram');
+                      return isInsta ? (
+                        <tr key={i} className="hover:bg-purple-50/50">
+                          <td className="py-2.5 pr-4 font-bold text-purple-950 max-w-[130px] truncate">{lead.name}</td>
+                          <td className="py-2.5 pr-4 font-bold text-gray-700">{(lead as any).instagram_followers ?? '—'}</td>
+                          <td className="py-2.5 pr-4 font-medium text-gray-500">{(lead as any).instagram_following ?? '—'}</td>
+                          <td className="py-2.5 pr-4 font-bold text-pink-600">{(lead as any).instagram_reach ? `⚡ ${(lead as any).instagram_reach}` : '—'}</td>
+                          <td className="py-2.5 pr-4 font-semibold text-gray-500">{(lead as any).instagram_verified ? '✅ Yes' : 'No'}</td>
+                          <td className="py-2.5 pr-4 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
+                          <td className="py-2.5 pr-4 font-mono text-gray-500 text-[10px] whitespace-nowrap">{lead.phone || '—'}</td>
+                          <td className="py-2.5 pr-4 text-gray-500 max-w-[150px] truncate" title={(lead as any).instagram_bio || lead.notes || ''}>{(lead as any).instagram_bio || lead.notes || '—'}</td>
+                          <td className="py-2.5 text-blue-600 max-w-[120px] truncate font-semibold">
+                            {lead.website
+                              ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-500">{lead.website.replace(/^https?:\/\//, '')}</a>
+                              : '—'}
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={i} className="hover:bg-purple-50/50">
+                          <td className="py-2.5 pr-4 font-bold text-purple-950 max-w-[130px] truncate">{lead.name}</td>
+                          <td className="py-2.5 pr-4 font-mono text-gray-500 text-[10px] whitespace-nowrap">{lead.phone || '—'}</td>
+                          <td className="py-2.5 pr-4 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
+                          <td className="py-2.5 pr-4 text-gray-500 max-w-[140px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
+                          <td className="py-2.5 pr-4 text-gray-500 max-w-[90px] truncate">{lead.category || '—'}</td>
+                          <td className="py-2.5 pr-4 text-yellow-600 font-bold whitespace-nowrap">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
+                          <td className="py-2.5 text-blue-600 max-w-[120px] truncate font-semibold">
+                            {lead.website
+                              ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-500">{lead.website.replace(/^https?:\/\//, '')}</a>
+                              : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -804,32 +837,65 @@ export default function ScraperPage() {
                                     <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
                                       <table className="w-full text-left text-[10px] border-collapse min-w-[600px]">
                                         <thead className="sticky top-0 bg-white">
-                                          <tr className="text-gray-400 font-bold uppercase tracking-wider border-b border-[#E4E3DD] text-[8px]">
-                                            <th className="pb-1.5 pr-2">Name</th>
-                                            <th className="pb-1.5 pr-2">Phone</th>
-                                            <th className="pb-1.5 pr-2">Email</th>
-                                            <th className="pb-1.5 pr-2">Address</th>
-                                            <th className="pb-1.5 pr-2">Category</th>
-                                            <th className="pb-1.5 pr-2">Rating</th>
-                                            <th className="pb-1.5">Website</th>
-                                          </tr>
+                                          {job.current_provider.includes('instagram') ? (
+                                            <tr className="text-gray-400 font-bold uppercase tracking-wider border-b border-[#E4E3DD] text-[8px]">
+                                              <th className="pb-1.5 pr-2">User</th>
+                                              <th className="pb-1.5 pr-2">Followers</th>
+                                              <th className="pb-1.5 pr-2">Following</th>
+                                              <th className="pb-1.5 pr-2">Est. Reach</th>
+                                              <th className="pb-1.5 pr-2">Verified</th>
+                                              <th className="pb-1.5 pr-2">Email</th>
+                                              <th className="pb-1.5 pr-2">Phone</th>
+                                              <th className="pb-1.5 pr-2">Bio</th>
+                                              <th className="pb-1.5">Website</th>
+                                            </tr>
+                                          ) : (
+                                            <tr className="text-gray-400 font-bold uppercase tracking-wider border-b border-[#E4E3DD] text-[8px]">
+                                              <th className="pb-1.5 pr-2">Name</th>
+                                              <th className="pb-1.5 pr-2">Phone</th>
+                                              <th className="pb-1.5 pr-2">Email</th>
+                                              <th className="pb-1.5 pr-2">Address</th>
+                                              <th className="pb-1.5 pr-2">Category</th>
+                                              <th className="pb-1.5 pr-2">Rating</th>
+                                              <th className="pb-1.5">Website</th>
+                                            </tr>
+                                          )}
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 text-gray-700">
-                                          {leads.slice(0, 10).map((lead, idx) => (
-                                            <tr key={idx} className="hover:bg-gray-50">
-                                              <td className="py-2 pr-2 font-bold text-gray-800 max-w-[120px] truncate">{lead.name}</td>
-                                              <td className="py-2 pr-2 font-mono text-gray-500 text-[9px]">{lead.phone || '—'}</td>
-                                              <td className="py-2 pr-2 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
-                                              <td className="py-2 pr-2 text-gray-500 max-w-[120px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
-                                              <td className="py-2 pr-2 text-gray-500 max-w-[80px] truncate">{lead.category || '—'}</td>
-                                              <td className="py-2 pr-2 text-yellow-600 font-bold">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
-                                              <td className="py-2 text-blue-600 max-w-[100px] truncate font-semibold">
-                                                {lead.website
-                                                  ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
-                                                  : '—'}
-                                              </td>
-                                            </tr>
-                                          ))}
+                                          {leads.slice(0, 10).map((lead, idx) => {
+                                            const isInsta = job.current_provider.includes('instagram');
+                                            return isInsta ? (
+                                              <tr key={idx} className="hover:bg-gray-50">
+                                                <td className="py-2 pr-2 font-bold text-gray-800 max-w-[120px] truncate">{lead.name}</td>
+                                                <td className="py-2 pr-2 font-bold text-gray-600">{(lead as any).instagram_followers ?? '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-500">{(lead as any).instagram_following ?? '—'}</td>
+                                                <td className="py-2 pr-2 font-bold text-pink-600">{(lead as any).instagram_reach ? `⚡ ${(lead as any).instagram_reach}` : '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-500">{(lead as any).instagram_verified ? 'Yes' : 'No'}</td>
+                                                <td className="py-2 pr-2 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
+                                                <td className="py-2 pr-2 font-mono text-gray-500 text-[9px]">{lead.phone || '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-400 max-w-[140px] truncate" title={(lead as any).instagram_bio || lead.notes || ''}>{(lead as any).instagram_bio || lead.notes || '—'}</td>
+                                                <td className="py-2 text-blue-600 max-w-[100px] truncate font-semibold">
+                                                  {lead.website
+                                                    ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
+                                                    : '—'}
+                                                </td>
+                                              </tr>
+                                            ) : (
+                                              <tr key={idx} className="hover:bg-gray-50">
+                                                <td className="py-2 pr-2 font-bold text-gray-800 max-w-[120px] truncate">{lead.name}</td>
+                                                <td className="py-2 pr-2 font-mono text-gray-500 text-[9px]">{lead.phone || '—'}</td>
+                                                <td className="py-2 pr-2 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-500 max-w-[120px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-500 max-w-[80px] truncate">{lead.category || '—'}</td>
+                                                <td className="py-2 pr-2 text-yellow-600 font-bold">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
+                                                <td className="py-2 text-blue-600 max-w-[100px] truncate font-semibold">
+                                                  {lead.website
+                                                    ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
+                                                    : '—'}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
                                         </tbody>
                                       </table>
                                     </div>

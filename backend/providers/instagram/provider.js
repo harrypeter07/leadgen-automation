@@ -212,7 +212,12 @@ class InstagramProvider {
       address: aiExtracted.address || null,
       category: aiExtracted.category || 'Instagram Profile',
       website: profileInfo.website || url,
-      snippet: `Followers: ${followers} · Following: ${profileInfo.following || 0} · Reach: ${estimatedReach} · Bio: ${profileInfo.bio || 'None'} · Verified: ${profileInfo.verified || false}`
+      snippet: `Followers: ${followers} · Following: ${profileInfo.following || 0} · Reach: ${estimatedReach} · Bio: ${profileInfo.bio || 'None'} · Verified: ${profileInfo.verified || false}`,
+      instagram_followers: followers,
+      instagram_following: profileInfo.following || 0,
+      instagram_reach: estimatedReach,
+      instagram_bio: profileInfo.bio || '',
+      instagram_verified: profileInfo.verified || false
     };
   }
 
@@ -227,7 +232,19 @@ class InstagramProvider {
       website: raw.website,
       notes: raw.snippet || '',
       source: 'instagram',
-      status: 'new'
+      status: 'new',
+      enrichment_fields: {
+        instagram_followers: raw.instagram_followers,
+        instagram_following: raw.instagram_following,
+        instagram_reach: raw.instagram_reach,
+        instagram_bio: raw.instagram_bio,
+        instagram_verified: raw.instagram_verified
+      },
+      instagram_followers: raw.instagram_followers,
+      instagram_following: raw.instagram_following,
+      instagram_reach: raw.instagram_reach,
+      instagram_bio: raw.instagram_bio,
+      instagram_verified: raw.instagram_verified
     };
   }
 }
