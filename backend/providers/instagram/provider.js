@@ -19,7 +19,7 @@ class InstagramProvider {
     logger.info(`[Instagram Provider] Generated queries: ${JSON.stringify(searchQueries)}`);
 
     const harvestedUrls = new Set();
-    const excludeList = ['p', 'explore', 'developer', 'about', 'legal', 'help', 'terms', 'privacy', 'accounts', 'stories', 'emails', 'explore/tags', 'tags'];
+    const excludeList = ['p', 'reel', 'reels', 'explore', 'developer', 'about', 'legal', 'help', 'terms', 'privacy', 'accounts', 'stories', 'emails', 'tags', 'tv'];
 
     // 2. Perform searches via TinyFish Search API to bypass Google CAPTCHAs
     for (const q of searchQueries) {
@@ -31,11 +31,22 @@ class InstagramProvider {
         for (const item of results) {
           const link = item.url || item.website || '';
           if (link.includes('instagram.com/')) {
-            const match = link.match(/instagram\.com\/([a-zA-Z0-9_.-]+)/);
-            if (match) {
-              const username = match[1].toLowerCase();
-              if (username && !excludeList.includes(username)) {
-                harvestedUrls.add(`https://www.instagram.com/${username}/`);
+            try {
+              const u = new URL(link);
+              const parts = u.pathname.split('/').filter(Boolean);
+              if (parts.length > 0) {
+                const username = parts[0].toLowerCase();
+                if (username && !excludeList.includes(username) && /^[a-zA-Z0-9_.-]+$/.test(username)) {
+                  harvestedUrls.add(`https://www.instagram.com/${username}/`);
+                }
+              }
+            } catch (err) {
+              const match = link.match(/instagram\.com\/([a-zA-Z0-9_.-]+)/);
+              if (match) {
+                const username = match[1].toLowerCase();
+                if (username && !excludeList.includes(username)) {
+                  harvestedUrls.add(`https://www.instagram.com/${username}/`);
+                }
               }
             }
           }

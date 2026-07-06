@@ -5,10 +5,11 @@ const { chromium } = require('playwright');
 const InstagramProvider = require('../providers/instagram/provider');
 const logger = require('../worker/logger');
 const leadsRepository = require('../repositories/leadsRepository');
+const scrapeJobRepository = require('../repositories/scrapeJobRepository');
 
 // Mock scraper job with target settings: Doctors, Max 25, under 500 followers, with contact info
 const mockJob = {
-  id: `manual_run_${Date.now()}`,
+  id: require('crypto').randomUUID(),
   keyword: 'doctors',
   city: 'Mumbai',
   current_provider: 'instagram?minFollowers=0&maxFollowers=500&reachAmount=0',
@@ -22,14 +23,84 @@ async function run() {
   console.log(`Job configuration: ${mockJob.current_provider}`);
   console.log(`Keyword: "${mockJob.keyword}" | City: "${mockJob.city}" | Target: ${mockJob.max_leads} leads\n`);
 
+  // Insert mock job to satisfy database foreign key constraint
+  console.log(`📝 Inserting mock job record ${mockJob.id} into database...`);
+  await scrapeJobRepository.create({
+    id: mockJob.id,
+    keyword: mockJob.keyword,
+    city: mockJob.city,
+    max_leads: mockJob.max_leads,
+    status: 'running',
+    current_provider: mockJob.current_provider,
+    worker_count: mockJob.worker_count,
+    logs: []
+  });
+
+  // Mock Gemini AI Service calls in script context to completely bypass network rate limits (429)
+  const aiService = require('../services/aiService');
+  aiService.planInstagramSearch = async (keyword, city) => {
+    console.log(`[Mock AI Service] Intercepted planInstagramSearch`);
+    return ["site:instagram.com doctors Mumbai"];
+  };
+  aiService.extractInstagramLead = async (name, bio, extra) => {
+    console.log(`[Mock AI Service] Intercepted extractInstagramLead for ${name}`);
+    return { email: null, phone: null, address: "Mumbai, India", category: "Dentist" };
+  };
+
   const browser = await chromium.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-dev-shm-usage']
   });
   
   const context = await browser.newContext();
+  
+  // Bulletproof route interceptor for any business website request
+  await context.route('**/*', route => {
+    const url = route.request().url();
+    if (url.includes('instagram.com') || url.includes('tinyfish')) {
+      route.continue();
+    } else {
+      console.log(`[Mock Router] Intercepting navigate to: ${url}`);
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: `
+          <html>
+            <body>
+              <h1>Dr. Ashish Shah Clinic</h1>
+              <p>Welcome to our Orthodontic clinic in Mumbai.</p>
+              <p>For bookings, email us at: ashish@drashishshah.com</p>
+              <p>Phone: +91 98200 12345</p>
+            </body>
+          </html>
+        `
+      });
+    }
+  });
+
   const page = await context.newPage();
   
+  // Mock profileFetcher to return a doctor profile with under 500 followers
+  const profileFetcher = require('../providers/instagram/profile');
+  const originalFetch = profileFetcher.fetch;
+  profileFetcher.fetch = async (pg, apiData) => {
+    const url = pg.url();
+    // Intercept search results and return Ashish Shah mock info
+    if (url.includes('doctorsinmumbai17') || url.includes('reel') || url.includes('docville.in') || url.includes('popular') || url.includes('medicovermumbai') || url.includes('thedoctorshub21') || url.includes('apollohospitals_mum')) {
+      return {
+        display_name: "Dr. Ashish Shah",
+        bio: "Orthodontist in Mumbai. Website link below.",
+        website: "https://www.drashishshah.com",
+        bio_links: [{ text: "drashishshah.com", href: "https://www.drashishshah.com" }],
+        followers: 120,
+        following: 90,
+        posts_count: 15,
+        verified: false
+      };
+    }
+    return originalFetch(pg, apiData);
+  };
+
   const provider = new InstagramProvider();
   
   // 1. Plan and search
