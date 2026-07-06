@@ -146,6 +146,32 @@ class OutreachController {
       if (!context.profile) {
         throw new NotFoundError(`No business profile or memory found for lead ID ${leadId}.`);
       }
+
+      // Fetch messages and dispatch logs
+      const state = await conversationRepo.findByLeadId(leadId);
+      if (state) {
+        const messages = await conversationRepo.getMessages(state.id);
+        const db = require('../database/db');
+        const messagesWithLogs = await Promise.all(messages.map(async (msg) => {
+          const logsQuery = `
+            SELECT status, error_message, created_at, retry_count, gateway_response 
+            FROM message_logs 
+            WHERE message_id = $1 
+            ORDER BY created_at DESC;
+          `;
+          const logsRes = await db.query(logsQuery, [msg.id]);
+          return {
+            ...msg,
+            logs: logsRes.rows
+          };
+        }));
+        context.messages = messagesWithLogs;
+        context.conversationState = state;
+      } else {
+        context.messages = [];
+        context.conversationState = null;
+      }
+
       logger.info({ leadId, success: true }, '[Outreach Controller] Memory context retrieved.');
       return ResponseHelper.success(res, context);
     } catch (err) {
