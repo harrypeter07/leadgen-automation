@@ -25,4 +25,10 @@ router.get('/memory/:leadId', (req, res, next) => outreachController.getMemory(r
 // 7. Trigger manual website audit & social discovery research
 router.post('/research', (req, res, next) => outreachController.runResearch(req, res, next));
 
+// 8. Get system outreach and ICP settings
+router.get('/settings', (req, res, next) => outreachController.getSettings(req, res, next));
+
+// 9. Update system outreach and ICP settings
+router.post('/settings', (req, res, next) => outreachController.updateSettings(req, res, next));
+
 module.exports = router;

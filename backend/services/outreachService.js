@@ -78,6 +78,18 @@ class OutreachService {
     logger.info('[Outreach Service] Checking followup queue for due tasks...');
     const nowStr = new Date().toISOString();
     
+    let settings = { whatsapp_delay_ms: 5000 };
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const configPath = path.join(__dirname, '../config/outreach_settings.json');
+      if (fs.existsSync(configPath)) {
+        settings = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      }
+    } catch (e) {
+      logger.warn(`[Outreach Service] Failed to read dynamic settings: ${e.message}`);
+    }
+    
     // Fetch all pending followups due right now
     const pendingTasks = await followupRepo.list({
       status: 'pending',
@@ -192,6 +204,11 @@ class OutreachService {
                     timeout: 8000
                   });
                   gatewayResponse = res.data;
+
+                  // Rate limit sleep after dispatching to WhatsApp to protect account from spam blocks
+                  const delayMs = settings.whatsapp_delay_ms || 5000;
+                  logger.info(`[Outreach Service] WhatsApp sent to ${recipient}. Throttling loop: sleeping for ${delayMs}ms...`);
+                  await new Promise(resolve => setTimeout(resolve, delayMs));
                 } else {
                   gatewayResponse = { mock: true, note: 'WhatsApp Service URL not set.' };
                 }

@@ -1,0 +1,9 @@
+{
+  "company_name": "Zarss Dev",
+  "icp_description": "Singapore-based cafes, restaurants, fitness studios, and local services that have slow loading websites, poor SEO visibility, or lack a proper mobile-responsive layout.",
+  "offering_pitch": "We build a free custom homepage mockup showing how a modern, fast, and optimized design will improve their customer conversions, and offer a full redesign package.",
+  "system_instructions": "You are a professional, helpful outreach assistant from Zarss. Write a friendly, highly-personalized message to the business owner. Reference their business name and industry. Do not sound spammy, salesy, or robotic. Keep the message under 3 sentences and end with a soft call-to-action asking if they'd like to see the free mockup we made for them.",
+  "whatsapp_delay_ms": 5000,
+  "followup_cooldown_hours": 24,
+  "rate_limit_messages_per_minute": 5
+}

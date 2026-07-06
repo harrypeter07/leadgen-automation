@@ -20,6 +20,17 @@ export default function SettingsPage() {
   const [clearingLeads, setClearingLeads] = useState(false)
   const [configStatus, setConfigStatus] = useState<Record<string, boolean>>({})
 
+  // Outreach Settings states
+  const [companyName, setCompanyName] = useState('Zarss Dev')
+  const [icpDescription, setIcpDescription] = useState('')
+  const [offeringPitch, setOfferingPitch] = useState('')
+  const [systemInstructions, setSystemInstructions] = useState('')
+  const [whatsappDelayMs, setWhatsappDelayMs] = useState(5000)
+  const [followupCooldownHours, setFollowupCooldownHours] = useState(24)
+  const [rateLimitMessagesPerMinute, setRateLimitMessagesPerMinute] = useState(5)
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [loadingSettings, setLoadingSettings] = useState(true)
+
   // 1. Fetch DB stats
   async function fetchDbStats() {
     try {
@@ -46,9 +57,68 @@ export default function SettingsPage() {
     }
   }
 
+  // Fetch Outreach Settings
+  async function fetchOutreachSettings() {
+    setLoadingSettings(true)
+    try {
+      const res = await fetch('/api/backend-v3/outreach/settings')
+      if (res.ok) {
+        const json = await res.json()
+        if (json.success && json.data) {
+          const s = json.data
+          setCompanyName(s.company_name || 'Zarss Dev')
+          setIcpDescription(s.icp_description || '')
+          setOfferingPitch(s.offering_pitch || '')
+          setSystemInstructions(s.system_instructions || '')
+          setWhatsappDelayMs(s.whatsapp_delay_ms || 5000)
+          setFollowupCooldownHours(s.followup_cooldown_hours || 24)
+          setRateLimitMessagesPerMinute(s.rate_limit_messages_per_minute || 5)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load outreach settings:', err)
+    } finally {
+      setLoadingSettings(false)
+    }
+  }
+
+  // Update Outreach Settings
+  async function handleSaveOutreachSettings(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingSettings(true)
+    const toastId = toast.loading('Saving targeting configurations...')
+    try {
+      const res = await fetch('/api/backend-v3/outreach/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_name: companyName,
+          icp_description: icpDescription,
+          offering_pitch: offeringPitch,
+          system_instructions: systemInstructions,
+          whatsapp_delay_ms: whatsappDelayMs,
+          followup_cooldown_hours: followupCooldownHours,
+          rate_limit_messages_per_minute: rateLimitMessagesPerMinute
+        })
+      })
+
+      if (res.ok) {
+        toast.success('Campaign settings updated successfully!', { id: toastId })
+        fetchOutreachSettings()
+      } else {
+        throw new Error('Server error')
+      }
+    } catch {
+      toast.error('Failed to update settings. Verify connection status.', { id: toastId })
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+
   useEffect(() => {
     fetchDbStats()
     fetchConfigStatus()
+    fetchOutreachSettings()
   }, [])
 
   // 2. Connection testers
@@ -297,6 +367,104 @@ RESEND_API_KEY=re_your_key`
             )
           })}
         </div>
+      </div>
+
+      {/* Section 2.5 - Dynamic Campaign & ICP Targeting Settings */}
+      <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+        <div>
+          <h3 className="font-bold text-[#1C1C1E] text-md uppercase tracking-wider text-gray-500">🎯 Campaign ICP & Outreach Controls</h3>
+          <p className="text-xs text-gray-400 mt-1 font-medium">Define your Ideal Customer Profile (ICP) and prompt rules. These dynamically format Gemini copy templates and WhatsApp rate throttles.</p>
+        </div>
+
+        {loadingSettings ? (
+          <div className="py-10 text-center text-xs text-gray-400 animate-pulse font-semibold">Loading campaign variables...</div>
+        ) : (
+          <form onSubmit={handleSaveOutreachSettings} className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Left Column: Company & Pitch */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-600 text-[10px] font-bold uppercase tracking-wider mb-2">Company Name (Sender)</label>
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors"
+                    placeholder="e.g. Zarss Marketing"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-600 text-[10px] font-bold uppercase tracking-wider mb-2">Our Target ICP Description</label>
+                  <textarea
+                    rows={4}
+                    value={icpDescription}
+                    onChange={(e) => setIcpDescription(e.target.value)}
+                    className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors resize-none"
+                    placeholder="Describe your ideal customers (e.g. cafes, local stores)..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-600 text-[10px] font-bold uppercase tracking-wider mb-2">Main Offer / Pitch</label>
+                  <textarea
+                    rows={3}
+                    value={offeringPitch}
+                    onChange={(e) => setOfferingPitch(e.target.value)}
+                    className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors resize-none"
+                    placeholder="What specific product/service are we pitching? (e.g. Free Speed Mockup)..."
+                  />
+                </div>
+              </div>
+
+              {/* Right Column: AI Prompt & Delays */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-600 text-[10px] font-bold uppercase tracking-wider mb-2">Gemini System Instructions</label>
+                  <textarea
+                    rows={6}
+                    value={systemInstructions}
+                    onChange={(e) => setSystemInstructions(e.target.value)}
+                    className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors resize-none font-mono"
+                    placeholder="System instructions to guide prompt drafting..."
+                  />
+                </div>
+
+                <div className="grid gap-4 grid-cols-2">
+                  <div>
+                    <label className="block text-gray-600 text-[10px] font-bold uppercase tracking-wider mb-2">WhatsApp Delay (ms)</label>
+                    <input
+                      type="number"
+                      value={whatsappDelayMs}
+                      onChange={(e) => setWhatsappDelayMs(parseInt(e.target.value, 10) || 0)}
+                      className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-600 text-[10px] font-bold uppercase tracking-wider mb-2">Followup Cooldown (h)</label>
+                    <input
+                      type="number"
+                      value={followupCooldownHours}
+                      onChange={(e) => setFollowupCooldownHours(parseInt(e.target.value, 10) || 0)}
+                      className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={savingSettings}
+                className="rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] text-[#141416] text-xs font-bold uppercase tracking-wider px-6 py-3 transition-colors shadow-md disabled:opacity-50"
+              >
+                {savingSettings ? 'Saving Changes...' : 'Save Campaign Settings'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* Section 3 - Database Maintenance */}

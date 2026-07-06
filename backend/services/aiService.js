@@ -13,12 +13,34 @@ class AIService {
    * @returns {Promise<string>} Drafted outreach message body
    */
   async generateOutboundDraft(leadName, industry, insights, objections, lastMessages = []) {
+    let settings = {
+      company_name: "Zarss Dev",
+      icp_description: "Singapore-based local businesses that have slow loading websites or poor SEO visibility.",
+      offering_pitch: "We build a free custom homepage mockup showing how a modern, fast, and optimized design will improve conversions.",
+      system_instructions: "You are a professional, helpful outreach assistant from Zarss. Write a friendly, highly-personalized message. Reference their business name and industry. Do not sound spammy or robotic. Keep it under 3 sentences."
+    };
+
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const configPath = path.join(__dirname, '../config/outreach_settings.json');
+      if (fs.existsSync(configPath)) {
+        settings = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      }
+    } catch (e) {
+      logger.warn(`[AI Service] Failed to read dynamic outreach settings: ${e.message}`);
+    }
+
     // Minimize history context (send max last 3 messages)
     const contextHistory = lastMessages.slice(-3).map(m => `${m.direction === 'inbound' ? 'Lead' : 'Sales'}: ${m.body}`).join('\n');
 
     const prompt = `
-      You are an expert sales outreach assistant. Write a highly personalized, natural-sounding message to a lead.
-      Avoid corporate speak, buzzwords, or sounding robotic. Keep it under 3-4 sentences.
+      ${settings.system_instructions}
+
+      Sending Context:
+      * Company Name: ${settings.company_name}
+      * Ideal Customer Profile (ICP): ${settings.icp_description}
+      * Our Offering / Pitch: ${settings.offering_pitch}
 
       Lead Info:
       * Name: ${leadName}
