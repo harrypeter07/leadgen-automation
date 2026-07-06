@@ -50,6 +50,9 @@ async function run() {
     const url = provider.profileUrls[i];
     console.log(`\n[${qualifiedLeads.length + 1}/25] Processing: ${url}`);
     
+    // Throttle iteration to avoid Gemini API Rate Limit (429)
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
     try {
       const rawLead = await provider.extract(page, i, mockJob);
       if (rawLead) {
