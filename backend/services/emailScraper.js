@@ -138,6 +138,52 @@ class EmailScraper {
       return true;
     }) || null;
   }
+
+  async scrapeContactDetails(page, url) {
+    if (!url || !url.startsWith('http')) return { email: null, phone: null };
+    let email = null;
+    let phone = null;
+    try {
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      });
+      await page.goto(url, { timeout: 12000, waitUntil: 'domcontentloaded' }).catch(() => {});
+      await page.waitForTimeout(800).catch(() => {});
+
+      email = await this._extractMailto(page);
+      if (!email) email = await this._extractFromText(page);
+      phone = await this._extractPhoneFromText(page);
+
+      if (!email || !phone) {
+        const contactUrl = await this._findContactLink(page, url);
+        if (contactUrl && contactUrl !== url) {
+          await page.goto(contactUrl, { timeout: 10000, waitUntil: 'domcontentloaded' }).catch(() => {});
+          await page.waitForTimeout(600).catch(() => {});
+          if (!email) email = await this._extractMailto(page) || await this._extractFromText(page);
+          if (!phone) phone = await this._extractPhoneFromText(page);
+        }
+      }
+
+      if (!email) email = await this._extractFromHTML(page);
+    } catch (_) {}
+    return { email, phone };
+  }
+
+  async _extractPhoneFromText(page) {
+    try {
+      const text = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
+      const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\+?\d{8,15}/g;
+      const matches = text.match(phoneRegex) || [];
+      const validPhone = matches.find(p => {
+        const digits = p.replace(/\D/g, '');
+        return digits.length >= 8 && digits.length <= 15;
+      });
+      return validPhone ? validPhone.trim() : null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 module.exports = new EmailScraper();

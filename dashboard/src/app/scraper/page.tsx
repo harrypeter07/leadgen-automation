@@ -50,6 +50,9 @@ export default function ScraperPage() {
   const [includeEmails, setIncludeEmails] = useState(false)
   const [searchScope, setSearchScope] = useState<'city' | 'country' | 'global'>('city')
   const [country, setCountry] = useState('')
+  const [minFollowers, setMinFollowers] = useState(0)
+  const [maxFollowers, setMaxFollowers] = useState(500)
+  const [reachAmount, setReachAmount] = useState(0)
   const [queuing, setQueuing] = useState(false)
 
   // Helper to parse keyword brackets notation
@@ -123,8 +126,10 @@ export default function ScraperPage() {
     setQueuing(true)
     const toastId = toast.loading('Queueing scrape job...')
     try {
-      // Append :email to provider if enrichment is checked
-      const finalProvider = includeEmails ? `${provider}:email` : provider;
+      // Append :email or query options to provider
+      const finalProvider = provider === 'instagram'
+        ? `instagram?minFollowers=${minFollowers}&maxFollowers=${maxFollowers}&reachAmount=${reachAmount}`
+        : includeEmails ? `${provider}:email` : provider;
 
       let finalCity = city.trim()
       if (searchScope === 'global') {
@@ -380,6 +385,44 @@ export default function ScraperPage() {
                     required
                     className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
                   />
+                </div>
+              )}
+
+              {provider === 'instagram' && (
+                <div className="space-y-4 border-l-2 border-pink-400 pl-3.5 py-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-pink-600 mb-1 uppercase tracking-wider">Min Followers</label>
+                      <input
+                        type="number"
+                        value={minFollowers}
+                        onChange={(e) => setMinFollowers(parseInt(e.target.value, 10) || 0)}
+                        min="0"
+                        className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-pink-600 mb-1 uppercase tracking-wider">Max Followers</label>
+                      <input
+                        type="number"
+                        value={maxFollowers}
+                        onChange={(e) => setMaxFollowers(parseInt(e.target.value, 10) || 0)}
+                        min="0"
+                        className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-pink-600 mb-1 uppercase tracking-wider">Reach Target (Est.)</label>
+                    <input
+                      type="number"
+                      value={reachAmount}
+                      onChange={(e) => setReachAmount(parseInt(e.target.value, 10) || 0)}
+                      min="0"
+                      placeholder="e.g. 500 estimated impressions"
+                      className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
+                    />
+                  </div>
                 </div>
               )}
 

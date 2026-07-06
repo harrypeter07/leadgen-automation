@@ -34,7 +34,7 @@ class JobManager {
   async executeJob(job, workerId) {
     const startTime = Date.now();
     const fullProviderName = job.current_provider || 'google_maps';
-    const providerName = fullProviderName.split(':')[0];
+    const providerName = fullProviderName.split(':')[0].split('?')[0];
     const provider = this.providers[providerName];
 
     if (!provider) {
@@ -88,7 +88,7 @@ class JobManager {
         }
 
         try {
-          const raw = await provider.extract(page, i, job.version || 'v2');
+          const raw = await provider.extract(page, i, job);
           if (!raw) return;
 
           const lead = provider.normalize(raw, job.city);
