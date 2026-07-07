@@ -1,35 +1,38 @@
-// backend/services/emailService.js
-// -------------------------------------------------------
-// Unified email sender. Priority:
-//  1. Nodemailer SMTP (Gmail App Password) — no domain needed
-//  2. Resend REST API — requires verified domain for external recipients
-//  3. Mock/log — falls back gracefully when neither is configured
-// -------------------------------------------------------
 const nodemailer = require('nodemailer');
 const axios = require('axios');
 const logger = require('../worker/logger');
+const supabase = require('../database/connection');
 
 // ── helpers ──────────────────────────────────────────────
 
 /**
- * Build a Nodemailer SMTP transporter from env vars.
- * Returns null if credentials are not configured.
+ * Retrieve SMTP configuration dynamically from Supabase meta_config table.
  */
-function buildNodemailerTransport() {
-  const gmailUser = (process.env.NODEMAILER_USER || '').trim();
-  const gmailPass = (process.env.NODEMAILER_APP_PASSWORD || '').trim();
-  if (!gmailUser || !gmailPass) return null;
+async function getSMTPConfigFromDB() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('meta_config')
+      .select('key, value')
+      .in('key', ['SMTP_USER', 'SMTP_PASS', 'SMTP_FROM_NAME']);
+    if (error || !data || data.length === 0) return null;
 
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: gmailUser,
-      pass: gmailPass,   // Gmail App Password (not your normal password)
-    },
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    socketTimeout: 5000,
-  });
+    const config = {};
+    data.forEach(row => {
+      config[row.key] = row.value;
+    });
+
+    if (config.SMTP_USER && config.SMTP_PASS) {
+      return {
+        user: config.SMTP_USER.trim(),
+        pass: config.SMTP_PASS.trim(),
+        fromName: config.SMTP_FROM_NAME ? config.SMTP_FROM_NAME.trim() : 'Outreach'
+      };
+    }
+  } catch (err) {
+    logger.warn({ error: err.message }, '[EmailService] Failed to load SMTP config from DB');
+  }
+  return null;
 }
 
 // ── public API ────────────────────────────────────────────
@@ -45,11 +48,46 @@ function buildNodemailerTransport() {
  * @returns {Promise<{provider: string, response: any, mock: boolean}>}
  */
 async function sendEmail({ to, subject, html, text }) {
-  // ── 1. Try Nodemailer / Gmail SMTP ──────────────────────
-  const transport = buildNodemailerTransport();
+  let transport = null;
+  let gmailUser = '';
+  let fromName = 'Outreach';
+
+  // ── 1a. Try loading SMTP configuration from DB ──────────────────
+  const dbConfig = await getSMTPConfigFromDB();
+  if (dbConfig) {
+    gmailUser = dbConfig.user;
+    fromName = dbConfig.fromName;
+    transport = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: dbConfig.user,
+        pass: dbConfig.pass,
+      },
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 5000,
+    });
+  } else {
+    // ── 1b. Fallback to Nodemailer/Gmail SMTP Env Vars ────────────────
+    const gmailUserEnv = (process.env.NODEMAILER_USER || '').trim();
+    const gmailPassEnv = (process.env.NODEMAILER_APP_PASSWORD || '').trim();
+    if (gmailUserEnv && gmailPassEnv) {
+      gmailUser = gmailUserEnv;
+      fromName = process.env.NODEMAILER_FROM_NAME || 'Outreach';
+      transport = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: gmailUserEnv,
+          pass: gmailPassEnv,
+        },
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: 5000,
+      });
+    }
+  }
+
   if (transport) {
-    const gmailUser = process.env.NODEMAILER_USER.trim();
-    const fromName  = process.env.NODEMAILER_FROM_NAME || 'Outreach';
     try {
       const info = await transport.sendMail({
         from: `"${fromName}" <${gmailUser}>`,
@@ -58,10 +96,10 @@ async function sendEmail({ to, subject, html, text }) {
         html,
         text: text || html.replace(/<[^>]+>/g, ''),
       });
-      logger.info({ to, messageId: info.messageId }, '[EmailService] Sent via Nodemailer/Gmail');
+      logger.info({ to, messageId: info.messageId }, '[EmailService] Sent via Nodemailer/Gmail SMTP');
       return { provider: 'nodemailer', response: { messageId: info.messageId }, mock: false };
     } catch (err) {
-      logger.warn({ to, error: err.message }, '[EmailService] Nodemailer failed — trying Resend fallback');
+      logger.warn({ to, error: err.message }, '[EmailService] Nodemailer SMTP failed — trying Resend fallback');
     }
   }
 
@@ -69,12 +107,12 @@ async function sendEmail({ to, subject, html, text }) {
   const resendKey = (process.env.RESEND_API_KEY || '').trim();
   if (resendKey) {
     const fromEmail = (process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev').trim();
-    const fromName  = process.env.NODEMAILER_FROM_NAME || 'Outreach';
+    const fromNameResend = process.env.NODEMAILER_FROM_NAME || 'Outreach';
     try {
       const res = await axios.post(
         'https://api.resend.com/emails',
         {
-          from: `${fromName} <${fromEmail}>`,
+          from: `${fromNameResend} <${fromEmail}>`,
           to,
           subject,
           html,
