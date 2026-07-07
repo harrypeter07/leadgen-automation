@@ -3,12 +3,17 @@
   "nodes": [
     {
       "parameters": {
-        "rule": "interval",
-        "interval": 1,
-        "unit": "hours"
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
       },
       "id": "e4f8a1b2-3001-4000-8000-000000000001",
-      "name": "Interval Trigger",
+      "name": "Hourly Sync Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
       "position": [100, 300]
@@ -26,29 +31,58 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 10000
+        }
       },
       "id": "e4f8a1b2-3002-4000-8000-000000000002",
-      "name": "Get Connections List",
+      "name": "Get Connected Accounts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [280, 300]
+      "position": [300, 300]
     },
     {
       "parameters": {
-        "fieldToSplit": "={{ $json.accounts }}",
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-accounts",
+              "leftValue": "={{ $json.accounts?.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "e4f8a1b2-300e-4000-8000-000000000010",
+      "name": "Has Accounts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "accounts",
         "options": {}
       },
       "id": "e4f8a1b2-3003-4000-8000-000000000003",
-      "name": "Loop Accounts List",
-      "type": "n8n-nodes-base.splitInBatches",
+      "name": "Split Accounts",
+      "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [460, 300]
+      "position": [700, 200]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=http://localhost:3001/api/automation/accounts/{{ $json.id }}/test",
+        "url": "={{ $env.BACKEND_URL }}/api/automation/accounts/{{ $json.id }}/test",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -58,30 +92,34 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 10000
+        }
       },
       "id": "e4f8a1b2-3004-4000-8000-000000000004",
-      "name": "Trigger Provider Health Verify",
+      "name": "Test Account Health",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [660, 200]
+      "position": [900, 200]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://graph.facebook.com/v19.0/{{ $node[\"Loop Accounts List\"].json.id }}/insights?metric=page_impressions,page_engagements&access_token={{ $json.access_token }}",
-        "options": {}
+        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $('Split Accounts').item.json.credentials?.page_id || $('Split Accounts').item.json.app_id }}/insights?metric=page_impressions,page_engagements,page_fan_adds&period=day&access_token={{ $('Split Accounts').item.json.credentials?.access_token }}",
+        "options": {
+          "timeout": 15000
+        }
       },
       "id": "e4f8a1b2-3005-4000-8000-000000000005",
-      "name": "Pull Meta Insights Analytics",
+      "name": "Pull Graph API Insights",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [860, 200]
+      "position": [1100, 200]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $env.BACKEND_URL }}/api/analytics/sync",
+        "method": "GET",
+        "url": "={{ $env.BACKEND_URL }}/api/automation/workflows/health",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -91,74 +129,79 @@
             }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"account_id\": \"={{ $node[\"Loop Accounts List\"].json.id }}\",\n  \"metrics\": \"={{ $json.data }}\"\n}",
-        "options": {}
+        "options": {
+          "timeout": 10000
+        }
       },
       "id": "e4f8a1b2-3006-4000-8000-000000000006",
-      "name": "Store Sync Analytics Details",
+      "name": "Store Health Snapshot",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1060, 200]
+      "position": [1300, 200]
     }
   ],
   "connections": {
-    "Interval Trigger": {
+    "Hourly Sync Trigger": {
       "main": [
         [
           {
-            "node": "Get Connections List",
+            "node": "Get Connected Accounts",
+            "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get Connections List": {
+    "Get Connected Accounts": {
       "main": [
         [
           {
-            "node": "Loop Accounts List",
+            "node": "Has Accounts?",
+            "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Loop Accounts List": {
+    "Has Accounts?": {
       "main": [
         [
           {
-            "node": "Trigger Provider Health Verify",
+            "node": "Split Accounts",
+            "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Trigger Provider Health Verify": {
+    "Split Accounts": {
       "main": [
         [
           {
-            "node": "Pull Meta Insights Analytics",
+            "node": "Test Account Health",
+            "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Pull Meta Insights Analytics": {
+    "Test Account Health": {
       "main": [
         [
           {
-            "node": "Store Sync Analytics Details",
+            "node": "Pull Graph API Insights",
+            "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Store Sync Analytics Details": {
+    "Pull Graph API Insights": {
       "main": [
         [
           {
-            "node": "Loop Accounts List",
+            "node": "Store Health Snapshot",
+            "type": "main",
             "index": 0
           }
         ]
@@ -166,6 +209,18 @@
     }
   },
   "active": true,
-  "settings": {},
-  "versionId": "e4f8a1b2-3000-4000-8000-000000000000"
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "e4f8a1b2-3000-4000-8001-000000000000",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "flowfyp-production"
+  },
+  "tags": [
+    { "id": "meta-integration", "name": "Meta Integration" },
+    { "id": "monitoring", "name": "Monitoring" }
+  ]
 }
