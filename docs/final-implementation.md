@@ -11,8 +11,10 @@ Detailed report of all files, configurations, schemas, and API endpoints added f
   * `leadgen/n8n-workflows/system-dispatcher.json`
 * **Database migrations**:
   * `leadgen/backend/database/migrations/02_meta_connected_accounts.sql`
+  * `leadgen/backend/database/migrations/04_automation_health_metrics.sql`
   * `leadgen/backend/database/run_migration_02.js`
   * `leadgen/backend/database/run_migration_03.js`
+  * `leadgen/backend/database/run_migration_04.js`
 * **Backend Services & Repositories**:
   * `leadgen/backend/services/encryptionService.js`
   * `leadgen/backend/repositories/connectedAccountsRepository.js`
@@ -36,12 +38,15 @@ Detailed report of all files, configurations, schemas, and API endpoints added f
   * `leadgen/docs/setup/environment.md`
   * `leadgen/docs/setup/deployment.md`
   * `leadgen/docs/setup/troubleshooting.md`
+* **User Config Mappings**:
+  * `leadgen/meta_credentials.txt`
 
 ## 📝 Files Modified
 
 * `leadgen/backend/index.js` (registered accounts and workflows endpoints).
 * `leadgen/dashboard/src/app/automation/accounts/page.tsx` (integrated CRUD credentials setting panels).
 * `leadgen/dashboard/src/app/automation/page.tsx` (implemented overview, calender queue posting, retry mechanisms).
+* `leadgen/dashboard/src/app/automation/layout.tsx` (mounted diagnostics System Health link on sidebar).
 
 ## ⚡ API Routes Added
 
@@ -56,6 +61,7 @@ Detailed report of all files, configurations, schemas, and API endpoints added f
 9. `GET /api/automation/workflows/publish/queue` - Retrieves queue list items.
 10. `POST /api/automation/workflows/publish/queue` - Schedules campaign postings.
 11. `POST /api/automation/workflows/retry` - Retries failed postings queue.
+12. `GET /api/automation/workflows/health` - Fetches real-time diagnostics parameters cache.
 
 ## 🗄️ Database Changes
 * Created tables:
@@ -63,6 +69,7 @@ Detailed report of all files, configurations, schemas, and API endpoints added f
   * `system_audit_logs`
   * `automation_publishing_queue`
   * `automation_workflow_status`
+  * `automation_health_metrics`
 
 ## 🔒 Security
 * Credentials (Tokens, secrets) are encrypted on database insert/update using `aes-256-cbc`.

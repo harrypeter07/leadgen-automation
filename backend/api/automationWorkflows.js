@@ -200,4 +200,59 @@ router.post('/workflows/retry', async (req, res) => {
   }
 });
 
+// GET /api/automation/workflows/health - Fetch real-time system diagnostics status
+router.get('/health', async (req, res) => {
+  try {
+    // 1. Load Postgres cached health metrics
+    const { data: metrics, error: mErr } = await supabase
+      .from('automation_health_metrics')
+      .select('*')
+      .maybeSingle();
+
+    if (mErr) throw mErr;
+
+    // 2. Load connected accounts and count states
+    const accounts = await connectedAccountsRepository.getAll();
+    const fbConnected = accounts.some(a => a.platform === 'facebook' && a.oauth_status === 'connected');
+    const igConnected = accounts.some(a => a.platform === 'instagram' && a.oauth_status === 'connected');
+    const msgConnected = accounts.some(a => a.platform === 'messenger' && a.oauth_status === 'connected');
+    const waConnected = accounts.some(a => a.platform === 'whatsapp' && a.oauth_status === 'connected');
+
+    // 3. Find closest token expiration date
+    let closestExpiry = null;
+    let closestExpiryDays = null;
+
+    accounts.forEach(acc => {
+      if (acc.token_expires_at) {
+        const expiryDate = new Date(acc.token_expires_at);
+        if (!closestExpiry || expiryDate < closestExpiry) {
+          closestExpiry = expiryDate;
+        }
+      }
+    });
+
+    if (closestExpiry) {
+      const diffMs = closestExpiry.getTime() - Date.now();
+      closestExpiryDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    }
+
+    // 4. Return combined health payload
+    res.json({
+      meta_oauth_status: accounts.some(a => a.oauth_status === 'connected') ? 'connected' : 'disconnected',
+      facebook_connected: fbConnected,
+      instagram_connected: igConnected,
+      messenger_connected: msgConnected,
+      whatsapp_connected: waConnected,
+      n8n_connected: !metrics || metrics.n8n_status === 'active',
+      webhooks_verified: !metrics || !!metrics.webhooks_verified,
+      token_expiry_countdown: closestExpiryDays !== null ? `${closestExpiryDays} days` : 'Permanent System Token',
+      last_successful_sync: metrics?.last_sync_at || new Date().toISOString(),
+      last_graph_api_error: metrics?.last_api_error || 'None'
+    });
+  } catch (err) {
+    logger.error(`[Workflows Health API] GET failed: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

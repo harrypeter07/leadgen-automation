@@ -1,36 +1,72 @@
-# Facebook Page Integration Setup Guide
+# Meta Graph API Endpoints Reference
 
-This guide details how to link your Facebook Page, get your Page ID, and configure API permissions.
+This guide catalogs the exact Graph API paths, HTTP methods, and payload structures called by the backend and workflows.
 
-## 1. Create a Facebook Page
-1. Log in to your personal Facebook account.
-2. Go to [facebook.com/pages/create](https://www.facebook.com/pages/create/).
-3. Choose a Page Category and name. Click **Create Page**.
+## 📋 Graph API Reference Directory
 
-## 2. Retrieve Page ID
-1. Navigate to your Facebook Page profile.
-2. Go to the **About** tab → **Page Transparency** or **Settings** → **New Pages Experience** → **Page Details**.
-3. Copy the numeric **Page ID**.
+### 1. Send Messenger / Instagram DM Message
+* **Endpoint**: `POST /v19.0/me/messages`
+* **Headers**: `Content-Type: application/json`
+* **Query Parameters**: `access_token=<PAGE_ACCESS_TOKEN>`
+* **Payload**:
+  ```json
+  {
+    "recipient": { "id": "<RECIPIENT_PAGE_SCOPED_ID>" },
+    "message": { "text": "Hello, how can we help you today?" }
+  }
+  ```
 
-## 3. Required Permissions Scope
-Ensure that the access token you load for your Page has the following permissions enabled:
-- `pages_show_list`
-- `pages_read_engagement`
-- `pages_manage_posts` (needed for publishing feed posts)
-- `pages_messaging` (needed for Messenger webhooks)
+### 2. Retrieve Messenger / Instagram Conversation Thread
+* **Endpoint**: `GET /v19.0/{conversation_id}?fields=messages{message,from,to,created_time}`
+* **Query Parameters**: `access_token=<PAGE_ACCESS_TOKEN>`
 
-## 4. Flow diagram: Facebook publishing
-```mermaid
-sequenceDiagram
-  participant User as Scraper Dashboard
-  participant Backend as Node API Backend
-  participant N8N as Publishing Hub Workflow
-  participant Meta as Meta Graph API (Page Feed)
-  
-  User->>Backend: Post Queue Item (Content, Scheduled Date)
-  Backend->>N8N: Poll Webhook triggers loop
-  N8N->>Backend: Fetch Decrypted Access Token
-  N8N->>Meta: POST /v19.0/{page_id}/feed
-  Meta-->>N8N: 200 OK (Post ID)
-  N8N->>Backend: Update Status -> published
-```
+### 3. Retrieve Page Comments (Facebook / Instagram)
+* **Endpoint**: `GET /v19.0/{object_id}/comments`
+* **Query Parameters**: `access_token=<PAGE_ACCESS_TOKEN>`
+
+### 4. Create Facebook Feed Post
+* **Endpoint**: `POST /v19.0/{page_id}/feed`
+* **Payload**:
+  ```json
+  {
+    "message": "Campaign post content",
+    "access_token": "<PAGE_ACCESS_TOKEN>"
+  }
+  ```
+
+### 5. Instagram Media Container Upload
+* **Endpoint**: `POST /v19.0/{instagram_business_id}/media`
+* **Payload**:
+  ```json
+  {
+    "image_url": "<IMAGE_ASSET_URL>",
+    "caption": "Instagram post caption",
+    "access_token": "<PAGE_ACCESS_TOKEN>"
+  }
+  ```
+
+### 6. Instagram Media Container Publish
+* **Endpoint**: `POST /v19.0/{instagram_business_id}/media_publish`
+* **Payload**:
+  ```json
+  {
+    "creation_id": "<CONTAINER_CREATION_ID>",
+    "access_token": "<PAGE_ACCESS_TOKEN>"
+  }
+  ```
+
+### 7. Retrieve Analytics Page Insights
+* **Endpoint**: `GET /v19.0/{page_id}/insights?metric=page_impressions,page_engagements`
+* **Query Parameters**: `access_token=<PAGE_ACCESS_TOKEN>`
+
+### 8. Send WhatsApp Text Message
+* **Endpoint**: `POST /v19.0/{phone_number_id}/messages`
+* **Payload**:
+  ```json
+  {
+    "messaging_product": "whatsapp",
+    "to": "<PHONE_NUMBER>",
+    "type": "text",
+    "text": { "body": "WhatsApp text body content" }
+  }
+  ```
