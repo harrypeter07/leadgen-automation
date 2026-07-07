@@ -1,0 +1,153 @@
+{
+  "name": "System Dispatcher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "system-dispatcher-trigger",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e4f8a1b2-4001-4000-8000-000000000001",
+      "name": "Webhook Trigger Node",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.body.action }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "manual_outbound",
+              "output": 1
+            },
+            {
+              "value2": "retry_job",
+              "output": 2
+            }
+          ]
+        },
+        "fallbackOutput": 1
+      },
+      "id": "e4f8a1b2-4002-4000-8000-000000000002",
+      "name": "Action Router Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/workflows/orchestrate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "={{ $env.API_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": \"trigger_outreach\",\n  \"payload\": \"={{ $json.body.payload }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-4003-4000-8000-000000000003",
+      "name": "Dispatch Outreach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [520, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/workflows/orchestrate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "={{ $env.API_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": \"retry_job\",\n  \"payload\": \"={{ $json.body.payload }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-4004-4000-8000-000000000004",
+      "name": "Dispatch Retry Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [520, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"dispatched\",\n  \"success\": true\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-4005-4000-8000-000000000005",
+      "name": "Respond Webhook Call",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [760, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger Node": {
+      "main": [
+        [
+          {
+            "node": "Action Router Switch",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Router Switch": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Outreach",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatch Retry Queue",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Outreach": {
+      "main": [
+        [
+          {
+            "node": "Respond Webhook Call",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Retry Queue": {
+      "main": [
+        [
+          {
+            "node": "Respond Webhook Call",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "e4f8a1b2-4000-4000-8000-000000000000"
+}

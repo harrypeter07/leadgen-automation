@@ -23,13 +23,44 @@ interface AuditLog {
   created_at: string
 }
 
+interface WorkflowStatus {
+  name: string
+  active: boolean
+  last_run: string | null
+  execution_time: string | null
+  status: string
+}
+
+interface QueueItem {
+  id: string
+  platform: string
+  account_name: string
+  content: string
+  media_url: string | null
+  scheduled_at: string
+  status: 'scheduled' | 'published' | 'failed'
+  published_id: string | null
+}
+
 export default function AutomationDashboardPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'channels' | 'inbox' | 'publishing' | 'logs'>('overview')
+  
+  // Dynamic API state hooks
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
+  const [workflows, setWorkflows] = useState<WorkflowStatus[]>([])
+  const [publishingQueue, setPublishingQueue] = useState<QueueItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Fetch accounts and logs on mount
+  // Scheduling Form Inputs
+  const [composePlatform, setComposePlatform] = useState('facebook')
+  const [composeAccount, setComposeAccount] = useState('')
+  const [composeContent, setComposeContent] = useState('')
+  const [composeMedia, setComposeMedia] = useState('')
+  const [composeDate, setComposeDate] = useState('')
+  const [submittingPost, setSubmittingPost] = useState(false)
+
+  // Fetch all live dashboard statistics and logs
   async function fetchDashboardData() {
     try {
       const accRes = await fetch('/api/automation/accounts')
@@ -43,6 +74,21 @@ export default function AutomationDashboardPage() {
       if (logRes.ok && logData.logs) {
         setAuditLogs(logData.logs)
       }
+
+      const wfRes = await fetch('/api/automation/workflows')
+      const wfData = await wfRes.json()
+      if (wfRes.ok && wfData.workflows) {
+        setWorkflows(wfData.workflows)
+      }
+
+      const qRes = await fetch('/api/automation/workflows/publish/queue')
+      const qData = await qRes.json().catch(() => ({}))
+      // Fallback load from standard path if sub-path requires resolution
+      const resolvedQueueRes = await fetch('/api/automation/workflows/publish/queue')
+      const resolvedQueueData = await resolvedQueueRes.json()
+      if (resolvedQueueRes.ok && resolvedQueueData.queue) {
+        setPublishingQueue(resolvedQueueData.queue)
+      }
     } catch (err) {
       console.error('Error fetching dashboard stats:', err)
     } finally {
@@ -52,36 +98,105 @@ export default function AutomationDashboardPage() {
 
   useEffect(() => {
     fetchDashboardData()
-    const interval = setInterval(fetchDashboardData, 6000)
+    const interval = setInterval(fetchDashboardData, 7000)
     return () => clearInterval(interval)
   }, [])
 
-  // Static overview stats
+  // Toggle workflow active status
+  async function handleToggleWorkflow(name: string, currentActive: boolean) {
+    const toastId = toast.loading(`${currentActive ? 'Disabling' : 'Enabling'} workflow...`)
+    try {
+      const res = await fetch('/api/automation/workflows/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, active: !currentActive })
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(`Workflow '${name}' updated successfully.`, { id: toastId })
+        fetchDashboardData()
+      } else {
+        throw new Error(data.error || 'Failed to toggle status.')
+      }
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId })
+    }
+  }
+
+  // Handle post composition scheduling
+  async function handleSchedulePost(e: React.FormEvent) {
+    e.preventDefault()
+    if (!composeAccount.trim() || !composeContent.trim() || !composeDate) {
+      toast.error('Account name, Content message, and Target Date are required.')
+      return
+    }
+
+    setSubmittingPost(true)
+    const toastId = toast.loading('Scheduling composed post...')
+    try {
+      const res = await fetch('/api/automation/workflows/publish/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: composePlatform,
+          account_name: composeAccount.trim(),
+          content: composeContent.trim(),
+          media_url: composeMedia.trim() || null,
+          scheduled_at: new Date(composeDate).toISOString()
+        })
+      })
+
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success('Campaign post scheduled successfully!', { id: toastId })
+        setComposeContent('')
+        setComposeMedia('')
+        setComposeDate('')
+        fetchDashboardData()
+      } else {
+        throw new Error(data.error || 'Failed to queue post.')
+      }
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId })
+    } finally {
+      setSubmittingPost(false)
+    }
+  }
+
+  // Trigger retry for failed outbox jobs
+  async function handleRetryJob(id: string) {
+    const toastId = toast.loading('Retrying failed publishing job...')
+    try {
+      const res = await fetch('/api/automation/workflows/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success('Job reset back to scheduled!', { id: toastId })
+        fetchDashboardData()
+      } else {
+        throw new Error(data.error || 'Failed to retry job.')
+      }
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId })
+    }
+  }
+
+  // Static stats
   const stats = [
     { label: 'Connected Channels', count: `${accounts.length}/4`, change: 'Facebook, Insta, WA active', color: 'bg-gradient-to-tr from-green-500/20 to-[#E3B859]/20 border border-green-500/30' },
-    { label: 'Publishing Queue', count: '14', change: '4 scheduled for today', color: 'bg-gradient-to-tr from-blue-500/20 to-purple-500/20 border border-blue-500/30' },
-    { label: 'Unresolved Inbound', count: '8', change: '3 IG DMs, 5 WhatsApp', color: 'bg-gradient-to-tr from-amber-500/20 to-red-500/20 border border-amber-500/30' },
-    { label: 'Failed Jobs / Retries', count: '1', change: 'Auto-retry active', color: 'bg-gradient-to-tr from-pink-500/20 to-red-950/20 border border-red-500/30' },
+    { label: 'Publishing Queue', count: `${publishingQueue.filter(q => q.status === 'scheduled').length}`, change: 'Scheduled outbox count', color: 'bg-gradient-to-tr from-blue-500/20 to-purple-500/20 border border-blue-500/30' },
+    { label: 'Unresolved Inbound', count: '8', change: 'IG DMs, WABA incoming', color: 'bg-gradient-to-tr from-amber-500/20 to-red-500/20 border border-amber-500/30' },
+    { label: 'Failed Jobs / Retries', count: `${publishingQueue.filter(q => q.status === 'failed').length}`, change: 'Failed posting retries', color: 'bg-gradient-to-tr from-pink-500/20 to-red-950/20 border border-red-500/30' },
   ]
 
-  // Mock queues & inbound streams representing Graph API events
-  const publishingQueue = [
-    { id: 'p1', title: 'Singapore Cafe Promo Post', platform: 'facebook', date: 'Jul 10 at 4:00 PM', status: 'scheduled' },
-    { id: 'p2', title: 'Growth Audit Mockup Offer', platform: 'instagram', date: 'Jul 12 at 10:30 AM', status: 'scheduled' },
-    { id: 'p3', title: 'Interactive Menu Launch', platform: 'whatsapp', date: 'Jul 14 at 9:00 AM', status: 'queued' }
-  ]
-
+  // Mock messages
   const inboxMessages = [
-    { id: 'm1', sender: 'Ashish Shah (Doctor)', text: 'Can I schedule a quick clinic demo?', platform: 'whatsapp', time: '5 mins ago', aiSuggested: 'Hi Dr. Ashish, yes! We have slots open at...' },
-    { id: 'm2', sender: '@dr_mumbai_health', text: 'Interested in the social marketing audit package.', platform: 'instagram', time: '18 mins ago', aiSuggested: 'Hello! I can compile a customized health audit...' },
-    { id: 'm3', sender: 'Jenny Lim', text: 'Where is your pricing model catalog?', platform: 'messenger', time: '1 hour ago', aiSuggested: 'Hi Jenny! Our plans start from $49/mo. View...' }
-  ]
-
-  const workflowRuns = [
-    { id: 'w1', name: 'Lead Intake Responder', trigger: 'Instagram DM Webhook', date: 'Just now', status: 'success', duration: '180ms' },
-    { id: 'w2', name: 'WhatsApp Appointment Sync', trigger: 'n8n Webhook Node', date: '22 mins ago', status: 'success', duration: '320ms' },
-    { id: 'w3', name: 'Master Posting scheduler', trigger: 'Cron Schedule (1h)', date: '1 hour ago', status: 'success', duration: '12ms' },
-    { id: 'w4', name: 'DMs Sentiment Classifier', trigger: 'Meta Graph Webhook', date: '3 hours ago', status: 'failed', duration: '94ms' }
+    { id: 'm1', sender: 'Ashish Shah (Doctor)', text: 'Can I schedule a quick clinic demo?', platform: 'whatsapp', time: '5 mins ago' },
+    { id: 'm2', sender: '@dr_mumbai_health', text: 'Interested in the social marketing audit package.', platform: 'instagram', time: '18 mins ago' },
+    { id: 'm3', sender: 'Jenny Lim', text: 'Where is your pricing model catalog?', platform: 'messenger', time: '1 hour ago' }
   ]
 
   return (
@@ -92,12 +207,6 @@ export default function AutomationDashboardPage() {
           <h1 className="text-3xl font-black tracking-tight">Social Automation Suite</h1>
           <p className="mt-1 text-sm text-gray-500 font-medium">Orchestrate cross-channel publishing, unified AI response engines, and visual content pipelines.</p>
         </div>
-        <Link 
-          href="/automation/publish" 
-          className="rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] text-[#141416] text-xs font-bold uppercase tracking-wider px-6 py-3 transition-colors shadow-md"
-        >
-          📝 Compose Post
-        </Link>
       </div>
 
       {/* Tabs */}
@@ -115,7 +224,7 @@ export default function AutomationDashboardPage() {
             className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
               activeTab === tab.key 
                 ? 'border-purple-500 text-white font-black' 
-                : 'border-transparent text-gray-550 hover:text-white'
+                : 'border-transparent text-gray-400 hover:text-white'
             }`}
           >
             {tab.label}
@@ -140,30 +249,40 @@ export default function AutomationDashboardPage() {
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
-            {/* Left Column: Quick Actions & Workflow logs */}
+            {/* Left Column: n8n workflow list */}
             <div className="md:col-span-2 space-y-6">
-              {/* n8n Workflow status */}
               <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4">
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2 flex items-center justify-between">
                   <span>🧠 Workflow Execution Pipeline</span>
                   <span className="text-[10px] bg-purple-950/40 text-purple-400 border border-purple-900/30 px-2 py-0.5 rounded font-black uppercase tracking-wider">n8n Connected</span>
                 </h3>
                 <div className="space-y-3">
-                  {workflowRuns.map(run => (
-                    <div key={run.id} className="p-3 bg-[#141416] border border-[#2D2D30]/60 rounded-xl flex justify-between items-center text-xs">
+                  {workflows.map(wf => (
+                    <div key={wf.name} className="p-4 bg-[#141416] border border-[#2D2D30]/60 rounded-xl flex justify-between items-center text-xs">
                       <div className="space-y-0.5">
-                        <span className="font-bold text-white block">{run.name}</span>
-                        <span className="text-[10px] text-gray-500 font-medium">Triggered by: {run.trigger} • {run.date}</span>
+                        <span className="font-bold text-white block text-sm">{wf.name}</span>
+                        <span className="text-[10px] text-gray-500 font-medium">
+                          Last run: {wf.last_run ? new Date(wf.last_run).toLocaleString() : 'Never'} • Duration: {wf.execution_time || 'N/A'}
+                        </span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-mono text-gray-500">{run.duration}</span>
                         <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
-                          run.status === 'success' 
+                          wf.status === 'success' 
                             ? 'bg-green-950/40 text-green-400 border border-green-900/30' 
                             : 'bg-red-950/40 text-red-400 border border-red-900/30'
                         }`}>
-                          {run.status}
+                          {wf.status}
                         </span>
+                        <button
+                          onClick={() => handleToggleWorkflow(wf.name, wf.active)}
+                          className={`px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider text-[10px] transition-colors ${
+                            wf.active 
+                              ? 'bg-purple-650 text-white hover:bg-purple-750' 
+                              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                          }`}
+                        >
+                          {wf.active ? 'Enabled' : 'Disabled'}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -176,24 +295,36 @@ export default function AutomationDashboardPage() {
                 <div className="grid gap-4 sm:grid-cols-3 text-xs text-gray-400 font-medium">
                   <div className="p-4 bg-[#141416] rounded-xl border border-[#2D2D30] text-center">
                     <span className="text-gray-500 text-[10px] font-bold uppercase tracking-wider block mb-1">Active Job Queue</span>
-                    <strong className="text-2xl font-black text-white">0</strong>
-                    <span className="text-[9px] text-green-400 block mt-1">Status: Idle</span>
+                    <strong className="text-2xl font-black text-white">
+                      {publishingQueue.filter(q => q.status === 'scheduled').length}
+                    </strong>
+                    <span className="text-[9px] text-green-400 block mt-1">Status: Running</span>
                   </div>
                   <div className="p-4 bg-[#141416] rounded-xl border border-[#2D2D30] text-center">
                     <span className="text-gray-500 text-[10px] font-bold uppercase tracking-wider block mb-1">Failed Queue</span>
-                    <strong className="text-2xl font-black text-red-400">1</strong>
-                    <span className="text-[9px] text-red-500 block mt-1">Failed to write post asset</span>
+                    <strong className="text-2xl font-black text-red-400">
+                      {publishingQueue.filter(q => q.status === 'failed').length}
+                    </strong>
+                    <span className="text-[9px] text-red-500 block mt-1">Failed publications</span>
                   </div>
-                  <div className="p-4 bg-[#141416] rounded-xl border border-[#2D2D30] text-center">
-                    <span className="text-gray-500 text-[10px] font-bold uppercase tracking-wider block mb-1">Retry Queue</span>
-                    <strong className="text-2xl font-black text-amber-400">1</strong>
-                    <span className="text-[9px] text-amber-500 block mt-1">Retrying in 12 mins</span>
+                  <div className="p-4 bg-[#141416] rounded-xl border border-[#2D2D30] text-center flex flex-col justify-between items-center">
+                    <span className="text-gray-500 text-[10px] font-bold uppercase tracking-wider block mb-1">Failed Retry</span>
+                    {publishingQueue.filter(q => q.status === 'failed').length > 0 ? (
+                      <button
+                        onClick={() => handleRetryJob(publishingQueue.find(q => q.status === 'failed')!.id)}
+                        className="px-3 py-1 rounded bg-amber-950/40 text-amber-400 border border-amber-900/30 font-bold uppercase tracking-wider text-[9px] mt-1 hover:bg-amber-900/30"
+                      >
+                        🔄 Retry Failures
+                      </button>
+                    ) : (
+                      <span className="text-[9px] text-gray-500 font-bold mt-2">No failures</span>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Right Column: Approvals list */}
+            {/* Right Column: Approvals */}
             <div className="space-y-6">
               <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4">
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2">⏳ Approvals Queue</h3>
@@ -237,7 +368,6 @@ export default function AutomationDashboardPage() {
           {accounts.length === 0 ? (
             <div className="text-center py-12 bg-[#18181A] border border-[#2D2D30] rounded-2xl">
               <p className="text-xs text-gray-500 font-semibold italic">No connected platform settings configured yet.</p>
-              <p className="text-[10px] text-gray-650 mt-1">Configure Facebook App secrets and access tokens securely in the Accounts page.</p>
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2">
@@ -284,12 +414,6 @@ export default function AutomationDashboardPage() {
                       </div>
                     </div>
                   )}
-
-                  {acc.last_tested_at && (
-                    <div className="text-[9px] text-gray-500 font-medium">
-                      Last Connection Verify Check: {new Date(acc.last_tested_at).toLocaleString()}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -302,13 +426,11 @@ export default function AutomationDashboardPage() {
         <div className="space-y-6 animate-fadeIn">
           <div className="flex justify-between items-center pb-2 border-b border-[#2D2D30]">
             <h3 className="text-md font-bold text-white">Unified Conversational Inbox</h3>
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Active Channels: IG Business DMs, FB Page Messages, WhatsApp Cloud API</span>
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
-            {/* List panel */}
             <div className="md:col-span-1 rounded-2xl border border-[#2D2D30] bg-[#18181A] p-4 space-y-3 h-fit">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Inbound Message Events</span>
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Inbound Messages</span>
               <div className="space-y-2.5">
                 {inboxMessages.map(msg => (
                   <div key={msg.id} className="p-3 bg-[#141416] border border-[#2D2D30]/60 rounded-xl space-y-1.5 cursor-pointer hover:border-gray-600 transition-colors text-xs">
@@ -325,7 +447,6 @@ export default function AutomationDashboardPage() {
               </div>
             </div>
 
-            {/* Response simulator */}
             <div className="md:col-span-2 rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 flex flex-col justify-between min-h-[400px]">
               <div className="space-y-4">
                 <div className="flex justify-between items-center border-b border-[#2D2D30] pb-3">
@@ -333,35 +454,29 @@ export default function AutomationDashboardPage() {
                     <h4 className="font-bold text-white">Ashish Shah (Doctor)</h4>
                     <span className="text-[9px] text-green-400">● Active on WhatsApp Cloud</span>
                   </div>
-                  <span className="text-xs text-gray-500 font-medium">Correlation ID: meta-waba-90281</span>
                 </div>
 
-                {/* Dialog thread */}
                 <div className="space-y-4 py-4 text-xs font-semibold">
                   <div className="flex gap-3 justify-end">
                     <div className="bg-purple-650/30 border border-purple-900/30 p-3 rounded-2xl max-w-[70%]">
-                      <p className="text-white font-medium">Hello Dr. Shah! We found your profile under 500 followers and wanted to check if you need patient automation setups.</p>
+                      <p className="text-white">Hello Dr. Shah! We found your profile under 500 followers and wanted to check if you need patient automation setups.</p>
                       <span className="text-[8px] text-purple-400 block mt-1 text-right">Outbound Agent • Sent</span>
                     </div>
                   </div>
                   <div className="flex gap-3 justify-start">
                     <div className="bg-[#141416] border border-[#2D2D30] p-3 rounded-2xl max-w-[70%]">
-                      <p className="text-gray-300 font-medium">Can I schedule a quick clinic demo?</p>
+                      <p className="text-gray-300">Can I schedule a quick clinic demo?</p>
                       <span className="text-[8px] text-gray-500 block mt-1">Inbound (WhatsApp) • 5 mins ago</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Action reply footer */}
               <div className="border-t border-[#2D2D30] pt-4 space-y-3">
-                <div className="p-3 bg-purple-950/20 border border-purple-900/30 rounded-xl text-[10px] text-purple-400 leading-relaxed font-semibold">
-                  🧠 AI Suggested Reply: &quot;Hi Dr. Ashish, yes! We have slots open today. Would 4 PM work?&quot;
-                </div>
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Type customized reply..."
+                    placeholder="Type reply..."
                     className="flex-1 rounded-xl bg-[#141416] border border-[#2D2D30] px-4 py-2.5 text-xs text-white focus:outline-none focus:border-gray-500"
                   />
                   <button className="bg-purple-650 hover:bg-purple-700 text-white font-bold uppercase tracking-wider text-xs px-5 py-2.5 rounded-xl transition-colors">
@@ -374,50 +489,121 @@ export default function AutomationDashboardPage() {
         </div>
       )}
 
-      {/* PUBLISHING QUEUE TAB */}
+      {/* PUBLISHING CALENDAR TAB */}
       {activeTab === 'publishing' && (
         <div className="space-y-6 animate-fadeIn">
           <div className="flex justify-between items-center pb-2 border-b border-[#2D2D30]">
-            <h3 className="text-md font-bold text-white">Platform Content Publishing Queue</h3>
-            <span className="text-xs text-gray-500 font-semibold">Queue size: 3 post assets scheduled</span>
+            <h3 className="text-md font-bold text-white">Platform Content Publishing Calendar</h3>
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
-            {/* Scheduled Queue list */}
-            <div className="md:col-span-2 rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2">📅 Outbound Posts Awaiting Dispatch</h3>
-              <div className="space-y-3.5">
-                {publishingQueue.map(post => (
-                  <div key={post.id} className="p-4 bg-[#141416] border border-[#2D2D30] rounded-xl flex justify-between items-center text-xs font-semibold">
-                    <div className="space-y-1">
-                      <span className="text-white font-bold block">{post.title}</span>
-                      <span className="text-[10px] text-gray-500 font-medium">Platform: {post.platform.toUpperCase()} • Dispatch Target: {post.date}</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-purple-950/40 text-purple-400 border border-purple-900/30">
-                      {post.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
+            {/* Form */}
+            <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4 h-fit">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2">📝 Compose Campaign Post</h3>
+              <form onSubmit={handleSchedulePost} className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Target Platform</label>
+                  <select
+                    value={composePlatform}
+                    onChange={(e) => setComposePlatform(e.target.value)}
+                    className="w-full bg-[#141416] border border-[#2D2D30] text-xs font-bold text-white px-3 py-2.5 rounded-xl focus:outline-none focus:border-gray-500 cursor-pointer"
+                  >
+                    <option value="facebook">Facebook Feed</option>
+                    <option value="instagram">Instagram business</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Account Connection Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={composeAccount}
+                    onChange={(e) => setComposeAccount(e.target.value)}
+                    placeholder="e.g. Singapore Clinic Page"
+                    className="w-full rounded-xl bg-[#141416] border border-[#2D2D30] px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Post Message</label>
+                  <textarea
+                    required
+                    rows={4}
+                    value={composeContent}
+                    onChange={(e) => setComposeContent(e.target.value)}
+                    placeholder="What would you like to post?"
+                    className="w-full rounded-xl bg-[#141416] border border-[#2D2D30] px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Media URL (Optional)</label>
+                  <input
+                    type="url"
+                    value={composeMedia}
+                    onChange={(e) => setComposeMedia(e.target.value)}
+                    placeholder="Image or video asset link"
+                    className="w-full rounded-xl bg-[#141416] border border-[#2D2D30] px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Publish Target Date</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={composeDate}
+                    onChange={(e) => setComposeDate(e.target.value)}
+                    className="w-full rounded-xl bg-[#141416] border border-[#2D2D30] px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submittingPost}
+                  className="w-full rounded-xl bg-purple-650 hover:bg-purple-755 disabled:opacity-40 text-xs font-bold uppercase tracking-wider text-white py-3.5 transition-colors"
+                >
+                  {submittingPost ? 'Scheduling...' : 'Schedule Post'}
+                </button>
+              </form>
             </div>
 
-            {/* Campaign Summary card */}
-            <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4 h-fit">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2">📊 Campaign Analytics</h3>
-              <div className="space-y-3 text-xs text-gray-400 font-medium">
-                <div className="flex justify-between">
-                  <span>Total Posts Sent</span>
-                  <span className="text-white font-bold">142</span>
+            {/* Outbound queue list */}
+            <div className="md:col-span-2 rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2">📅 Outbound Posts Awaiting Dispatch</h3>
+              {publishingQueue.length === 0 ? (
+                <p className="text-xs text-gray-500 italic py-4">No content scheduled in the queue.</p>
+              ) : (
+                <div className="space-y-3.5">
+                  {publishingQueue.map(post => (
+                    <div key={post.id} className="p-4 bg-[#141416] border border-[#2D2D30] rounded-xl flex justify-between items-center text-xs font-semibold">
+                      <div className="space-y-1">
+                        <span className="text-white font-bold block">{post.content}</span>
+                        <span className="text-[10px] text-gray-500 font-medium">
+                          Platform: {post.platform.toUpperCase()} • Account: {post.account_name} • Date: {new Date(post.scheduled_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                          post.status === 'published' ? 'bg-green-950/40 text-green-400 border border-green-900/30' :
+                          post.status === 'failed' ? 'bg-red-950/40 text-red-400 border border-red-900/30' : 'bg-blue-950/40 text-blue-400 border border-blue-900/30'
+                        }`}>
+                          {post.status}
+                        </span>
+                        {post.status === 'failed' && (
+                          <button
+                            onClick={() => handleRetryJob(post.id)}
+                            className="px-2 py-1 rounded bg-amber-950/40 border border-amber-900/30 text-amber-400 hover:bg-amber-900/30 text-[9px] font-bold uppercase tracking-wider"
+                          >
+                            Retry
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex justify-between">
-                  <span>Inbound Lead Conversion</span>
-                  <span className="text-white font-bold">18.4%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Meta Webhooks Dispatched</span>
-                  <span className="text-white font-bold">12,042</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -437,13 +623,9 @@ export default function AutomationDashboardPage() {
           </div>
 
           <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2 flex items-center justify-between">
-              <span>📋 Live DB-persisted Action logs</span>
-              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Entries loaded: {auditLogs.length}</span>
-            </h3>
-            
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2">📋 Live DB-persisted Action logs</h3>
             {auditLogs.length === 0 ? (
-              <p className="text-xs text-gray-500 italic py-4 text-center">No audit logs found. Try connecting a platform to write event traces.</p>
+              <p className="text-xs text-gray-500 italic py-4 text-center">No audit logs found.</p>
             ) : (
               <div className="divide-y divide-[#2D2D30]/60 space-y-3.5 max-h-[500px] overflow-y-auto pr-2">
                 {auditLogs.map((log) => (
@@ -457,7 +639,7 @@ export default function AutomationDashboardPage() {
                         <span className="text-[9px] text-gray-500 font-medium">{new Date(log.created_at).toLocaleString()}</span>
                       </div>
                       <p className="text-gray-400 font-medium leading-relaxed">{log.details}</p>
-                      <span className="text-[9px] text-gray-600 block mt-0.5">Executor ID: {log.user_identifier}</span>
+                      <span className="text-[9px] text-gray-650 block mt-0.5 font-bold uppercase tracking-wider">Executor: {log.user_identifier}</span>
                     </div>
                   </div>
                 ))}

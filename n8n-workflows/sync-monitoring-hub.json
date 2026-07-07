@@ -1,0 +1,171 @@
+{
+  "name": "Sync & Monitoring Hub",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": "interval",
+        "interval": 1,
+        "unit": "hours"
+      },
+      "id": "e4f8a1b2-3001-4000-8000-000000000001",
+      "name": "Interval Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.BACKEND_URL }}/api/automation/accounts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "={{ $env.API_SECRET }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e4f8a1b2-3002-4000-8000-000000000002",
+      "name": "Get Connections List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [280, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplit": "={{ $json.accounts }}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-3003-4000-8000-000000000003",
+      "name": "Loop Accounts List",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:3001/api/automation/accounts/{{ $json.id }}/test",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "={{ $env.API_SECRET }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e4f8a1b2-3004-4000-8000-000000000004",
+      "name": "Trigger Provider Health Verify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/v19.0/{{ $node[\"Loop Accounts List\"].json.id }}/insights?metric=page_impressions,page_engagements&access_token={{ $json.access_token }}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-3005-4000-8000-000000000005",
+      "name": "Pull Meta Insights Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [860, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/analytics/sync",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "={{ $env.API_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"account_id\": \"={{ $node[\"Loop Accounts List\"].json.id }}\",\n  \"metrics\": \"={{ $json.data }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-3006-4000-8000-000000000006",
+      "name": "Store Sync Analytics Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1060, 200]
+    }
+  ],
+  "connections": {
+    "Interval Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Connections List",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Connections List": {
+      "main": [
+        [
+          {
+            "node": "Loop Accounts List",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Accounts List": {
+      "main": [
+        [
+          {
+            "node": "Trigger Provider Health Verify",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Provider Health Verify": {
+      "main": [
+        [
+          {
+            "node": "Pull Meta Insights Analytics",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pull Meta Insights Analytics": {
+      "main": [
+        [
+          {
+            "node": "Store Sync Analytics Details",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Sync Analytics Details": {
+      "main": [
+        [
+          {
+            "node": "Loop Accounts List",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "e4f8a1b2-3000-4000-8000-000000000000"
+}

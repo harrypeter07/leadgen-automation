@@ -1,0 +1,267 @@
+{
+  "name": "Publishing Hub",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": "interval",
+        "interval": 5,
+        "unit": "minutes"
+      },
+      "id": "e4f8a1b2-2001-4000-8000-000000000001",
+      "name": "Poll Queue Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.BACKEND_URL }}/api/automation/publish/queue?status=scheduled",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "={{ $env.API_SECRET }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e4f8a1b2-2002-4000-8000-000000000002",
+      "name": "Get Scheduled Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [280, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplit": "={{ $json.queue }}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-2003-4000-8000-000000000003",
+      "name": "Loop Through Posts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/automation/accounts/credentials",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "={{ $env.API_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"platform\": \"={{ $json.platform }}\",\n  \"account_name\": \"={{ $json.account_name }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-2004-4000-8000-000000000004",
+      "name": "Get Account Credentials",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [640, 200]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.platform }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "facebook",
+              "output": 1
+            },
+            {
+              "value2": "instagram",
+              "output": 2
+            }
+          ]
+        },
+        "fallbackOutput": 1
+      },
+      "id": "e4f8a1b2-2005-4000-8000-000000000005",
+      "name": "Channel Router Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [840, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/{{ $node[\"Loop Through Posts\"].json.page_id }}/feed",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": \"={{ $node[\"Loop Through Posts\"].json.content }}\",\n  \"access_token\": \"={{ $json.access_token }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-2006-4000-8000-000000000006",
+      "name": "Post to Facebook feed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1040, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/{{ $node[\"Loop Through Posts\"].json.instagram_id }}/media",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"image_url\": \"={{ $node[\"Loop Through Posts\"].json.media_url }}\",\n  \"caption\": \"={{ $node[\"Loop Through Posts\"].json.content }}\",\n  \"access_token\": \"={{ $json.access_token }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-2007-4000-8000-000000000007",
+      "name": "Create Instagram container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1040, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/{{ $node[\"Loop Through Posts\"].json.instagram_id }}/media_publish",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"creation_id\": \"={{ $json.id }}\",\n  \"access_token\": \"={{ $node[\"Get Account Credentials\"].json.access_token }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-2008-4000-8000-000000000008",
+      "name": "Publish Instagram Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/automation/publish/queue/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "={{ $env.API_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"id\": \"={{ $node[\"Loop Through Posts\"].json.id }}\",\n  \"status\": \"published\",\n  \"published_id\": \"={{ $json.id || $json.id }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-2009-4000-8000-000000000009",
+      "name": "Update Status Completed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1460, 200]
+    }
+  ],
+  "connections": {
+    "Poll Queue Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Scheduled Posts",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scheduled Posts": {
+      "main": [
+        [
+          {
+            "node": "Loop Through Posts",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Through Posts": {
+      "main": [
+        [
+          {
+            "node": "Get Account Credentials",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Account Credentials": {
+      "main": [
+        [
+          {
+            "node": "Channel Router Switch",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Channel Router Switch": {
+      "main": [
+        [
+          {
+            "node": "Post to Facebook feed",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Instagram container",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Facebook feed": {
+      "main": [
+        [
+          {
+            "node": "Update Status Completed",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Instagram container": {
+      "main": [
+        [
+          {
+            "node": "Publish Instagram Post",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Instagram Post": {
+      "main": [
+        [
+          {
+            "node": "Update Status Completed",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status Completed": {
+      "main": [
+        [
+          {
+            "node": "Loop Through Posts",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "e4f8a1b2-2000-4000-8000-000000000000"
+}
