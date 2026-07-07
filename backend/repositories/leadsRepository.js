@@ -49,7 +49,9 @@ class LeadsRepository {
             review_count: cleanData.review_count || undefined,
             job_id: cleanData.job_id || undefined,
             enrichment_fields: cleanData.enrichment_fields || undefined,
-            notes: cleanData.notes || undefined
+            notes: cleanData.notes || undefined,
+            email: cleanData.email || undefined,
+            enrichment_status: cleanData.enrichment_status || undefined
           };
 
           const { data: updated, error: updateError } = await supabase
@@ -86,6 +88,22 @@ class LeadsRepository {
     return { ...data, _was_duplicate: false };
   }
 
+  async update(id, leadData) {
+    logger.debug(`[LeadsRepository] Updating lead ID: ${id}`);
+    const { data, error } = await supabase
+      .from('leads')
+      .update(leadData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      logger.error(`[LeadsRepository] update error: ${error.message}`);
+      throw error;
+    }
+    return data;
+  }
+
   async getById(id) {
     logger.debug(`[LeadsRepository] Fetching lead by ID: ${id}`);
     const { data, error } = await supabase
@@ -116,8 +134,8 @@ class LeadsRepository {
     return data || [];
   }
 
-  async getAll({ limit = 50, offset = 0, city, category, status, search, job_id } = {}) {
-    logger.debug(`[LeadsRepository] Fetching all leads (limit=${limit}, offset=${offset}, job_id=${job_id})`);
+  async getAll({ limit = 50, offset = 0, city, category, status, search, job_id, job_ids, has_email } = {}) {
+    logger.debug(`[LeadsRepository] Fetching all leads (limit=${limit}, offset=${offset}, job_id=${job_id || job_ids})`);
     let query = supabase
       .from('leads')
       .select('*', { count: 'exact' })
@@ -128,6 +146,18 @@ class LeadsRepository {
     if (category) query = query.eq('category', category);
     if (status) query = query.eq('status', status);
     if (job_id) query = query.eq('job_id', job_id);
+
+    if (job_ids) {
+      const ids = Array.isArray(job_ids) ? job_ids : job_ids.split(',').map(x => x.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        query = query.in('job_id', ids);
+      }
+    }
+
+    if (has_email === 'true' || has_email === true) {
+      query = query.not('email', 'is', null).neq('email', '');
+    }
+
     if (search) query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
 
     const { data, count, error } = await query;

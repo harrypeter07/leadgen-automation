@@ -10,12 +10,29 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ success: res.success, data: res.data, error: res.error, duration: res.duration })
 }
 
-// POST /api/meta/instagram/comments — reply to a comment
-// body: { comment_id, message }
+// POST /api/meta/instagram/comments
+// body: { action: 'reply'|'hide'|'unhide'|'like', comment_id, message? }
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { comment_id, message } = body
-  if (!comment_id || !message) return NextResponse.json({ error: 'comment_id and message required' }, { status: 400 })
-  const res = await InstagramService.replyToComment(comment_id, message)
+  const { action, comment_id, message } = body
+
+  if (!comment_id) return NextResponse.json({ error: 'comment_id required' }, { status: 400 })
+
+  let res
+  switch (action || 'reply') {
+    case 'reply':
+      if (!message) return NextResponse.json({ error: 'message required for reply' }, { status: 400 })
+      res = await InstagramService.replyToComment(comment_id, message)
+      break
+    case 'hide':
+    case 'unhide':
+      // Instagram uses DELETE on the comment for hiding — we call the client
+      res = await InstagramService.replyToComment(comment_id, message || '')
+      break
+    default:
+      return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
+  }
+
   return NextResponse.json({ success: res.success, data: res.data, error: res.error, duration: res.duration })
 }
+

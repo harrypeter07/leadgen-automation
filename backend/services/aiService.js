@@ -57,6 +57,50 @@ class AIService {
   }
 
   /**
+   * Extract key business details from raw website page text
+   * @param {string} pageText Visible text content of website homepage
+   * @param {string} businessName Name of the business
+   * @returns {Promise<{business_description: string|null, key_offerings: string[], contact_person: string|null, contact_position: string|null, scraped_email: string|null}>}
+   */
+  async extractBusinessDetails(pageText, businessName) {
+    const prompt = `
+      Analyze the following visible text from the website of "${businessName}" and extract key details for personalized sales outreach.
+      Return the output as a clean, valid JSON object containing exactly these fields:
+      1. "business_description": A professional 1-2 sentence description of what they do and who they serve. Keep it natural and objective.
+      2. "key_offerings": An array of up to 4 key products, services, or solutions they specialize in.
+      3. "contact_person": Name of a contact person, founder, owner, or executive if mentioned. Otherwise null.
+      4. "contact_position": Position/title of the contact person if found (e.g. Owner, Founder, CEO, Manager). Otherwise null.
+      5. "scraped_email": Any contact/sales email address visible in the text. Otherwise null.
+
+      Website visible text:
+      ${pageText.substring(0, 3500)}
+
+      JSON format expected:
+      {
+        "business_description": "string" or null,
+        "key_offerings": ["string"],
+        "contact_person": "string" or null,
+        "contact_position": "string" or null,
+        "scraped_email": "string" or null
+      }
+    `;
+
+    try {
+      const responseJsonText = await geminiClient.generateContent(prompt, true);
+      return JSON.parse(responseJsonText);
+    } catch (err) {
+      logger.warn({ error: err.message }, '[AI Service] Failed to parse business details from Gemini. Returning fallbacks.');
+      return {
+        business_description: null,
+        key_offerings: [],
+        contact_person: null,
+        contact_position: null,
+        scraped_email: null
+      };
+    }
+  }
+
+  /**
    * Synthesize raw scraper findings into structured observations, key insights, and objections
    * @param {string} scrapedContent Raw text extracted from profile, SEO data, or audit logs
    * @returns {Promise<{observations: Array<{type: string, content: string}>, insights: string[], objections: string[]}>}

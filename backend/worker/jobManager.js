@@ -115,12 +115,12 @@ class JobManager {
           }
           seenKeys.add(dedupeKey);
 
-          // Email Enrichment if enabled
+          // Email & AI Website Enrichment if enabled
           if (enrichEmails && lead.website) {
             const emailPage = await context.newPage().catch(() => null);
             if (emailPage) {
               try {
-                logger.info(`[JobManager] Scraping email for ${lead.name} from: ${lead.website}`);
+                logger.info(`[JobManager] Scraping & Enriching details for ${lead.name} from: ${lead.website}`);
                 // Enforce 30-second absolute timeout for email scraping
                 const scrapePromise = emailScraper.scrapeEmail(emailPage, lead.website);
                 const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 30000));
@@ -128,10 +128,31 @@ class JobManager {
                 const email = await Promise.race([scrapePromise, timeoutPromise]);
                 if (email) {
                   lead.email = email;
-                  logger.info(`[JobManager] ✅ Found email: ${email}`);
+                  logger.info(`[JobManager] ✅ Found email via regex: ${email}`);
+                }
+
+                // AI Enrichment
+                const pageText = await emailPage.evaluate(() => document.body ? document.body.innerText : '').catch(() => '');
+                if (pageText && pageText.trim().length > 100) {
+                  const aiService = require('../services/aiService');
+                  const details = await aiService.extractBusinessDetails(pageText, lead.name);
+                  
+                  lead.enrichment_fields = {
+                    business_description: details.business_description,
+                    key_offerings: details.key_offerings,
+                    contact_person: details.contact_person,
+                    contact_position: details.contact_position
+                  };
+                  lead.enrichment_status = 'completed';
+
+                  if (details.scraped_email && !lead.email) {
+                    lead.email = details.scraped_email;
+                    logger.info(`[JobManager] ✅ Found email via AI: ${details.scraped_email}`);
+                  }
                 }
               } catch (e) {
-                logger.warn(`[JobManager] Email enrichment failed for ${lead.website}: ${e.message}`);
+                logger.warn(`[JobManager] Website enrichment failed for ${lead.website}: ${e.message}`);
+                lead.enrichment_status = 'failed';
               } finally {
                 await emailPage.close().catch(() => {});
               }

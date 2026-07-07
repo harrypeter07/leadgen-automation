@@ -31,7 +31,7 @@ MAX_STALE      = 2     # consecutive no-new-results scrolls before stopping
 # CSV columns match Supabase schema
 CSV_HEADERS = [
     "name", "phone", "email", "address", "city",
-    "category", "website", "rating", "review_count", "source",
+    "category", "website", "rating", "review_count", "source", "notes",
 ]
 
 # ---------------------------------------------------------------------------
@@ -266,6 +266,22 @@ def scrape_lead(page, city: str) -> dict | None:
             break
         cat = None
     lead["category"] = clean_str(cat)
+
+    # --- editorial description ---
+    desc = None
+    for sel in [
+        "div.PYv55",
+        "span.PYv55",
+        "div.WErco",
+        ".PYv55",
+    ]:
+        desc = extract_field(
+            lambda s=sel: page.locator(s).first.inner_text(timeout=2000)
+        )
+        if desc and desc.strip():
+            break
+        desc = None
+    lead["notes"] = clean_str(desc)
 
     return lead
 

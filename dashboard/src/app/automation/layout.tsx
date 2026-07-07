@@ -103,6 +103,7 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
                 { name: 'Unified Inbox', href: '/automation/inbox', icon: '📥' },
                 { name: 'CRM Pipelines', href: '/automation/crm', icon: '💼' },
                 { name: 'Outreach Campaigns', href: '/automation/campaigns', icon: '📤' },
+                { name: 'Email Outreach', href: '/automation/email-outreach', icon: '📧' },
               ]},
               { label: 'Content Publishing', items: [
                 { name: 'Campaign Composer', href: '/automation/publish', icon: '📝' },

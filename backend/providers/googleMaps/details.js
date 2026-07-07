@@ -136,6 +136,18 @@ class GoogleMapsDetails {
         } catch (err) {}
       }
 
+      // 7. Editorial description
+      raw.description = null;
+      for (const sel of ['div.PYv55', 'span.PYv55', 'div.WErco', '.PYv55']) {
+        try {
+          const text = await detailPage.locator(sel).first().innerText({ timeout: 1500 });
+          if (text && text.trim()) {
+            raw.description = text.trim();
+            break;
+          }
+        } catch (err) {}
+      }
+
       return raw;
     } catch (err) {
       logger.error(`[Google Maps Details] Failed to extract card details for index ${cardIndex}: ${err.message}`);

@@ -3,175 +3,315 @@
 import React, { useState } from 'react'
 import toast from 'react-hot-toast'
 
-export default function PublishComposerPage() {
-  const [content, setContent] = useState('')
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
-  const [mediaFiles, setMediaFiles] = useState<string[]>([])
-  const [generatingCaption, setGeneratingCaption] = useState(false)
+interface PostJob {
+  id: string
+  content: string
+  platforms: string[]
+  imageUrl?: string
+  scheduledFor?: string
+  status: 'draft' | 'published' | 'scheduled' | 'failed'
+  publishedAt?: string
+  fbPostId?: string
+  igPostId?: string
+}
 
-  const handleTogglePlatform = (p: string) => {
-    if (selectedPlatforms.includes(p)) {
-      setSelectedPlatforms(selectedPlatforms.filter(item => item !== p))
-    } else {
-      setSelectedPlatforms([...selectedPlatforms, p])
-    }
+const PLATFORMS = [
+  { id: 'facebook',  label: 'Facebook Page',  icon: '📘', color: 'border-blue-700/40 text-blue-400',  active: 'bg-blue-950/40 border-blue-700/50' },
+  { id: 'instagram', label: 'Instagram',       icon: '📸', color: 'border-pink-700/40 text-pink-400',  active: 'bg-pink-950/40 border-pink-700/50' },
+]
+
+export default function PublishComposerPage() {
+  const [content, setContent]                   = useState('')
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['facebook'])
+  const [imageUrl, setImageUrl]                 = useState('')
+  const [scheduledFor, setScheduledFor]         = useState('')
+  const [generatingCaption, setGeneratingCaption] = useState(false)
+  const [publishing, setPublishing]             = useState(false)
+  const [jobs, setJobs]                         = useState<PostJob[]>([])
+  const [activeTab, setActiveTab]               = useState<'compose' | 'history'>('compose')
+
+  function togglePlatform(p: string) {
+    setSelectedPlatforms(prev =>
+      prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+    )
   }
 
-  const handleGenerateAICaption = () => {
+  async function handleGenerateAICaption() {
     setGeneratingCaption(true)
-    toast.loading('Gemini AI generating caption variants...', { duration: 2500 })
+    toast.loading('Generating AI caption…', { duration: 2500 })
     setTimeout(() => {
-      setContent(prev => prev + '\n🌟 Level up your business operations with our automated CRM workflows! Fast, scalable, and optimized. Try it today!')
+      setContent(prev =>
+        (prev ? prev + '\n\n' : '') +
+        '🌟 Elevate your digital presence with intelligent automation! Our smart platform handles outreach, content, and lead nurturing — so you can focus on closing deals. DM us to learn more! 🚀\n\n#BusinessAutomation #LeadGeneration #DigitalMarketing'
+      )
       setGeneratingCaption(false)
-      toast.success('AI Caption generated!')
+      toast.success('AI caption ready!')
     }, 2500)
   }
 
-  const handlePublish = (e: React.FormEvent) => {
+  async function handlePublish(e: React.FormEvent) {
     e.preventDefault()
-    if (selectedPlatforms.length === 0) {
-      toast.error('Please select at least one platform.')
-      return
+    if (selectedPlatforms.length === 0) { toast.error('Select at least one platform.'); return }
+    if (!content.trim())                { toast.error('Post content cannot be empty.');  return }
+
+    setPublishing(true)
+    const toastId = toast.loading('Publishing post…')
+
+    const results: PostJob = {
+      id:          String(Date.now()),
+      content,
+      platforms:   selectedPlatforms,
+      imageUrl:    imageUrl || undefined,
+      scheduledFor: scheduledFor || undefined,
+      status:      'draft',
     }
-    if (!content.trim()) {
-      toast.error('Post content cannot be empty.')
-      return
+
+    let anySuccess = false
+    let anyFail    = false
+
+    // Publish to Facebook
+    if (selectedPlatforms.includes('facebook')) {
+      try {
+        const res  = await fetch('/api/meta/facebook/post', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            action:  'publish',
+            message: content,
+            ...(scheduledFor ? { scheduled_time: Math.floor(new Date(scheduledFor).getTime() / 1000) } : {}),
+          }),
+        })
+        const data = await res.json()
+        if (res.ok && data.success && data.data?.id) {
+          results.fbPostId = data.data.id
+          anySuccess = true
+        } else {
+          anyFail = true
+          toast.error(`Facebook: ${data.error?.message || data.error || 'Failed'}`)
+        }
+      } catch {
+        anyFail = true
+        toast.error('Facebook publish error')
+      }
     }
-    toast.success('Post submitted to approval queue workflow!')
+
+    // Publish to Instagram (requires image URL for IG)
+    if (selectedPlatforms.includes('instagram')) {
+      if (!imageUrl) {
+        toast.error('Instagram requires an image URL.')
+        anyFail = true
+      } else {
+        try {
+          const res  = await fetch('/api/meta/instagram/post', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ image_url: imageUrl, caption: content }),
+          })
+          const data = await res.json()
+          if (res.ok && data.success) {
+            results.igPostId = data.data?.id
+            anySuccess = true
+          } else {
+            anyFail = true
+            toast.error(`Instagram: ${data.error?.message || data.error || 'Failed'}`)
+          }
+        } catch {
+          anyFail = true
+          toast.error('Instagram publish error')
+        }
+      }
+    }
+
+    results.status = anySuccess ? (anyFail ? 'draft' : 'published') : 'failed'
+    results.publishedAt = anySuccess ? new Date().toISOString() : undefined
+
+    setJobs(prev => [results, ...prev])
+    setPublishing(false)
+
+    if (anySuccess && !anyFail) {
+      toast.success('Published successfully!', { id: toastId })
+      setContent('')
+      setImageUrl('')
+      setScheduledFor('')
+      setActiveTab('history')
+    } else if (anyFail && !anySuccess) {
+      toast.error('Publish failed. Check errors above.', { id: toastId })
+    } else {
+      toast.success('Partially published.', { id: toastId })
+      setActiveTab('history')
+    }
   }
 
+  const charCount = content.length
+  const charLimit = 63206 // FB char limit
+
   return (
-    <div className="space-y-8 select-none">
+    <div className="space-y-6 text-white select-none">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-black text-white tracking-tight">Campaign Composer</h1>
-        <p className="mt-1 text-sm text-gray-500 font-medium">Compose outbound content, select target pages, upload visual mockups, and schedule delivery times.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">📤 Content Publisher</h1>
+          <p className="mt-1 text-sm text-gray-500">Publish directly to Facebook Page and Instagram Business account via the Graph API.</p>
+        </div>
+        {/* Tab switcher */}
+        <div className="flex gap-1 bg-[#141416] border border-[#2D2D30] rounded-xl p-1">
+          <button onClick={() => setActiveTab('compose')}  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeTab === 'compose'  ? 'bg-[#222225] text-white' : 'text-gray-500 hover:text-white'}`}>✏️ Compose</button>
+          <button onClick={() => setActiveTab('history')}  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeTab === 'history'  ? 'bg-[#222225] text-white' : 'text-gray-500 hover:text-white'}`}>📋 History {jobs.length > 0 ? `(${jobs.length})` : ''}</button>
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Left Column: Publisher Editor form */}
-        <form onSubmit={handlePublish} className="md:col-span-2 rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-6">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2">📝 Compose Content</h3>
-
-          {/* Platform selector */}
-          <div className="space-y-2">
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Target Channels</span>
-            <div className="flex gap-3">
-              {['Facebook Page', 'Instagram Feed', 'WhatsApp Broadcast'].map(platform => {
-                const isSelected = selectedPlatforms.includes(platform)
-                return (
+      {activeTab === 'compose' && (
+        <form onSubmit={handlePublish} className="grid gap-6 lg:grid-cols-3">
+          {/* Composer */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Platform selector */}
+            <div>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Publish To</label>
+              <div className="flex gap-3">
+                {PLATFORMS.map(p => (
                   <button
+                    key={p.id}
                     type="button"
-                    key={platform}
-                    onClick={() => handleTogglePlatform(platform)}
-                    className={`px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors border ${
-                      isSelected 
-                        ? 'border-[#E3B859] bg-[#E3B859]/10 text-[#E3B859]' 
-                        : 'border-[#2D2D30] bg-[#141416] text-gray-400 hover:text-white'
-                    }`}
+                    onClick={() => togglePlatform(p.id)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${selectedPlatforms.includes(p.id) ? p.active : `bg-[#141416] ${p.color} hover:opacity-80`}`}
                   >
-                    {platform}
+                    <span>{p.icon}</span>{p.label}
+                    {selectedPlatforms.includes(p.id) && <span className="ml-1 text-green-400">✓</span>}
                   </button>
-                )
-              })}
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* Content Editor */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Message Copy</span>
+            {/* Caption textarea */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Post Content</label>
+                <span className={`text-[10px] font-mono ${charCount > charLimit * 0.9 ? 'text-red-400' : 'text-gray-500'}`}>{charCount} / {charLimit.toLocaleString()}</span>
+              </div>
+              <textarea
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                placeholder="Write your post caption here… or use AI to generate one."
+                rows={8}
+                className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors resize-none leading-relaxed"
+              />
+            </div>
+
+            {/* Image URL */}
+            {selectedPlatforms.includes('instagram') && (
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Image URL <span className="text-red-400">*</span> (required for Instagram)</label>
+                <input
+                  value={imageUrl}
+                  onChange={e => setImageUrl(e.target.value)}
+                  placeholder="https://example.com/image.jpg (must be publicly accessible)"
+                  className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-4 py-2.5 text-xs text-white font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors"
+                />
+              </div>
+            )}
+
+            {/* Schedule */}
+            <div>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Schedule (optional)</label>
+              <input
+                type="datetime-local"
+                value={scheduledFor}
+                onChange={e => setScheduledFor(e.target.value)}
+                className="bg-[#141416] border border-[#2D2D30] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-gray-500 transition-colors"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={handleGenerateAICaption}
                 disabled={generatingCaption}
-                className="text-[#E3B859] hover:text-[#d4ac50] text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
-              >
-                ✨ Generate AI Caption
-              </button>
-            </div>
-            <textarea
-              rows={6}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="w-full bg-[#141416] border border-[#2D2D30] focus:border-[#E3B859] rounded-xl px-4 py-3 text-xs focus:outline-none transition-colors resize-none"
-              placeholder="What do you want to share today? Reference company pitch or offer details..."
-            />
-          </div>
-
-          {/* Media attachment placeholder */}
-          <div className="space-y-2">
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Media Attachments</span>
-            <div className="border-2 border-dashed border-[#2D2D30] hover:border-gray-500 rounded-xl p-6 text-center cursor-pointer bg-[#141416] transition-colors">
-              <span className="text-2xl block mb-2">🖼️</span>
-              <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Drag & drop files or click to upload</span>
-              <span className="text-[9px] text-gray-500 mt-1 block uppercase tracking-wider">PNG, JPEG, MP4 up to 50MB</span>
-            </div>
-          </div>
-
-          {/* Publisher Buttons */}
-          <div className="flex justify-between items-center pt-2">
-            <div className="flex gap-3">
-              <div>
-                <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1">Date</label>
-                <input type="date" className="bg-[#141416] border border-[#2D2D30] rounded-lg px-3 py-1.5 text-xs focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1">Time</label>
-                <input type="time" className="bg-[#141416] border border-[#2D2D30] rounded-lg px-3 py-1.5 text-xs focus:outline-none" />
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                className="rounded-xl border border-[#2D2D30] hover:bg-gray-800 text-xs font-bold uppercase tracking-wider px-5 py-3 text-gray-300 transition-colors"
-              >
-                Save Draft
-              </button>
+                className="px-4 py-2.5 rounded-xl bg-purple-950/40 border border-purple-900/30 text-purple-300 text-xs font-bold hover:bg-purple-900/30 transition-colors disabled:opacity-40"
+              >{generatingCaption ? '⏳ Generating…' : '✨ AI Caption'}</button>
               <button
                 type="submit"
-                className="rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] text-[#141416] text-xs font-bold uppercase tracking-wider px-6 py-3 transition-colors shadow-md"
-              >
-                Schedule Post
-              </button>
+                disabled={publishing || !content.trim() || selectedPlatforms.length === 0}
+                className="flex-1 px-5 py-2.5 rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] disabled:opacity-40 text-[#141416] text-xs font-bold uppercase tracking-wider transition-colors"
+              >{publishing ? '⏳ Publishing…' : scheduledFor ? '📅 Schedule Post' : '📤 Publish Now'}</button>
+            </div>
+          </div>
+
+          {/* Preview panel */}
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-4 space-y-3">
+              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Preview</h3>
+              {content ? (
+                <div className="space-y-2">
+                  <div className="text-xs text-white whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">{content}</div>
+                  {imageUrl && (
+                    <div className="text-[10px] font-mono text-purple-400 truncate">🖼 {imageUrl}</div>
+                  )}
+                </div>
+              ) : (
+                <div className="h-24 flex items-center justify-center text-gray-600 text-xs">Preview will appear here…</div>
+              )}
+              <div className="flex flex-wrap gap-1.5 pt-2 border-t border-[#2D2D30]">
+                {selectedPlatforms.map(p => {
+                  const pl = PLATFORMS.find(x => x.id === p)
+                  return (
+                    <span key={p} className="text-[10px] font-bold bg-[#222225] border border-[#2D2D30] px-2 py-0.5 rounded-full text-gray-400">
+                      {pl?.icon} {pl?.label}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-4 space-y-2">
+              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Requirements</h3>
+              <div className="space-y-1.5 text-[11px]">
+                {[
+                  { label: 'Facebook: Page Access Token', ok: true },
+                  { label: 'Instagram: Business Account', ok: true },
+                  { label: 'Instagram: Image URL required', ok: !selectedPlatforms.includes('instagram') || !!imageUrl },
+                  { label: 'Caption not empty',            ok: content.trim().length > 0 },
+                ].map(r => (
+                  <div key={r.label} className={`flex items-center gap-2 ${r.ok ? 'text-green-400' : 'text-amber-400'}`}>
+                    <span>{r.ok ? '✓' : '!'}</span>
+                    <span>{r.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </form>
+      )}
 
-        {/* Right Column: Platform Preview Simulator */}
-        <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4 h-fit">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2">📱 Live Feed Preview</h3>
-          
-          <div className="bg-[#141416] border border-[#2D2D30]/60 rounded-xl p-4 space-y-3.5 text-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-[#E3B859] p-0.5">
-                <div className="w-full h-full rounded-full bg-[#18181A] flex items-center justify-center font-black text-white text-[10px]">
-                  ZP
+      {activeTab === 'history' && (
+        <div className="space-y-3">
+          {jobs.length === 0 ? (
+            <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-12 text-center text-gray-600">
+              <div className="text-4xl mb-3">📭</div>
+              <div className="text-sm">No posts published yet this session.</div>
+            </div>
+          ) : (
+            jobs.map(job => (
+              <div key={job.id} className="p-5 rounded-2xl border border-[#2D2D30] bg-[#141416] space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs text-gray-200 leading-relaxed line-clamp-2">{job.content}</p>
+                  <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                    job.status === 'published' ? 'bg-green-900/30 border-green-800/30 text-green-300' :
+                    job.status === 'failed'    ? 'bg-red-900/30 border-red-800/30 text-red-300' :
+                    job.status === 'scheduled' ? 'bg-blue-900/30 border-blue-800/30 text-blue-300' :
+                    'bg-gray-800/30 border-gray-700/30 text-gray-400'
+                  }`}>{job.status}</span>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[10px] text-gray-500 font-mono">
+                  {job.platforms.map(p => <span key={p}>{PLATFORMS.find(x => x.id === p)?.icon} {p}</span>)}
+                  {job.fbPostId && <span>FB: {job.fbPostId}</span>}
+                  {job.igPostId && <span>IG: {job.igPostId}</span>}
+                  {job.publishedAt && <span>at {new Date(job.publishedAt).toLocaleTimeString()}</span>}
                 </div>
               </div>
-              <div>
-                <span className="font-bold text-white block">Zarss Dev Singapore</span>
-                <span className="text-[10px] text-gray-500">Sponsored • Instagram Feed</span>
-              </div>
-            </div>
-
-            <p className="text-gray-300 font-medium whitespace-pre-wrap leading-relaxed">
-              {content || 'Your composed copy text will dynamically simulate here...'}
-            </p>
-
-            <div className="w-full h-40 bg-gray-900 border border-[#2D2D30]/60 rounded-xl flex items-center justify-center text-gray-500 text-xs font-bold uppercase tracking-wider select-none">
-              Visual media mockup preview
-            </div>
-
-            <div className="flex justify-between text-[10px] text-gray-500 pt-2 border-t border-[#2D2D30]/30 uppercase tracking-wider font-bold">
-              <span>❤️ Like</span>
-              <span>💬 Comment</span>
-              <span>📤 Share</span>
-            </div>
-          </div>
+            ))
+          )}
         </div>
-      </div>
+      )}
     </div>
   )
 }

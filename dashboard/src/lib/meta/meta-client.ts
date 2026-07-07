@@ -32,6 +32,14 @@ async function metaFetch<T>(
   endpoint: string,
   options: RequestInit & MetaClientOptions = {}
 ): Promise<MetaApiResponse<T>> {
+  // Dynamically import/call ensureMetaConfig to avoid circular dependencies
+  try {
+    const { ensureMetaConfig } = require('./runtime-config')
+    await ensureMetaConfig()
+  } catch (err) {
+    console.warn('[MetaClient] Failed to execute ensureMetaConfig:', err)
+  }
+
   const start = Date.now()
   const requestId = generateRequestId()
   const token = options.accessToken || getDefaultToken()

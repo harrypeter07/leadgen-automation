@@ -31,4 +31,88 @@ router.get('/settings', (req, res, next) => outreachController.getSettings(req, 
 // 9. Update system outreach and ICP settings
 router.post('/settings', (req, res, next) => outreachController.updateSettings(req, res, next));
 
+// 10. Trigger n8n email outreach generation webhook
+router.post('/email/generate', async (req, res, next) => {
+  const { leadIds } = req.body || {};
+  if (!leadIds || !Array.isArray(leadIds)) {
+    return res.status(400).json({ error: 'leadIds must be an array of UUIDs.' });
+  }
+
+  const n8nWebhookBaseUrl = process.env.N8N_WEBHOOK_BASE_URL || 'http://localhost:5678';
+  const targetUrl = `${n8nWebhookBaseUrl.replace(/\/+$/, '')}/webhook/email-outreach/generate`;
+
+  const axios = require('axios');
+  const logger = require('../worker/logger');
+  logger.info({ leadIds, targetUrl }, '[Outreach API] Triggering n8n AI email generation...');
+
+  try {
+    const response = await axios.post(targetUrl, { leadIds }, { timeout: 45000 });
+    res.json({ success: true, data: response.data });
+  } catch (err) {
+    logger.error(`[Outreach API] Generate failed: ${err.message}`);
+    res.status(500).json({ error: `n8n webhook execution failed: ${err.message}` });
+  }
+});
+
+// 11. Trigger n8n email outreach send webhook
+router.post('/email/send', async (req, res, next) => {
+  const { leadIds } = req.body || {};
+  if (!leadIds || !Array.isArray(leadIds)) {
+    return res.status(400).json({ error: 'leadIds must be an array of UUIDs.' });
+  }
+
+  const n8nWebhookBaseUrl = process.env.N8N_WEBHOOK_BASE_URL || 'http://localhost:5678';
+  const targetUrl = `${n8nWebhookBaseUrl.replace(/\/+$/, '')}/webhook/email-outreach/send`;
+
+  const axios = require('axios');
+  const logger = require('../worker/logger');
+  logger.info({ leadIds, targetUrl }, '[Outreach API] Triggering n8n email dispatch...');
+
+  try {
+    const response = await axios.post(targetUrl, { leadIds }, { timeout: 45000 });
+    res.json({ success: true, data: response.data });
+  } catch (err) {
+    logger.error(`[Outreach API] Send failed: ${err.message}`);
+    res.status(500).json({ error: `n8n webhook execution failed: ${err.message}` });
+  }
+});
+
+// 12. Send a single outreach email using unified EmailService (utilized by n8n or direct actions)
+router.post('/email/send-single', async (req, res, next) => {
+  const { to, subject, body } = req.body || {};
+  if (!to || !subject || !body) {
+    return res.status(400).json({ error: 'to, subject, and body are required.' });
+  }
+
+  const allowedTestEmails = [
+    'hassanmansuri570@gmail.com',
+    'hmansuri882@gmail.com',
+    'mansurihh@rknec.edu',
+    'hassanmansuri379@gmail.com'
+  ];
+
+  let recipient = to;
+  const logger = require('../worker/logger');
+  
+  if (!allowedTestEmails.map(e => e.toLowerCase()).includes(to.toLowerCase())) {
+    recipient = allowedTestEmails[Math.floor(Math.random() * allowedTestEmails.length)];
+    logger.info(`[Outreach API] Redirecting outreach recipient from ${to} to test sandbox email ${recipient}`);
+  }
+
+  const emailService = require('../services/emailService');
+  logger.info({ to: recipient, subject }, '[Outreach API] Sending email via unified service...');
+
+  try {
+    const result = await emailService.sendEmail({
+      to: recipient,
+      subject,
+      html: body
+    });
+    res.json(result);
+  } catch (err) {
+    logger.error(`[Outreach API] Send email failed: ${err.message}`);
+    res.status(500).json({ error: `Failed to send email: ${err.message}` });
+  }
+});
+
 module.exports = router;

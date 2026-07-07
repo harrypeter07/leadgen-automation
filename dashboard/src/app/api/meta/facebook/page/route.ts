@@ -1,110 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { FacebookService } from '@/lib/meta/facebook-service'
 
-const GRAPH_BASE = 'https://graph.facebook.com'
-const API_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
-
-function getPageToken() {
-  return process.env.META_PAGE_ACCESS_TOKEN || ''
-}
-function getPageId() {
-  return process.env.META_PAGE_ID || ''
-}
-
-// GET /api/meta/facebook/page — Fetch page info
+// GET /api/meta/facebook/page — Fetch page info using service layer (auto-logging + retries)
 export async function GET(req: NextRequest) {
-  const pageToken = getPageToken()
-  const pageId = getPageId()
   const action = req.nextUrl.searchParams.get('action') || 'info'
-
-  if (!pageToken || !pageId) {
-    return NextResponse.json({ error: 'META_PAGE_ACCESS_TOKEN and META_PAGE_ID not configured.' }, { status: 400 })
-  }
+  let res
 
   try {
-    let url = ''
     switch (action) {
       case 'info':
-        url = `${GRAPH_BASE}/${API_VERSION}/${pageId}?fields=id,name,fan_count,link,category,about,website,phone,picture&access_token=${pageToken}`
+        res = await FacebookService.getPage()
         break
-      case 'posts':
-        url = `${GRAPH_BASE}/${API_VERSION}/${pageId}/posts?fields=id,message,created_time,permalink_url,attachments&limit=20&access_token=${pageToken}`
+      case 'posts': {
+        const limit = parseInt(req.nextUrl.searchParams.get('limit') || '20')
+        res = await FacebookService.getPosts(limit)
         break
+      }
       case 'insights':
-        url = `${GRAPH_BASE}/${API_VERSION}/${pageId}/insights?metric=page_impressions,page_engagements,page_fans&period=day&access_token=${pageToken}`
+        res = await FacebookService.getInsights()
         break
       case 'comments': {
         const postId = req.nextUrl.searchParams.get('post_id') || ''
+        const limit = parseInt(req.nextUrl.searchParams.get('limit') || '25')
         if (!postId) return NextResponse.json({ error: 'post_id required' }, { status: 400 })
-        url = `${GRAPH_BASE}/${API_VERSION}/${postId}/comments?fields=id,message,from,created_time&access_token=${pageToken}`
+        res = await FacebookService.getComments(postId, limit)
         break
       }
       default:
         return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
     }
 
-    const res = await fetch(url)
-    const data = await res.json()
-    return NextResponse.json({ success: !data.error, data })
+    return NextResponse.json({ success: res.success, data: res.data, error: res.error, duration: res.duration })
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 500 })
   }
 }
 
-// POST /api/meta/facebook/page — Publish / comment / reply actions
+// POST /api/meta/facebook/page — Publish / comment / reply actions using service layer
 export async function POST(req: NextRequest) {
-  const pageToken = getPageToken()
-  const pageId = getPageId()
   const action = req.nextUrl.searchParams.get('action') || 'post'
-
-  if (!pageToken || !pageId) {
-    return NextResponse.json({ error: 'META_PAGE_ACCESS_TOKEN and META_PAGE_ID not configured.' }, { status: 400 })
-  }
 
   try {
     const body = await req.json()
-    let url = ''
-    let payload: Record<string, unknown> = {}
+    let res
 
     switch (action) {
       case 'post':
-        url = `${GRAPH_BASE}/${API_VERSION}/${pageId}/feed`
-        payload = { message: body.message, link: body.link, access_token: pageToken }
+        res = await FacebookService.publishPost(body.message, body.link, body.scheduled_time)
         break
-      case 'delete': {
-        const postId = body.post_id
-        if (!postId) return NextResponse.json({ error: 'post_id required' }, { status: 400 })
-        const res = await fetch(`${GRAPH_BASE}/${API_VERSION}/${postId}?access_token=${pageToken}`, { method: 'DELETE' })
-        const data = await res.json()
-        return NextResponse.json({ success: !data.error, data })
-      }
+      case 'delete':
+        if (!body.post_id) return NextResponse.json({ error: 'post_id required' }, { status: 400 })
+        res = await FacebookService.deletePost(body.post_id)
+        break
       case 'reply_comment':
-        url = `${GRAPH_BASE}/${API_VERSION}/${body.comment_id}/comments`
-        payload = { message: body.message, access_token: pageToken }
-        break
-      case 'like_comment':
-        url = `${GRAPH_BASE}/${API_VERSION}/${body.comment_id}/likes`
-        payload = { access_token: pageToken }
+        if (!body.comment_id || !body.message) return NextResponse.json({ error: 'comment_id and message required' }, { status: 400 })
+        res = await FacebookService.replyToComment(body.comment_id, body.message)
         break
       case 'hide_comment':
-        url = `${GRAPH_BASE}/${API_VERSION}/${body.comment_id}`
-        payload = { is_hidden: true, access_token: pageToken }
+        if (!body.comment_id) return NextResponse.json({ error: 'comment_id required' }, { status: 400 })
+        res = await FacebookService.hideComment(body.comment_id, true)
         break
-      case 'delete_comment': {
-        const res = await fetch(`${GRAPH_BASE}/${API_VERSION}/${body.comment_id}?access_token=${pageToken}`, { method: 'DELETE' })
-        const data = await res.json()
-        return NextResponse.json({ success: !data.error, data })
-      }
+      case 'unhide_comment':
+        if (!body.comment_id) return NextResponse.json({ error: 'comment_id required' }, { status: 400 })
+        res = await FacebookService.hideComment(body.comment_id, false)
+        break
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
     }
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    const data = await res.json()
-    return NextResponse.json({ success: !data.error, data })
+    return NextResponse.json({ success: res.success, data: res.data, error: res.error, duration: res.duration })
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 500 })
   }

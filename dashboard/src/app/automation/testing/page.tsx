@@ -58,6 +58,8 @@ const TEST_SUITES = [
     icon: '📤',
     tests: [
       { id: 'post_instagram',   label: 'Test IG Post Container', desc: 'Creates test IG media container (no publish).' },
+      { id: 'fb_publish_test',  label: 'Test FB Publish',        desc: 'Publishes a test post and immediately deletes it.' },
+      { id: 'fb_comments',      label: 'Test FB Comments',       desc: 'Reads comments on the most recent post.' },
     ]
   },
   {
@@ -66,6 +68,13 @@ const TEST_SUITES = [
     tests: [
       { id: 'webhook',   label: 'Test Webhook Verify',  desc: 'Fires challenge verification handshake.' },
       { id: 'graph_api', label: 'Test Graph API',       desc: 'Raw /me ping via Graph API v23.0.' },
+    ]
+  },
+  {
+    group: 'Infrastructure',
+    icon: '⚙️',
+    tests: [
+      { id: 'n8n_health', label: 'Test n8n Connection', desc: 'Checks if n8n workflow engine is reachable.' },
     ]
   },
 ]
@@ -87,6 +96,9 @@ function buildEndpointLabel(target: string): string {
     dm_instagram: '/api/meta/instagram/messages?limit=5',
     ig_insights: '/api/meta/instagram/insights',
     post_instagram: '/api/meta/test → post_instagram',
+    fb_publish_test: '/api/meta/facebook/post → publish + delete',
+    fb_comments: '/api/meta/facebook/comments?post_id=latest',
+    n8n_health: '/api/health/n8n',
     webhook: '/api/meta/webhook → challenge',
     graph_api: '/api/meta/test → graph_api',
   }
@@ -125,6 +137,7 @@ async function runTest(target: string): Promise<TestResult> {
     messenger_inbox:{ method: 'GET', url: '/api/meta/facebook/messages?limit=5' },
     oauth:          { method: 'GET', url: '/api/meta/oauth?action=validate' },
     permissions:    { method: 'GET', url: '/api/meta/permissions' },
+    n8n_health:     { method: 'GET', url: '/api/health/n8n' },
   }
 
   let httpCode = 0
@@ -137,7 +150,48 @@ async function runTest(target: string): Promise<TestResult> {
     let res: Response
     let data: Record<string, unknown> = {}
 
-    if (route) {
+    // ── Facebook publish+delete test (special flow) ───────────────────────
+    if (target === 'fb_publish_test') {
+      logs.push('→ POST /api/meta/facebook/post (action: publish)')
+      const pubRes = await fetch('/api/meta/facebook/post', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'publish', message: `[FlowFyp Test] Auto-delete in progress — ${new Date().toISOString()}` }),
+      })
+      const pubData = await pubRes.json().catch(() => ({}))
+      httpCode = pubRes.status
+      graphResponse = pubData
+      logs.push(`← HTTP ${httpCode} — post_id: ${pubData?.data?.id || 'none'}`)
+
+      if (pubData?.data?.id) {
+        logs.push('→ DELETE /api/meta/facebook/post (auto-cleanup)')
+        const delRes = await fetch('/api/meta/facebook/post', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', post_id: pubData.data.id }),
+        })
+        const delData = await delRes.json().catch(() => ({}))
+        logs.push(`← DELETE HTTP ${delRes.status} — ${JSON.stringify(delData?.data || delData?.error || '')}`)
+        graphResponse = { ...pubData, deleted: delData }
+      }
+    // ── Facebook comments test (load first post, then read comments) ────────
+    } else if (target === 'fb_comments') {
+      logs.push('→ GET /api/meta/facebook/post?limit=1')
+      const postsRes = await fetch('/api/meta/facebook/post?limit=1')
+      const postsData = await postsRes.json().catch(() => ({}))
+      const firstPost = (postsData?.data as Array<{ id: string }> | undefined)?.[0]
+      if (!firstPost?.id) {
+        errorMessage = 'No posts found to read comments from.'
+        graphResponse = postsData as Record<string, unknown>
+        httpCode = 200
+      } else {
+        logs.push(`→ GET /api/meta/facebook/comments?post_id=${firstPost.id}`)
+        const commRes = await fetch(`/api/meta/facebook/comments?post_id=${firstPost.id}`)
+        const commData = await commRes.json().catch(() => ({}))
+        httpCode = commRes.status
+        graphResponse = commData as Record<string, unknown>
+        logs.push(`← HTTP ${httpCode} — ${JSON.stringify(commData).slice(0, 100)}`)
+        if (commData?.error) errorMessage = JSON.stringify(commData.error)
+      }
+    } else if (route) {
       res = await fetch(route.url, {
         method: route.method,
         ...(route.body ? { body: JSON.stringify(route.body), headers: { 'Content-Type': 'application/json' } } : {}),
@@ -196,6 +250,7 @@ export default function TestingPage() {
   const [running, setRunning] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [runningAll, setRunningAll] = useState(false)
+  const [progress, setProgress] = useState(0)
 
   const execute = useCallback(async (target: string) => {
     if (running || runningAll) return
@@ -212,16 +267,20 @@ export default function TestingPage() {
   const runAll = useCallback(async () => {
     if (running || runningAll) return
     setRunningAll(true)
-    for (const t of ALL_TESTS) {
+    setProgress(0)
+    for (let i = 0; i < ALL_TESTS.length; i++) {
+      const t = ALL_TESTS[i]
       setRunning(t.id)
+      setSelected(t.id)
       setResults(prev => ({ ...prev, [t.id]: { target: t.id, label: t.label, status: 'pending' } }))
       const result = await runTest(t.id)
       setResults(prev => ({ ...prev, [t.id]: result }))
-      await new Promise(r => setTimeout(r, 200))
+      setProgress(Math.round(((i + 1) / ALL_TESTS.length) * 100))
+      await new Promise(r => setTimeout(r, 300))
     }
     setRunning(null)
     setRunningAll(false)
-    toast.success('All tests completed')
+    toast.success('All tests completed!')
   }, [running, runningAll])
 
   const selectedResult = selected ? results[selected] : null
@@ -254,7 +313,7 @@ export default function TestingPage() {
               disabled={!!running || runningAll}
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-semibold hover:opacity-90 disabled:opacity-40 transition-all"
             >
-              {runningAll ? '⏳ Running All…' : '▶ Run All Tests'}
+              {runningAll ? `⏳ Running… ${progress}%` : '▶ Run All Tests'}
             </button>
           </div>
         </div>

@@ -5,6 +5,13 @@ const API_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
 
 // GET /api/meta/permissions — Lists all Graph API permissions granted to the page token
 export async function GET(_req: NextRequest) {
+  try {
+    const { ensureMetaConfig } = require('@/lib/meta/runtime-config')
+    await ensureMetaConfig()
+  } catch (err) {
+    console.warn('[permissions] Failed to execute ensureMetaConfig:', err)
+  }
+
   const pageToken = process.env.META_PAGE_ACCESS_TOKEN || ''
   const appId     = process.env.META_APP_ID || ''
   const appSecret = process.env.META_APP_SECRET || ''
