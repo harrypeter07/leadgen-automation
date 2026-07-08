@@ -21,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: { path: strin
     console.warn('[Backend-V3 Proxy] Failed to load backend URL fallback from DB:', err.message)
   }
 
-  const backendUrl = process.env.V3_BACKEND_URL || dbBackendUrl || process.env.WHATSAPP_SERVICE_URL || 'https://scraper-auto.up.railway.app'
+  const backendUrl = process.env.V3_BACKEND_URL || dbBackendUrl || process.env.WHATSAPP_SERVICE_URL || 'https://leadgen-automation-production-12c6.up.railway.app'
   if (!backendUrl) {
     return NextResponse.json({ error: 'V3_BACKEND_URL not configured' }, { status: 500 })
   }
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: { path: string
     console.warn('[Backend-V3 Proxy] Failed to load backend URL fallback from DB:', err.message)
   }
 
-  const backendUrl = process.env.V3_BACKEND_URL || dbBackendUrl || process.env.WHATSAPP_SERVICE_URL || 'https://scraper-auto.up.railway.app'
+  const backendUrl = process.env.V3_BACKEND_URL || dbBackendUrl || process.env.WHATSAPP_SERVICE_URL || 'https://leadgen-automation-production-12c6.up.railway.app'
   if (!backendUrl) {
     return NextResponse.json({ error: 'V3_BACKEND_URL not configured' }, { status: 500 })
   }

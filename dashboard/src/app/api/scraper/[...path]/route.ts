@@ -57,7 +57,7 @@ async function proxyRequest(req: NextRequest, params: { path: string[] }, method
   const secondaryUrl = getValidUrl(req.headers.get('x-backend-secondary')) || 
                        getValidUrl(process.env.V3_BACKEND_URL_SECONDARY) ||
                        getValidUrl(dbSecondaryUrl) ||
-                       'https://lead-intelligence-backend-production.up.railway.app'
+                       'https://leadgen-automation-production-12c6.up.railway.app'
   const mode = req.headers.get('x-backend-mode') || 'primary'
 
   const cleanUrl = (url: string) => url.replace(/\/$/, '')

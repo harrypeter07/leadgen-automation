@@ -82,7 +82,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/accounts/credentials",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/accounts/credentials",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -132,7 +132,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $('Split Queue Items').item.json.page_id }}/feed",
+        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $json.page_id }}/feed",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"message\": \"{{ $('Split Queue Items').item.json.content }}\",\n  \"access_token\": \"{{ $json.access_token }}\"\n}",
@@ -149,7 +149,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $('Split Queue Items').item.json.instagram_id }}/media",
+        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $json.page_id }}/media",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"image_url\": \"{{ $('Split Queue Items').item.json.media_url }}\",\n  \"caption\": \"{{ $('Split Queue Items').item.json.content }}\",\n  \"access_token\": \"{{ $('Fetch Page Credentials').item.json.access_token }}\"\n}",
@@ -166,7 +166,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $('Split Queue Items').item.json.instagram_id }}/media_publish",
+        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $json.page_id }}/media_publish",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"creation_id\": \"{{ $json.id }}\",\n  \"access_token\": \"{{ $('Fetch Page Credentials').item.json.access_token }}\"\n}",
