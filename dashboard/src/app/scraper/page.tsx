@@ -90,10 +90,13 @@ export default function ScraperPage() {
     const savedPrimary = typeof window !== 'undefined' ? localStorage.getItem('scraper_primary_backend') : null
     const primaryUrl = savedPrimary !== null && savedPrimary.trim() !== '' ? savedPrimary.trim() : 'https://scraper-auto.up.railway.app'
     
+    const savedSecondary = typeof window !== 'undefined' ? localStorage.getItem('scraper_secondary_backend') : null
+    const secondaryUrl = savedSecondary !== null && savedSecondary.trim() !== '' ? savedSecondary.trim() : 'https://leadgen-automation-production.up.railway.app'
+
     const headers = {
       ...(options.headers || {}),
       'x-backend-primary': primaryUrl,
-      'x-backend-secondary': typeof window !== 'undefined' ? (localStorage.getItem('scraper_secondary_backend') || '') : '',
+      'x-backend-secondary': secondaryUrl,
       'x-backend-mode': typeof window !== 'undefined' ? (localStorage.getItem('scraper_backend_mode') || 'primary') : 'primary'
     }
     return fetch(url, { ...options, headers })
@@ -104,7 +107,10 @@ export default function ScraperPage() {
     if (typeof window !== 'undefined') {
       const savedPrimary = localStorage.getItem('scraper_primary_backend')
       setPrimaryBackend(savedPrimary !== null && savedPrimary.trim() !== '' ? savedPrimary.trim() : 'https://scraper-auto.up.railway.app')
-      setSecondaryBackend(localStorage.getItem('scraper_secondary_backend') || '')
+      
+      const savedSecondary = localStorage.getItem('scraper_secondary_backend')
+      setSecondaryBackend(savedSecondary !== null && savedSecondary.trim() !== '' ? savedSecondary.trim() : 'https://leadgen-automation-production.up.railway.app')
+      
       setBackendMode((localStorage.getItem('scraper_backend_mode') as 'primary' | 'secondary' | 'both') || 'primary')
     }
   }, [])
