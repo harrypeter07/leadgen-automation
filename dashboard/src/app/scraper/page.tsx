@@ -794,7 +794,7 @@ export default function ScraperPage() {
                           <td className="py-2.5 pr-4 font-semibold text-gray-500">{(lead as any).instagram_verified ? '✅ Yes' : 'No'}</td>
                           <td className="py-2.5 pr-4 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
                           <td className="py-2.5 pr-4 font-mono text-gray-500 text-[10px] whitespace-nowrap">{lead.phone || '—'}</td>
-                          <td className="py-2.5 pr-4 text-gray-500 max-w-[150px] truncate" title={(lead as any).instagram_bio || lead.notes || ''}>{(lead as any).instagram_bio || lead.notes || '—'}</td>
+                          <td className="py-2.5 pr-4 text-gray-500 max-w-[150px] truncate" title={(lead as any).instagram_bio || (lead as any).notes || ''}>{(lead as any).instagram_bio || (lead as any).notes || '—'}</td>
                           <td className="py-2.5 text-blue-600 max-w-[120px] truncate font-semibold">
                             {lead.website
                               ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-500">{lead.website.replace(/^https?:\/\//, '')}</a>
@@ -968,7 +968,7 @@ export default function ScraperPage() {
                                                 <td className="py-2 pr-2 text-gray-500">{(lead as any).instagram_verified ? 'Yes' : 'No'}</td>
                                                 <td className="py-2 pr-2 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
                                                 <td className="py-2 pr-2 font-mono text-gray-500 text-[9px]">{lead.phone || '—'}</td>
-                                                <td className="py-2 pr-2 text-gray-400 max-w-[140px] truncate" title={(lead as any).instagram_bio || lead.notes || ''}>{(lead as any).instagram_bio || lead.notes || '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-400 max-w-[140px] truncate" title={(lead as any).instagram_bio || (lead as any).notes || ''}>{(lead as any).instagram_bio || (lead as any).notes || '—'}</td>
                                                 <td className="py-2 text-blue-600 max-w-[100px] truncate font-semibold">
                                                   {lead.website
                                                     ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>

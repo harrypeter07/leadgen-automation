@@ -37,7 +37,7 @@ function scrubSecrets(obj: Record<string, unknown>): Record<string, unknown> {
 /** Persist a single log entry to Supabase (fire-and-forget) */
 function persistToSupabase(entry: MetaLogEntry): void {
   import('@/lib/supabase').then(({ supabaseAdmin }) => {
-    supabaseAdmin.from('meta_request_logs').insert({
+    Promise.resolve(supabaseAdmin.from('meta_request_logs').insert({
       timestamp: entry.timestamp,
       level: entry.level,
       source: entry.source,
@@ -53,9 +53,9 @@ function persistToSupabase(entry: MetaLogEntry): void {
       response: entry.response ? JSON.parse(JSON.stringify(scrubSecrets(entry.response as Record<string, unknown>))) : null,
       retry_count: entry.retryCount ?? 0,
       error: entry.error ?? null,
-    }).then(res => {
+    })).then(res => {
       if (res.error) console.warn('[MetaLogger] Supabase DB Insert error:', res.error)
-    }).catch(err => {
+    }).catch((err: unknown) => {
       console.warn('[MetaLogger] Supabase DB catch error:', err)
     })
   }).catch(err => {

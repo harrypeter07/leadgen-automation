@@ -51,11 +51,11 @@ async function proxyRequest(req: NextRequest, params: { path: string[] }, method
 
   // Get routing inputs from frontend custom headers
   const primaryUrl = getValidUrl(req.headers.get('x-backend-primary')) || 
-                     getValidUrl(process.env.V3_BACKEND_URL) || 
+                     getValidUrl(process.env.V3_BACKEND_URL ?? null) || 
                      getValidUrl(dbBackendUrl) || 
                      'https://scraper-auto.up.railway.app'
   const secondaryUrl = getValidUrl(req.headers.get('x-backend-secondary')) || 
-                       getValidUrl(process.env.V3_BACKEND_URL_SECONDARY) ||
+                       getValidUrl(process.env.V3_BACKEND_URL_SECONDARY ?? null) ||
                        getValidUrl(dbSecondaryUrl) ||
                        'https://leadgen-automation-production-12c6.up.railway.app'
   const mode = req.headers.get('x-backend-mode') || 'primary'
