@@ -68,7 +68,7 @@ export default function InstagramAnalyzerPage() {
     let pollCount = 0
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch('/api/backend-v3/logs')
+        const res = await fetch('/api/instagram-logs')
         if (res.ok) {
           const data = await res.json()
           if (data.logs) {
@@ -96,7 +96,7 @@ export default function InstagramAnalyzerPage() {
     }, 1000)
 
     try {
-      const res = await fetch('/api/backend-v3/test/instagram', {
+      const res = await fetch('/api/instagram-audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -119,7 +119,7 @@ export default function InstagramAnalyzerPage() {
       if (res.ok && data.report) {
         setReport(data.report)
         // Fetch logs one final time to capture completeness
-        const logsRes = await fetch('/api/backend-v3/logs')
+        const logsRes = await fetch('/api/instagram-logs')
         if (logsRes.ok) {
           const logsData = await logsRes.json()
           if (logsData.logs) {
