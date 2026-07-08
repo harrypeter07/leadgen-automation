@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { MetaSettingsService } from '@/lib/meta/meta-settings-service'
 
 // Maps frontend scraper sub-paths to the correct backend routes
 function resolveBackendPath(subPath: string): string {
@@ -8,11 +9,11 @@ function resolveBackendPath(subPath: string): string {
   // /api/scraper/jobs           → /api/jobs
   if (subPath === 'jobs') return '/api/jobs'
 
-  // /api/scraper/{uuid}/leads        → /api/jobs/{uuid}/leads  (GET)
+  // /api/scraper/{uuid}/leads        → /api/jobs/${uuid}/leads  (GET)
   const jobLeadsMatch = subPath.match(/^([0-9a-f-]{36})\/leads$/)
   if (jobLeadsMatch) return `/api/jobs/${jobLeadsMatch[1]}/leads`
 
-  // /api/scraper/{uuid}/save-leads   → /api/jobs/{uuid}/save-leads  (POST)
+  // /api/scraper/{uuid}/save-leads   → /api/jobs/${uuid}/save-leads  (POST)
   const saveLeadsMatch = subPath.match(/^([0-9a-f-]{36})\/save-leads$/)
   if (saveLeadsMatch) return `/api/jobs/${saveLeadsMatch[1]}/save-leads`
 
@@ -29,8 +30,17 @@ async function proxyRequest(req: NextRequest, params: { path: string[] }, method
   const subPath = params.path.join('/')
   const backendPath = resolveBackendPath(subPath)
 
+  // Query fallback backend URL from DB if not defined in headers or env
+  let dbBackendUrl = ''
+  try {
+    const dbSettings = await MetaSettingsService.getFromDB() as Record<string, string>
+    dbBackendUrl = dbSettings.V3_BACKEND_URL || dbSettings.WHATSAPP_SERVICE_URL || dbSettings.BACKEND_URL || ''
+  } catch (err: any) {
+    console.warn('[Scraper Proxy] Failed to load backend URL fallback from DB:', err.message)
+  }
+
   // Get routing inputs from frontend custom headers
-  const primaryUrl = req.headers.get('x-backend-primary') || process.env.V3_BACKEND_URL || process.env.WHATSAPP_SERVICE_URL || 'http://localhost:3001'
+  const primaryUrl = req.headers.get('x-backend-primary') || process.env.V3_BACKEND_URL || dbBackendUrl || process.env.WHATSAPP_SERVICE_URL || 'https://scraper-auto.up.railway.app'
   const secondaryUrl = req.headers.get('x-backend-secondary') || ''
   const mode = req.headers.get('x-backend-mode') || 'primary'
 
