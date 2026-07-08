@@ -10,6 +10,7 @@ export function middleware(request: NextRequest) {
   // automation tooling can call these endpoints without a session cookie.
   if (
     pathname.startsWith('/_next') ||
+    pathname.startsWith('/api/email/send') ||
     pathname.startsWith('/api/login') ||
     pathname.startsWith('/api/meta') ||
     pathname.startsWith('/api/automation') ||
