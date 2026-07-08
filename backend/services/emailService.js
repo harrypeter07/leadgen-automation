@@ -87,6 +87,7 @@ async function sendEmail({ to, subject, html, text }) {
     }
   }
 
+  let nodemailerError = null;
   if (transport) {
     try {
       const info = await transport.sendMail({
@@ -99,6 +100,7 @@ async function sendEmail({ to, subject, html, text }) {
       logger.info({ to, messageId: info.messageId }, '[EmailService] Sent via Nodemailer/Gmail SMTP');
       return { provider: 'nodemailer', response: { messageId: info.messageId }, mock: false };
     } catch (err) {
+      nodemailerError = err.message;
       logger.warn({ to, error: err.message }, '[EmailService] Nodemailer SMTP failed — trying Resend fallback');
     }
   }
@@ -136,7 +138,10 @@ async function sendEmail({ to, subject, html, text }) {
   logger.warn({ to }, '[EmailService] No email provider configured — email not sent (mock mode)');
   return {
     provider: 'mock',
-    response: { note: 'Neither Nodemailer nor Resend is configured. Set NODEMAILER_USER + NODEMAILER_APP_PASSWORD or RESEND_API_KEY.' },
+    response: { 
+      note: 'Neither Nodemailer nor Resend is configured. Set NODEMAILER_USER + NODEMAILER_APP_PASSWORD or RESEND_API_KEY.',
+      nodemailer_error: nodemailerError
+    },
     mock: true,
   };
 }
