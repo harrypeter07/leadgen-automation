@@ -64,6 +64,22 @@ app.get('/health/env-check', (req, res) => {
   });
 });
 
+app.get('/health/smtp-check', async (req, res) => {
+  const supabase = require('./database/connection');
+  if (!supabase) {
+    return res.json({ error: 'Supabase client is null' });
+  }
+  try {
+    const { data, error } = await supabase
+      .from('meta_config')
+      .select('key, value')
+      .in('key', ['SMTP_USER', 'SMTP_PASS', 'SMTP_FROM_NAME']);
+    res.json({ data, error });
+  } catch (err) {
+    res.json({ catch_error: err.message });
+  }
+});
+
 // Liveness probe
 app.get('/health/live', (_req, res) => {
   res.json({ status: 'live', timestamp: new Date().toISOString() });
