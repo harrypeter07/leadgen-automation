@@ -40,9 +40,11 @@ async function proxyRequest(req: NextRequest, params: { path: string[] }, method
 
   // Query fallback backend URL from DB if not defined in headers or env
   let dbBackendUrl = ''
+  let dbSecondaryUrl = ''
   try {
     const dbSettings = await MetaSettingsService.getFromDB() as Record<string, string>
     dbBackendUrl = dbSettings.V3_BACKEND_URL || dbSettings.WHATSAPP_SERVICE_URL || dbSettings.BACKEND_URL || ''
+    dbSecondaryUrl = dbSettings.V3_BACKEND_URL_SECONDARY || dbSettings.WHATSAPP_SERVICE_URL || ''
   } catch (err: any) {
     console.warn('[Scraper Proxy] Failed to load backend URL fallback from DB:', err.message)
   }
@@ -51,9 +53,11 @@ async function proxyRequest(req: NextRequest, params: { path: string[] }, method
   const primaryUrl = getValidUrl(req.headers.get('x-backend-primary')) || 
                      getValidUrl(process.env.V3_BACKEND_URL) || 
                      getValidUrl(dbBackendUrl) || 
-                     getValidUrl(process.env.WHATSAPP_SERVICE_URL) || 
                      'https://scraper-auto.up.railway.app'
-  const secondaryUrl = getValidUrl(req.headers.get('x-backend-secondary')) || ''
+  const secondaryUrl = getValidUrl(req.headers.get('x-backend-secondary')) || 
+                       getValidUrl(process.env.V3_BACKEND_URL_SECONDARY) ||
+                       getValidUrl(dbSecondaryUrl) ||
+                       'https://leadgen-automation-production.up.railway.app'
   const mode = req.headers.get('x-backend-mode') || 'primary'
 
   const cleanUrl = (url: string) => url.replace(/\/$/, '')

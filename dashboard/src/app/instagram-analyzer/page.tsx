@@ -134,7 +134,10 @@ export default function InstagramAnalyzerPage() {
         }
         toast.success('Instagram audit completed successfully!', { id: toastId })
       } else {
-        throw new Error(data.error || 'Audit failed')
+        const errorMsg = typeof data.error === 'object' && data.error !== null
+          ? (data.error.message || JSON.stringify(data.error))
+          : (data.error || 'Audit failed')
+        throw new Error(errorMsg)
       }
     } catch (err: unknown) {
       clearInterval(pollInterval)
