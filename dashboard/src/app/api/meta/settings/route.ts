@@ -21,12 +21,9 @@ export async function GET() {
     ])
     const safeSettings: Record<string, string | boolean> = {}
     for (const [k, v] of Object.entries(merged)) {
+      safeSettings[k] = (v as string) || ''
       if (SECRET_KEYS.has(k)) {
-        // Return masked value + "set" flag so UI can show ✓ without revealing secret
-        safeSettings[k] = v ? '•'.repeat(24) : ''
         safeSettings[`${k}__set`] = !!v
-      } else {
-        safeSettings[k] = (v as string) || ''
       }
     }
 
