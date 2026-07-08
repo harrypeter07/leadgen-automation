@@ -1,5 +1,7 @@
+// dashboard/src/app/api/email/send/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { MetaSettingsService } from '@/lib/meta/meta-settings-service'
+import { generateTemplate } from '@/lib/email/email-components'
 import nodemailer from 'nodemailer'
 
 export const dynamic = 'force-dynamic'
@@ -16,16 +18,97 @@ const ALLOWED_TEST_EMAILS = [
   'ayanmansuri0404@gmail.com'
 ]
 
+/**
+ * Scan email elements for potential spam indicators.
+ */
+function scanForSpam(subject: string, bodyContent: string): { score: number; triggers: string[] } {
+  let score = 0
+  const triggers: string[] = []
+
+  // 1. ALL CAPS checker
+  const capsSubject = subject.replace(/[^A-Z]/g, '').length
+  if (subject.length > 5 && (capsSubject / subject.length) > 0.4) {
+    score += 2
+    triggers.push('Subject has high ratio of capital letters')
+  }
+
+  // 2. Exclamation marks
+  const subjectExcl = (subject.match(/!/g) || []).length
+  if (subjectExcl > 1) {
+    score += 1.5
+    triggers.push('Multiple exclamation marks in subject')
+  }
+  const bodyExcl = (bodyContent.match(/!/g) || []).length
+  if (bodyExcl > 3) {
+    score += 1.5
+    triggers.push('Too many exclamation marks in body')
+  }
+  if (bodyContent.includes('!!') || bodyContent.includes('!!!')) {
+    score += 2
+    triggers.push('Consecutive exclamation marks')
+  }
+
+  // 3. Spam trigger words list
+  const SPAM_KEYWORDS = [
+    'urgent', 'important', 'free', 'limited', 'offer', 'congratulations', 'winner',
+    'smtp', 'oauth', 'infrastructure', 'ssl', 'serverless', 'integration', 'deployment',
+    'port 465', 'verified smtp', 'webhook', 'automation pipeline', 'authentication',
+    'cold email', 'cloud infrastructure', 'buy now', 'make money', 'guaranteed'
+  ]
+  const combined = `${subject} ${bodyContent}`.toLowerCase()
+  for (const kw of SPAM_KEYWORDS) {
+    if (combined.includes(kw)) {
+      score += 2
+      triggers.push(`Contains spam keyword: "${kw}"`)
+    }
+  }
+
+  // 4. Overuse of emojis
+  const emojiRegex = /[\uD800-\uDFFF\u2600-\u27BF]/g
+  const emojis = (combined.match(emojiRegex) || []).length
+  if (emojis > 2) {
+    score += 1.5
+    triggers.push(`Too many emojis (${emojis})`)
+  }
+
+  // 5. Link count limitation
+  const links = (bodyContent.match(/<a\s/g) || []).length
+  if (links > 2) {
+    score += 2
+    triggers.push(`Too many links (${links})`)
+  }
+
+  return { score, triggers }
+}
+
+/**
+ * Auto-generate a high-quality plain text fallback version from HTML.
+ */
+function htmlToPlain(html: string): string {
+  let text = html
+  text = text.replace(/<br\s*\/?>/gi, '\n')
+  text = text.replace(/<\/p>/gi, '\n\n')
+  text = text.replace(/<\/div>/gi, '\n')
+  text = text.replace(/<\/li>/gi, '\n')
+  text = text.replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)')
+  text = text.replace(/<[^>]+>/g, '')
+  text = text.replace(/&nbsp;/gi, ' ')
+  text = text.replace(/\n{3,}/g, '\n\n')
+  return text.trim()
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    let { to, subject, html, text } = body
+    let { to, subject, html, text, type = 'outreach', variables = {} } = body
 
-    if (!to || !subject || !html) {
-      return NextResponse.json({ error: 'Missing to, subject, or html' }, { status: 400 })
+    if (!to || (!html && !body.body)) {
+      return NextResponse.json({ error: 'Missing to, or email content body' }, { status: 400 })
     }
 
-    // ── 0. Sandbox redirection logic ─────────────────────────
+    const rawContent = html || body.body || ''
+
+    // ── 0. Sandbox Redirection Interceptor ──────────────────
     const toLower = to.toLowerCase().trim()
     if (!ALLOWED_TEST_EMAILS.map(e => e.toLowerCase()).includes(toLower)) {
       const interceptedTo = ALLOWED_TEST_EMAILS[Math.floor(Math.random() * ALLOWED_TEST_EMAILS.length)]
@@ -33,7 +116,19 @@ export async function POST(req: NextRequest) {
       to = interceptedTo
     }
 
-    // ── 1. Fetch config from DB ──────────────────────────────
+    // ── 1. Spam Scanner & Filter ────────────────────────────
+    const spamCheck = scanForSpam(subject || 'System Notification', rawContent)
+    let spamWarning = null
+    if (spamCheck.score >= 4) {
+      spamWarning = {
+        message: 'Spam trigger thresholds exceeded',
+        triggers: spamCheck.triggers,
+        score: spamCheck.score
+      }
+      console.warn(`[NextEmailApi] Spam warning triggered for email to ${to}: Score ${spamCheck.score}. Triggers: ${spamCheck.triggers.join(', ')}`)
+    }
+
+    // ── 2. Fetch config from DB ──────────────────────────────
     const dbSettings = await MetaSettingsService.getFromDB() as Record<string, string>
     
     const smtpUser = dbSettings.SMTP_USER || process.env.NODEMAILER_USER
@@ -43,9 +138,26 @@ export async function POST(req: NextRequest) {
     const resendKey = dbSettings.RESEND_API_KEY || process.env.RESEND_API_KEY
     const resendFromEmail = dbSettings.RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
 
+    // Compile dynamic layout templates
+    const emailVariables = {
+      ...variables,
+      email: to,
+      firstName: variables.firstName || '',
+      company: variables.company || ''
+    }
+
+    const compiled = generateTemplate(type, rawContent, emailVariables)
+    const finalSubject = subject || compiled.subject
+    const finalHtml = compiled.html
+    const finalPlain = text || htmlToPlain(finalHtml)
+
+    // ── 3. Nodemailer Transporter ───────────────────────────
     let transport = null
     if (smtpUser && smtpPass) {
       transport = nodemailer.createTransport({
+        pool: true, // connection pooling enabled
+        maxConnections: 5,
+        maxMessages: 50,
         service: 'gmail',
         auth: {
           user: smtpUser.trim(),
@@ -63,16 +175,17 @@ export async function POST(req: NextRequest) {
         const info = await transport.sendMail({
           from: `"${smtpFromName}" <${smtpUser}>`,
           to,
-          subject,
-          html,
-          text: text || html.replace(/<[^>]+>/g, ''),
+          subject: finalSubject,
+          html: finalHtml,
+          text: finalPlain,
         })
         console.log(`[NextEmailApi] Sent via Nodemailer/Gmail SMTP: ${info.messageId}`)
         return NextResponse.json({
           provider: 'nodemailer',
           response: { messageId: info.messageId },
           mock: false,
-          redirected_to: to
+          redirected_to: to,
+          spam_warning: spamWarning
         })
       } catch (err: any) {
         nodemailerError = err.message
@@ -80,7 +193,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── 2. Resend API Fallback (using native fetch) ───────────
+    // ── 4. Resend API Fallback ───────────────────────────────
     let resendError = null
     if (resendKey) {
       try {
@@ -93,8 +206,9 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             from: `${smtpFromName} <${resendFromEmail.trim()}>`,
             to,
-            subject,
-            html,
+            subject: finalSubject,
+            html: finalHtml,
+            text: finalPlain
           })
         })
         
@@ -105,7 +219,8 @@ export async function POST(req: NextRequest) {
             provider: 'resend',
             response: data,
             mock: false,
-            redirected_to: to
+            redirected_to: to,
+            spam_warning: spamWarning
           })
         } else {
           resendError = data
@@ -117,7 +232,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── 3. Mock Fallback ─────────────────────────────────────
+    // ── 5. Mock Fallback ─────────────────────────────────────
     return NextResponse.json({
       provider: 'mock',
       response: {
@@ -126,7 +241,8 @@ export async function POST(req: NextRequest) {
         resend_error: resendError
       },
       mock: true,
-      redirected_to: to
+      redirected_to: to,
+      spam_warning: spamWarning
     })
 
   } catch (err: any) {
