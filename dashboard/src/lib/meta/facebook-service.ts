@@ -61,14 +61,14 @@ export const FacebookService = {
   },
   async getMessages(limit = 20) {
     const pageId = getPageId(); const token = getPageToken()
-    const endpoint = `/${pageId}/conversations?fields=id,link,participants,messages{message,from,created_time}&limit=${limit}&access_token=${token}`
+    const endpoint = `/${pageId}/conversations?platform=messenger&fields=id,link,participants,messages{message,from,created_time}&limit=${limit}&access_token=${token}`
     return MetaClient.get<{ data: unknown[] }>(endpoint, { source: SOURCE })
   },
   async sendMessage(recipientId: string, text: string) {
-    const token = getPageToken()
-    MetaLogger.request(SOURCE, 'POST', '/me/messages', { recipientId, text })
-    const res = await MetaClient.post<{ message_id: string }>('/me/messages', { recipient: { id: recipientId }, message: { text }, access_token: token }, { source: SOURCE })
-    MetaLogger.response(SOURCE, '/me/messages', res.statusCode, res.duration, res.error as MetaApiResponse['error'])
+    const pageId = getPageId(); const token = getPageToken()
+    MetaLogger.request(SOURCE, 'POST', `/${pageId}/messages`, { recipientId, text })
+    const res = await MetaClient.post<{ message_id: string }>(`/${pageId}/messages`, { recipient: { id: recipientId }, message: { text }, access_token: token }, { source: SOURCE })
+    MetaLogger.response(SOURCE, `/${pageId}/messages`, res.statusCode, res.duration, res.error as MetaApiResponse['error'])
     return res
   },
 }

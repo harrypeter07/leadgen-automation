@@ -89,11 +89,8 @@ export default function AutomationDashboardPage() {
 
       const qRes = await fetch('/api/automation/workflows/publish/queue')
       const qData = await qRes.json().catch(() => ({}))
-      // Fallback load from standard path if sub-path requires resolution
-      const resolvedQueueRes = await fetch('/api/automation/workflows/publish/queue')
-      const resolvedQueueData = await resolvedQueueRes.json()
-      if (resolvedQueueRes.ok && resolvedQueueData.queue) {
-        setPublishingQueue(resolvedQueueData.queue)
+      if (qRes.ok && qData.queue) {
+        setPublishingQueue(qData.queue)
       }
 
       // Fetch dynamic messages from Connected Facebook / Instagram APIs
@@ -116,7 +113,7 @@ export default function AutomationDashboardPage() {
           })
         }
       } catch (e) {
-        console.warn('Error fetching FB messages:', e)
+        console.warn('Facebook Messenger: conversations API not available — page may need Messenger subscription.', e)
       }
 
       try {
@@ -137,7 +134,7 @@ export default function AutomationDashboardPage() {
           })
         }
       } catch (e) {
-        console.warn('Error fetching IG messages:', e)
+        console.warn('Instagram: conversations API not available — page may need instagram_messages webhook.', e)
       }
 
       setInboxMessages(fetchedMsgs)
@@ -258,7 +255,7 @@ export default function AutomationDashboardPage() {
   async function handleRetryJob(id: string) {
     const toastId = toast.loading('Retrying failed publishing job...')
     try {
-      const res = await fetch('/api/automation/workflows/retry', {
+      const res = await fetch('/api/automation/workflows/workflows/retry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
@@ -500,7 +497,17 @@ export default function AutomationDashboardPage() {
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Inbound Messages</span>
               <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
                 {inboxMessages.length === 0 ? (
-                  <p className="text-xs text-gray-500 italic py-4 text-center">No inbound messages.</p>
+                  <div className="py-6 text-center space-y-2">
+                    <span className="text-3xl block">📭</span>
+                    <p className="text-xs text-gray-400 font-semibold">No conversations found.</p>
+                    <p className="text-[10px] text-gray-600 leading-relaxed">Make sure your page has Messenger subscriptions and someone has sent a message first.</p>
+                    <button
+                      onClick={fetchDashboardData}
+                      className="mt-2 text-[10px] px-3 py-1.5 rounded-lg bg-purple-950/30 border border-purple-900/30 text-purple-400 hover:bg-purple-900/20 font-bold uppercase tracking-wider transition-colors"
+                    >
+                      🔄 Reload Inbox
+                    </button>
+                  </div>
                 ) : (
                   inboxMessages.map(msg => (
                     <div
