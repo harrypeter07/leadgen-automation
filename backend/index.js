@@ -82,15 +82,42 @@ app.get('/health/smtp-check', async (req, res) => {
 
 app.get('/health/smtp-send-check', async (req, res) => {
   const { sendEmail } = require('./services/emailService');
+  let dbConfig = null;
+  let catchErr = null;
+  try {
+    const supabase = require('./database/connection');
+    const { data, error } = await supabase
+      .from('meta_config')
+      .select('key, value')
+      .in('key', ['SMTP_USER', 'SMTP_PASS', 'SMTP_FROM_NAME']);
+      
+    if (data) {
+      const config = {};
+      data.forEach(row => {
+        config[row.key] = row.value;
+      });
+      dbConfig = {
+        user: config.SMTP_USER,
+        pass_exists: !!config.SMTP_PASS,
+        fromName: config.SMTP_FROM_NAME
+      };
+    }
+    if (error) {
+      catchErr = error.message;
+    }
+  } catch (err) {
+    catchErr = err.message;
+  }
+
   try {
     const result = await sendEmail({
       to: 'mansurihh@rknec.edu',
       subject: 'production test diagnostic',
       html: 'testing'
     });
-    res.json(result);
+    res.json({ result, dbConfig, catchErr });
   } catch (err) {
-    res.json({ send_error: err.message });
+    res.json({ send_error: err.message, dbConfig, catchErr });
   }
 });
 
