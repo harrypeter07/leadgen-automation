@@ -14,6 +14,10 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api/login') ||
     pathname.startsWith('/api/meta') ||
     pathname.startsWith('/api/automation') ||
+    pathname.startsWith('/api/backend-v3') ||
+    pathname.startsWith('/api/scraper') ||
+    pathname.startsWith('/api/instagram-audit') ||
+    pathname.startsWith('/api/instagram-logs') ||
     pathname.startsWith('/automation') ||
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/fonts') ||
