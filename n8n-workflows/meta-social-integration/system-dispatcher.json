@@ -121,7 +121,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/retry",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/workflows/retry",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
