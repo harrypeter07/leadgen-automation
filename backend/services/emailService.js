@@ -116,6 +116,7 @@ async function sendEmail({ to, subject, html, text }) {
   }
 
   // ── 2. Try Resend REST API ───────────────────────────────
+  let resendError = null;
   if (activeResendKey) {
     const fromNameResend = fromName || 'Outreach';
     try {
@@ -138,6 +139,7 @@ async function sendEmail({ to, subject, html, text }) {
       logger.info({ to, id: res.data.id }, '[EmailService] Sent via Resend');
       return { provider: 'resend', response: res.data, mock: false };
     } catch (err) {
+      resendError = err.response ? err.response.data : err.message;
       logger.warn({ to, error: err.message }, '[EmailService] Resend also failed');
     }
   }
@@ -148,7 +150,8 @@ async function sendEmail({ to, subject, html, text }) {
     provider: 'mock',
     response: { 
       note: 'Neither Nodemailer nor Resend is configured. Set NODEMAILER_USER + NODEMAILER_APP_PASSWORD or RESEND_API_KEY.',
-      nodemailer_error: nodemailerError
+      nodemailer_error: nodemailerError,
+      resend_error: resendError
     },
     mock: true,
   };
