@@ -1,8 +1,18 @@
 const path = require('path');
 
 // Enforce browser binary directory relative path before loading playwright if not already set
-if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
-  process.env.PLAYWRIGHT_BROWSERS_PATH = path.resolve(__dirname, '../node_modules/playwright-core/.local-browsers');
+const fs = require('fs');
+const isInvalidPath = !process.env.PLAYWRIGHT_BROWSERS_PATH || 
+                      process.env.PLAYWRIGHT_BROWSERS_PATH === '0' || 
+                      process.env.PLAYWRIGHT_BROWSERS_PATH === 'false' ||
+                      process.env.PLAYWRIGHT_BROWSERS_PATH === 'undefined';
+
+if (isInvalidPath) {
+  if (fs.existsSync('/ms-playwright')) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright';
+  } else {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = path.resolve(__dirname, '../node_modules/playwright-core/.local-browsers');
+  }
 }
 
 const playwright = require('playwright');
