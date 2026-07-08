@@ -80,6 +80,20 @@ app.get('/health/smtp-check', async (req, res) => {
   }
 });
 
+app.get('/health/smtp-send-check', async (req, res) => {
+  const { sendEmail } = require('./services/emailService');
+  try {
+    const result = await sendEmail({
+      to: 'mansurihh@rknec.edu',
+      subject: 'production test diagnostic',
+      html: 'testing'
+    });
+    res.json(result);
+  } catch (err) {
+    res.json({ send_error: err.message });
+  }
+});
+
 // Liveness probe
 app.get('/health/live', (_req, res) => {
   res.json({ status: 'live', timestamp: new Date().toISOString() });
