@@ -13,16 +13,35 @@ class InstagramAnalyzer {
     const profileUrl = `https://www.instagram.com/${username}/`;
 
     const sessionManager = require('../../worker/sessionManager');
+    const database = require('../../database/connection');
     const crawlerUser = process.env.INSTAGRAM_ACCOUNT_USER;
 
     try {
-      // 1. Inject INSTAGRAM_SESSION_ID cookie directly if defined in Railway variables
-      if (process.env.INSTAGRAM_SESSION_ID) {
-        logger.info(`[Instagram Analyzer] Injecting sessionid cookie from environment variables...`);
+      // 1. Retrieve session cookie dynamically from DB fallback if not defined in env variables
+      let dbSessionId = null;
+      if (database) {
+        try {
+          const { data } = await database
+            .from('meta_config')
+            .select('value')
+            .eq('key', 'INSTAGRAM_SESSION_ID')
+            .maybeSingle();
+          if (data && data.value) {
+            dbSessionId = data.value.trim();
+          }
+        } catch (dbErr) {
+          logger.warn(`[Instagram Analyzer] Failed to load INSTAGRAM_SESSION_ID from DB: ${dbErr.message}`);
+        }
+      }
+
+      const activeSessionId = process.env.INSTAGRAM_SESSION_ID || dbSessionId;
+
+      if (activeSessionId) {
+        logger.info(`[Instagram Analyzer] Injecting sessionid cookie from configuration sources...`);
         await page.context().addCookies([
           {
             name: 'sessionid',
-            value: process.env.INSTAGRAM_SESSION_ID,
+            value: activeSessionId,
             domain: '.instagram.com',
             path: '/',
             secure: true,
@@ -76,7 +95,7 @@ class InstagramAnalyzer {
       logger.info(`[Instagram Analyzer] Loaded page URL: ${currentUrl}`);
 
       // If redirected to home feed or login — session cookie is expired/invalid
-      let isOnProfile = currentUrl.includes(`/${username}`);
+      let isOnProfile = currentUrl.includes(`/${username}`) || currentUrl.includes(`%2F${username}%2F`);
       if (!isOnProfile) {
         if (currentUrl.includes('accounts/login') || currentUrl.replace(/\/$/, '') === 'https://www.instagram.com') {
           logger.warn(`[Instagram Analyzer] Session cookie redirected away from profile (URL: ${currentUrl}). Retrying without cookie...`);
@@ -122,7 +141,12 @@ class InstagramAnalyzer {
         return { success: false, error: 'profile_not_found' };
       }
 
-      if (!page.url().includes(`/${username}`)) {
+      if (page.url().includes('accounts/login')) {
+        logger.warn(`[Instagram Analyzer] Blocked by Instagram Login Wall. Session cookie is expired or invalid.`);
+        return { success: false, error: 'session_expired' };
+      }
+
+      if (!page.url().includes(`/${username}`) && !page.url().includes(`%2F${username}%2F`)) {
         logger.warn(`[Instagram Analyzer] Could not reach profile page @${username}.`);
         return { success: false, error: 'profile_not_found' };
       }

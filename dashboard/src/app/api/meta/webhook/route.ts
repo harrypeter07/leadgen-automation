@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     console.log(`[Meta Webhook] Received ${object} event:`, JSON.stringify(body).slice(0, 400))
 
     // Route to n8n communication hub (forward the raw payload)
-    const n8nUrl = process.env.N8N_BASE_URL
+    const n8nUrl = process.env.N8N_BASE_URL || process.env.N8N_WEBHOOK_BASE_URL
     if (n8nUrl) {
       fetch(`${n8nUrl}/webhook/meta-communication-inbound`, {
         method: 'POST',
