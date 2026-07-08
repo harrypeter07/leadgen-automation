@@ -82,7 +82,33 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/accounts/{{ $json.id }}/test",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/accounts/credentials",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "27pwgfjvq491aircy8lh6nz3eb5mkus0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"platform\": \"{{ $json.platform }}\",\n  \"account_name\": \"{{ $json.account_name }}\"\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "e4f8a1b2-3009-4000-8000-000000000009",
+      "name": "Fetch Account Credentials",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/accounts/{{ $('Split Accounts').item.json.id }}/test",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -100,12 +126,12 @@
       "name": "Test Account Health",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [900, 200]
+      "position": [1100, 200]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $('Split Accounts').item.json.credentials?.page_id || $('Split Accounts').item.json.app_id }}/insights?metric=page_impressions,page_engagements,page_fan_adds&period=day&access_token={{ $('Split Accounts').item.json.credentials?.access_token }}",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Fetch Account Credentials').item.json.page_id }}/insights?metric=page_impressions,page_engagements,page_fan_adds&period=day&access_token={{ $('Fetch Account Credentials').item.json.access_token }}",
         "options": {
           "timeout": 15000
         }
@@ -114,7 +140,7 @@
       "name": "Pull Graph API Insights",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1100, 200]
+      "position": [1300, 200]
     },
     {
       "parameters": {
@@ -137,7 +163,7 @@
       "name": "Store Health Snapshot",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1300, 200]
+      "position": [1500, 200]
     }
   ],
   "connections": {
@@ -175,6 +201,17 @@
       ]
     },
     "Split Accounts": {
+      "main": [
+        [
+          {
+            "node": "Fetch Account Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Account Credentials": {
       "main": [
         [
           {
