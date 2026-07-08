@@ -42,14 +42,14 @@ export const InstagramService = {
     return MetaClient.post<{ id: string }>(`/${commentId}/replies`, { message, access_token: token }, { source: SOURCE })
   },
   async getMessages(limit = 20) {
-    const token = getPageToken()
-    return MetaClient.get<{ data: unknown[] }>(`/me/conversations?fields=id,participants,messages{message,from,created_time}&platform=instagram&limit=${limit}&access_token=${token}`, { source: SOURCE })
+    const igId = getIgBizId(); const token = getPageToken()
+    return MetaClient.get<{ data: unknown[] }>(`/${igId}/conversations?platform=instagram&fields=id,participants,messages{message,from,created_time}&limit=${limit}&access_token=${token}`, { source: SOURCE })
   },
   async sendDM(recipientId: string, text: string) {
-    const token = getPageToken()
-    MetaLogger.request(SOURCE, 'POST', '/me/messages', { recipientId, text })
-    const res = await MetaClient.post<{ message_id: string }>('/me/messages', { recipient: { id: recipientId }, message: { text }, access_token: token }, { source: SOURCE })
-    MetaLogger.response(SOURCE, '/me/messages', res.statusCode, res.duration, res.error as MetaApiResponse['error'])
+    const igId = getIgBizId(); const token = getPageToken()
+    MetaLogger.request(SOURCE, 'POST', `/${igId}/messages`, { recipientId, text })
+    const res = await MetaClient.post<{ message_id: string }>(`/${igId}/messages`, { recipient: { id: recipientId }, message: { text }, access_token: token }, { source: SOURCE })
+    MetaLogger.response(SOURCE, `/${igId}/messages`, res.statusCode, res.duration, res.error as MetaApiResponse['error'])
     return res
   },
   async getInsights(metric = 'reach,profile_views,follower_count', period = 'day') {
