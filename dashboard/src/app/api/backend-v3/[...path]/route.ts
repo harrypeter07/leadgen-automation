@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { MetaSettingsService } from '@/lib/meta/meta-settings-service'
 
 function getTargetUrl(baseUrl: string, subPath: string) {
   let formatted = baseUrl.trim()
@@ -11,7 +12,16 @@ function getTargetUrl(baseUrl: string, subPath: string) {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { path: string[] } }) {
-  const backendUrl = process.env.V3_BACKEND_URL || process.env.WHATSAPP_SERVICE_URL;
+  // Query fallback backend URL from DB if not defined in env
+  let dbBackendUrl = ''
+  try {
+    const dbSettings = await MetaSettingsService.getFromDB() as Record<string, string>
+    dbBackendUrl = dbSettings.V3_BACKEND_URL || dbSettings.WHATSAPP_SERVICE_URL || dbSettings.BACKEND_URL || ''
+  } catch (err: any) {
+    console.warn('[Backend-V3 Proxy] Failed to load backend URL fallback from DB:', err.message)
+  }
+
+  const backendUrl = process.env.V3_BACKEND_URL || dbBackendUrl || process.env.WHATSAPP_SERVICE_URL || 'https://scraper-auto.up.railway.app'
   if (!backendUrl) {
     return NextResponse.json({ error: 'V3_BACKEND_URL not configured' }, { status: 500 })
   }
@@ -39,7 +49,16 @@ export async function POST(req: NextRequest, { params }: { params: { path: strin
 }
 
 export async function GET(req: NextRequest, { params }: { params: { path: string[] } }) {
-  const backendUrl = process.env.V3_BACKEND_URL || process.env.WHATSAPP_SERVICE_URL;
+  // Query fallback backend URL from DB if not defined in env
+  let dbBackendUrl = ''
+  try {
+    const dbSettings = await MetaSettingsService.getFromDB() as Record<string, string>
+    dbBackendUrl = dbSettings.V3_BACKEND_URL || dbSettings.WHATSAPP_SERVICE_URL || dbSettings.BACKEND_URL || ''
+  } catch (err: any) {
+    console.warn('[Backend-V3 Proxy] Failed to load backend URL fallback from DB:', err.message)
+  }
+
+  const backendUrl = process.env.V3_BACKEND_URL || dbBackendUrl || process.env.WHATSAPP_SERVICE_URL || 'https://scraper-auto.up.railway.app'
   if (!backendUrl) {
     return NextResponse.json({ error: 'V3_BACKEND_URL not configured' }, { status: 500 })
   }
