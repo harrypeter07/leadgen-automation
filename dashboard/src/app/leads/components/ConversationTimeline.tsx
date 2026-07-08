@@ -76,6 +76,29 @@ export default function ConversationTimeline({ leadId }: { leadId: string }) {
         })
       }
 
+      // 4. Map chat messages and their delivery logs
+      if (memoryData.success && memoryData.data.messages) {
+        memoryData.data.messages.forEach((msg: any) => {
+          const latestLog = msg.logs?.[0] || {}
+          let statusText = ''
+          if (latestLog.status) {
+            statusText = ` [${latestLog.status.toUpperCase()}]`
+          }
+          const errText = latestLog.error_message ? ` (Error: ${latestLog.error_message})` : ''
+
+          consolidatedEvents.push({
+            id: msg.id,
+            type: 'message',
+            title: `${msg.direction === 'inbound' ? '📥 Received' : '📤 Sent'} ${msg.channel.toUpperCase()}${statusText}`,
+            description: msg.body + errText,
+            timestamp: msg.created_at,
+            channel: msg.channel,
+            direction: msg.direction,
+            status: latestLog.status
+          })
+        })
+      }
+
       // Sort events chronologically
       consolidatedEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       setEvents(consolidatedEvents)
@@ -147,12 +170,29 @@ export default function ConversationTimeline({ leadId }: { leadId: string }) {
                     {event.type === 'message' && '💬'}
                   </span>
                 </div>
-                <div className="flex-1 min-w-0 pt-1.5 flex justify-between space-x-4">
-                  <div>
-                    <p className="text-xs font-bold text-gray-800">{event.title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{event.description}</p>
+                 <div className="flex-1 min-w-0 pt-1.5 flex justify-between space-x-4">
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-gray-800">{event.title}</p>
+                      {event.status === 'failed' && (
+                        <span className="text-[8px] font-black uppercase bg-red-100 text-red-700 px-1.5 py-0.5 rounded border border-red-200">Failed</span>
+                      )}
+                      {event.status === 'sent' && (
+                        <span className="text-[8px] font-black uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">Sent</span>
+                      )}
+                      {event.status === 'pending' && (
+                        <span className="text-[8px] font-black uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-200 animate-pulse">Sending...</span>
+                      )}
+                    </div>
+                    {event.type === 'message' ? (
+                      <p className="text-xs text-gray-600 bg-gray-50 border border-gray-150 p-3 rounded-2xl whitespace-pre-wrap leading-relaxed font-medium inline-block max-w-md">
+                        {event.description}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 font-medium leading-relaxed">{event.description}</p>
+                    )}
                   </div>
-                  <div className="text-right text-[10px] whitespace-nowrap text-gray-400 font-bold uppercase">
+                  <div className="text-right text-[10px] whitespace-nowrap text-gray-400 font-bold uppercase pt-1">
                     {new Date(event.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </div>
                 </div>

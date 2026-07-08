@@ -7,33 +7,56 @@ class LeadsRepository {
   async upsert(leadData) {
     logger.debug(`[LeadsRepository] Upserting lead: ${leadData.name}`);
 
+    const ALLOWED_COLUMNS = [
+      'id', 'created_at', 'name', 'phone', 'email', 'address', 'city', 'category', 'website',
+      'rating', 'review_count', 'source', 'status', 'notes', 'whatsapp_sent_at', 'email_sent_at',
+      'last_contacted_at', 'ai_message_whatsapp', 'ai_message_email_subject', 'ai_message_email_body',
+      'website_audit_id', 'instagram_audit_id', 'job_id', 'updated_at', 'deleted_at', 'tenant_id',
+      'enrichment_fields', 'tools_tried', 'tools_failed', 'enrichment_status', 'confidence_score',
+      'enrichment_scratchpad', 'attempts'
+    ];
+
     if (leadData.city) {
       leadData.city = leadData.city.toLowerCase().replace(/(?:^|\s|-)\S/g, match => match.toUpperCase()).trim();
     }
+
+    // Filter properties to map strictly to valid schema columns
+    const cleanData = {};
+    for (const col of ALLOWED_COLUMNS) {
+      if (leadData[col] !== undefined) {
+        cleanData[col] = leadData[col];
+      }
+    }
     
-    if (leadData.phone) {
+    if (cleanData.phone) {
       try {
         const { data: existing } = await supabase
           .from('leads')
           .select('id, name')
-          .eq('phone', leadData.phone)
+          .eq('phone', cleanData.phone)
           .maybeSingle();
           
         if (existing) {
-          logger.warn(`[LeadsRepository] DUPLICATE: ${leadData.phone} exists as "${existing.name}" — merging.`);
+          logger.warn(`[LeadsRepository] DUPLICATE: ${cleanData.phone} exists as "${existing.name}" — merging.`);
           
+          const updatePayload = {
+            name: cleanData.name,
+            address: cleanData.address || undefined,
+            city: cleanData.city || undefined,
+            category: cleanData.category || undefined,
+            website: cleanData.website || undefined,
+            rating: cleanData.rating || undefined,
+            review_count: cleanData.review_count || undefined,
+            job_id: cleanData.job_id || undefined,
+            enrichment_fields: cleanData.enrichment_fields || undefined,
+            notes: cleanData.notes || undefined,
+            email: cleanData.email || undefined,
+            enrichment_status: cleanData.enrichment_status || undefined
+          };
+
           const { data: updated, error: updateError } = await supabase
             .from('leads')
-            .update({
-              name: leadData.name,
-              address: leadData.address || undefined,
-              city: leadData.city || undefined,
-              category: leadData.category || undefined,
-              website: leadData.website || undefined,
-              rating: leadData.rating || undefined,
-              review_count: leadData.review_count || undefined,
-              job_id: leadData.job_id || undefined
-            })
+            .update(updatePayload)
             .eq('id', existing.id)
             .select()
             .single();
@@ -49,20 +72,36 @@ class LeadsRepository {
     // No duplicate found by phone check — attempt fresh insert
     const { data, error } = await supabase
       .from('leads')
-      .insert([leadData])
+      .insert([cleanData])
       .select()
       .single();
 
     if (error) {
       // Postgres unique constraint violation (code 23505) — skip gracefully
       if (error.code === '23505') {
-        logger.warn(`[LeadsRepository] Unique constraint hit for "${leadData.name}" — skipping.`);
-        return { name: leadData.name, _was_duplicate: true, _skipped: true };
+        logger.warn(`[LeadsRepository] Unique constraint hit for "${cleanData.name}" — skipping.`);
+        return { name: cleanData.name, _was_duplicate: true, _skipped: true };
       }
       logger.error(`[LeadsRepository] insert error: ${error.message}`);
       throw error;
     }
     return { ...data, _was_duplicate: false };
+  }
+
+  async update(id, leadData) {
+    logger.debug(`[LeadsRepository] Updating lead ID: ${id}`);
+    const { data, error } = await supabase
+      .from('leads')
+      .update(leadData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      logger.error(`[LeadsRepository] update error: ${error.message}`);
+      throw error;
+    }
+    return data;
   }
 
   async getById(id) {
@@ -95,8 +134,8 @@ class LeadsRepository {
     return data || [];
   }
 
-  async getAll({ limit = 50, offset = 0, city, category, status, search, job_id } = {}) {
-    logger.debug(`[LeadsRepository] Fetching all leads (limit=${limit}, offset=${offset}, job_id=${job_id})`);
+  async getAll({ limit = 50, offset = 0, city, category, status, search, job_id, job_ids, has_email } = {}) {
+    logger.debug(`[LeadsRepository] Fetching all leads (limit=${limit}, offset=${offset}, job_id=${job_id || job_ids})`);
     let query = supabase
       .from('leads')
       .select('*', { count: 'exact' })
@@ -107,6 +146,18 @@ class LeadsRepository {
     if (category) query = query.eq('category', category);
     if (status) query = query.eq('status', status);
     if (job_id) query = query.eq('job_id', job_id);
+
+    if (job_ids) {
+      const ids = Array.isArray(job_ids) ? job_ids : job_ids.split(',').map(x => x.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        query = query.in('job_id', ids);
+      }
+    }
+
+    if (has_email === 'true' || has_email === true) {
+      query = query.not('email', 'is', null).neq('email', '');
+    }
+
     if (search) query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
 
     const { data, count, error } = await query;

@@ -5,6 +5,7 @@ const config = require('../modules/config');
 const outreachService = require('../services/outreachService');
 const intelligenceService = require('../services/intelligenceService');
 const conversationEngine = require('../services/conversationEngine');
+const { sendEmail } = require('../services/emailService');
 
 class BackgroundWorkers {
   constructor() {
@@ -132,25 +133,13 @@ class BackgroundWorkers {
               });
               gatewayResponse = waRes.data;
             } else {
-              // Email dispatch via Resend
-              const resendKey = (process.env.RESEND_API_KEY || '').trim();
-              if (resendKey) {
-                const resendRes = await axios.post('https://api.resend.com/emails', {
-                  from: 'Outreach <onboarding@resend.dev>',
-                  to: log.recipient,
-                  subject: 'Partnership Inquiry - Growth Audit',
-                  html: `<p>${log.body.replace(/\n/g, '<br>')}</p>`
-                }, {
-                  headers: {
-                    'Authorization': `Bearer ${resendKey}`,
-                    'Content-Type': 'application/json'
-                  },
-                  timeout: 6000
-                });
-                gatewayResponse = resendRes.data;
-              } else {
-                gatewayResponse = { mock: true, note: 'Resend API key not set.' };
-              }
+              // Email via unified emailService (Nodemailer → Resend fallback)
+              const emailResult = await sendEmail({
+                to: log.recipient,
+                subject: 'Partnership Inquiry - Growth Audit',
+                html: `<p>${log.body.replace(/\n/g, '<br>')}</p>`,
+              });
+              gatewayResponse = emailResult;
             }
             success = true;
           } catch (err) {

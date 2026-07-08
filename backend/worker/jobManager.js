@@ -34,7 +34,7 @@ class JobManager {
   async executeJob(job, workerId) {
     const startTime = Date.now();
     const fullProviderName = job.current_provider || 'google_maps';
-    const providerName = fullProviderName.split(':')[0];
+    const providerName = fullProviderName.split(':')[0].split('?')[0];
     const provider = this.providers[providerName];
 
     if (!provider) {
@@ -88,8 +88,22 @@ class JobManager {
         }
 
         try {
-          const raw = await provider.extract(page, i, job.version || 'v2');
-          if (!raw) return;
+          const raw = await provider.extract(page, i, job);
+          if (!raw) {
+            // Real-time synchronization of discard logs to the database
+            const currentFresh = await scrapeJobRepository.getById(job.id);
+            const loopLogs = currentFresh ? (currentFresh.logs || []) : [];
+            const newLogs = [...loopLogs];
+            if (Array.isArray(job.logs)) {
+              for (const log of job.logs) {
+                if (!newLogs.includes(log)) {
+                  newLogs.push(log);
+                }
+              }
+            }
+            await scrapeJobRepository.update(job.id, { logs: newLogs });
+            return;
+          }
 
           const lead = provider.normalize(raw, job.city);
 
@@ -101,12 +115,12 @@ class JobManager {
           }
           seenKeys.add(dedupeKey);
 
-          // Email Enrichment if enabled
+          // Email & AI Website Enrichment if enabled
           if (enrichEmails && lead.website) {
             const emailPage = await context.newPage().catch(() => null);
             if (emailPage) {
               try {
-                logger.info(`[JobManager] Scraping email for ${lead.name} from: ${lead.website}`);
+                logger.info(`[JobManager] Scraping & Enriching details for ${lead.name} from: ${lead.website}`);
                 // Enforce 30-second absolute timeout for email scraping
                 const scrapePromise = emailScraper.scrapeEmail(emailPage, lead.website);
                 const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 30000));
@@ -114,10 +128,31 @@ class JobManager {
                 const email = await Promise.race([scrapePromise, timeoutPromise]);
                 if (email) {
                   lead.email = email;
-                  logger.info(`[JobManager] ✅ Found email: ${email}`);
+                  logger.info(`[JobManager] ✅ Found email via regex: ${email}`);
+                }
+
+                // AI Enrichment
+                const pageText = await emailPage.evaluate(() => document.body ? document.body.innerText : '').catch(() => '');
+                if (pageText && pageText.trim().length > 100) {
+                  const aiService = require('../services/aiService');
+                  const details = await aiService.extractBusinessDetails(pageText, lead.name);
+                  
+                  lead.enrichment_fields = {
+                    business_description: details.business_description,
+                    key_offerings: details.key_offerings,
+                    contact_person: details.contact_person,
+                    contact_position: details.contact_position
+                  };
+                  lead.enrichment_status = 'completed';
+
+                  if (details.scraped_email && !lead.email) {
+                    lead.email = details.scraped_email;
+                    logger.info(`[JobManager] ✅ Found email via AI: ${details.scraped_email}`);
+                  }
                 }
               } catch (e) {
-                logger.warn(`[JobManager] Email enrichment failed for ${lead.website}: ${e.message}`);
+                logger.warn(`[JobManager] Website enrichment failed for ${lead.website}: ${e.message}`);
+                lead.enrichment_status = 'failed';
               } finally {
                 await emailPage.close().catch(() => {});
               }
@@ -137,9 +172,16 @@ class JobManager {
           const avg = elapsed / scrapedLeads.length;
           const estRemaining = Math.round(avg * (limit - scrapedLeads.length));
 
-          // Single update: progress + accumulated leads
+          // Single update: progress + accumulated leads + logs
           const currentFresh = await scrapeJobRepository.getById(job.id);
           const loopLogs = currentFresh ? (currentFresh.logs || []) : [];
+          if (Array.isArray(job.logs)) {
+            for (const log of job.logs) {
+              if (!loopLogs.includes(log)) {
+                loopLogs.push(log);
+              }
+            }
+          }
           loopLogs.push(`[${new Date().toISOString()}] Extracted: ${lead.name} (${lead.phone || 'no phone'})`);
 
           await scrapeJobRepository.update(job.id, {

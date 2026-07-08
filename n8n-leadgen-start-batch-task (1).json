@@ -1,0 +1,123 @@
+{
+  "name": "LeadGen - Start Batch Task (calls real backend job queue)",
+  "notes": "REPLACES the old 'Discovery Batch Generator' workflow. That version wrote to a discovery_queue table that doesn't exist in the real backend. This version calls the backend's own job-queue system directly, so scrape_jobs / queueManager.js does the actual work — no n8n queue duplication.",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "leadgen/start-batch",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-start",
+      "name": "Webhook - Start Batch Task",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Expected input body:\n// { keywords: ['restaurant','cafe'], areas: ['Zone A','Zone B'], city: 'Nagpur', provider: 'google_maps', maxLeads: 50 }\nconst body = $input.first().json.body || $input.first().json;\nconst { keywords, areas, city, provider, maxLeads } = body;\n\nif (!keywords || !areas || !city) {\n  throw new Error('Missing required fields: keywords, areas, city');\n}\n\nreturn [{ json: { keywords, areas, city, provider: provider || 'google_maps', maxLeads: maxLeads || 50 } }];"
+      },
+      "id": "validate-input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.BACKEND_AUTOMATED_URL}}/api/jobs/start-batch",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": { "timeout": 30000 },
+        "continueOnFail": true
+      },
+      "id": "call-start-batch",
+      "name": "Call POST /api/jobs/start-batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// FALLBACK: if /api/jobs/start-batch isn't built yet on the backend,\n// this loops the existing single-job endpoint POST /api/jobs/start once\n// per keyword x area combination instead.\nconst input = $('Validate Input').item.json;\nconst combos = [];\nfor (const area of input.areas) {\n  for (const keyword of input.keywords) {\n    combos.push({ keyword, city: input.city, area, provider: input.provider, maxLeads: input.maxLeads });\n  }\n}\nreturn combos.map(c => ({ json: c }));"
+      },
+      "id": "fallback-expand",
+      "name": "Fallback: Expand Combinations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.BACKEND_AUTOMATED_URL}}/api/jobs/start",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": { "timeout": 30000 },
+        "continueOnFail": true
+      },
+      "id": "call-start-single-fallback",
+      "name": "Fallback: Call POST /api/jobs/start (per combo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 420]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "leftValue": "={{$json.error}}",
+              "rightValue": "404",
+              "operator": { "type": "string", "operation": "contains" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-batch-endpoint-exists",
+      "name": "start-batch Not Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'queued', jobs: $json } }}"
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Start Batch Task": { "main": [[{ "node": "Validate Input", "type": "main", "index": 0 }]] },
+    "Validate Input": { "main": [[{ "node": "Call POST /api/jobs/start-batch", "type": "main", "index": 0 }]] },
+    "Call POST /api/jobs/start-batch": { "main": [[{ "node": "start-batch Not Found?", "type": "main", "index": 0 }]] },
+    "start-batch Not Found?": {
+      "main": [
+        [{ "node": "Fallback: Expand Combinations", "type": "main", "index": 0 }],
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fallback: Expand Combinations": { "main": [[{ "node": "Fallback: Call POST /api/jobs/start (per combo)", "type": "main", "index": 0 }]] },
+    "Fallback: Call POST /api/jobs/start (per combo)": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  }
+}

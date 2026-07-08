@@ -1,0 +1,296 @@
+{
+  "name": "Communication Hub",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meta-communication-inbound",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e4f8a1b2-1001-4000-8000-000000000001",
+      "name": "Meta Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 300],
+      "webhookId": "meta-communication-inbound"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-001",
+              "leftValue": "={{ $json.body.object }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "e4f8a1b2-1002-4000-8000-000000000002",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [280, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"error\": \"Invalid webhook payload — missing object field.\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "e4f8a1b2-100f-4000-8000-000000000009",
+      "name": "Reject Invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 480]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.body.object }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "page",
+              "output": 0
+            },
+            {
+              "value2": "instagram",
+              "output": 1
+            },
+            {
+              "value2": "whatsapp_business_account",
+              "output": 2
+            }
+          ]
+        },
+        "fallbackOutput": 0
+      },
+      "id": "e4f8a1b2-1004-4000-8000-000000000004",
+      "name": "Platform Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [480, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/workflows/orchestrate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "27pwgfjvq491aircy8lh6nz3eb5mkus0"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": \"messenger_message\",\n  \"object\": \"page\",\n  \"entry\": {{ JSON.stringify($json.body.entry) }},\n  \"channel\": \"messenger\",\n  \"sender_id\": \"={{ $json.body.entry?.[0]?.messaging?.[0]?.sender?.id }}\",\n  \"message_text\": \"={{ $json.body.entry?.[0]?.messaging?.[0]?.message?.text }}\",\n  \"page_id\": \"={{ $json.body.entry?.[0]?.id }}\",\n  \"timestamp\": {{ Date.now() }}\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "e4f8a1b2-1005-4000-8000-000000000005",
+      "name": "Handle Messenger",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/workflows/orchestrate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "27pwgfjvq491aircy8lh6nz3eb5mkus0"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": \"instagram_message\",\n  \"object\": \"instagram\",\n  \"entry\": {{ JSON.stringify($json.body.entry) }},\n  \"channel\": \"instagram\",\n  \"sender_id\": \"={{ $json.body.entry?.[0]?.messaging?.[0]?.sender?.id }}\",\n  \"message_text\": \"={{ $json.body.entry?.[0]?.messaging?.[0]?.message?.text }}\",\n  \"ig_business_id\": \"={{ $json.body.entry?.[0]?.id }}\",\n  \"timestamp\": {{ Date.now() }}\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "e4f8a1b2-1006-4000-8000-000000000006",
+      "name": "Handle Instagram DM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/workflows/orchestrate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "27pwgfjvq491aircy8lh6nz3eb5mkus0"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": \"whatsapp_message\",\n  \"object\": \"whatsapp_business_account\",\n  \"entry\": {{ JSON.stringify($json.body.entry) }},\n  \"channel\": \"whatsapp\",\n  \"sender_phone\": \"={{ $json.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from }}\",\n  \"message_text\": \"={{ $json.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body }}\",\n  \"waba_id\": \"={{ $json.body.entry?.[0]?.id }}\",\n  \"timestamp\": {{ Date.now() }}\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "e4f8a1b2-1007-4000-8000-000000000007",
+      "name": "Handle WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 460]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"received\",\n  \"channel\": \"meta\",\n  \"processed_at\": \"{{ new Date().toISOString() }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-1008-4000-8000-000000000008",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 300]
+    }
+  ],
+  "connections": {
+    "Meta Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Platform Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Platform Router": {
+      "main": [
+        [
+          {
+            "node": "Handle Messenger",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Instagram DM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Messenger": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Instagram DM": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "e4f8a1b2-1000-4000-8001-000000000000",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "flowfyp-production"
+  },
+  "tags": [
+    { "id": "meta-integration", "name": "Meta Integration" },
+    { "id": "communication", "name": "Communication" }
+  ]
+}

@@ -50,6 +50,9 @@ export default function ScraperPage() {
   const [includeEmails, setIncludeEmails] = useState(false)
   const [searchScope, setSearchScope] = useState<'city' | 'country' | 'global'>('city')
   const [country, setCountry] = useState('')
+  const [minFollowers, setMinFollowers] = useState(0)
+  const [maxFollowers, setMaxFollowers] = useState(500)
+  const [reachAmount, setReachAmount] = useState(0)
   const [queuing, setQueuing] = useState(false)
 
   // Helper to parse keyword brackets notation
@@ -77,10 +80,39 @@ export default function ScraperPage() {
   const [selectedJob, setSelectedJob] = useState<ScrapeJob | null>(null)
   const [isPaused, setIsPaused] = useState(false)
 
+  // API Routing Configurations
+  const [primaryBackend, setPrimaryBackend] = useState('')
+  const [secondaryBackend, setSecondaryBackend] = useState('')
+  const [backendMode, setBackendMode] = useState<'primary' | 'secondary' | 'both'>('primary')
+
+  // Helper fetch wrapper to attach routing headers from localStorage/state
+  async function fetchWithRouting(url: string, options: RequestInit = {}) {
+    const savedPrimary = typeof window !== 'undefined' ? localStorage.getItem('scraper_primary_backend') : null
+    const primaryUrl = savedPrimary !== null && savedPrimary.trim() !== '' ? savedPrimary.trim() : 'https://scraper-auto.up.railway.app'
+    
+    const headers = {
+      ...(options.headers || {}),
+      'x-backend-primary': primaryUrl,
+      'x-backend-secondary': typeof window !== 'undefined' ? (localStorage.getItem('scraper_secondary_backend') || '') : '',
+      'x-backend-mode': typeof window !== 'undefined' ? (localStorage.getItem('scraper_backend_mode') || 'primary') : 'primary'
+    }
+    return fetch(url, { ...options, headers })
+  }
+
+  // Load routing configuration from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedPrimary = localStorage.getItem('scraper_primary_backend')
+      setPrimaryBackend(savedPrimary !== null && savedPrimary.trim() !== '' ? savedPrimary.trim() : 'https://scraper-auto.up.railway.app')
+      setSecondaryBackend(localStorage.getItem('scraper_secondary_backend') || '')
+      setBackendMode((localStorage.getItem('scraper_backend_mode') as 'primary' | 'secondary' | 'both') || 'primary')
+    }
+  }, [])
+
   // Fetch all jobs
   async function fetchJobs() {
     try {
-      const res = await fetch('/api/scraper/jobs')
+      const res = await fetchWithRouting('/api/scraper/jobs')
       const data = await res.json()
       if (res.ok && data.jobs) {
         setJobs(data.jobs)
@@ -102,7 +134,7 @@ export default function ScraperPage() {
     fetchJobs()
     const interval = setInterval(fetchJobs, 5000)
     return () => clearInterval(interval)
-  }, [])
+  }, [selectedJob])
 
   // Queue a new job
   async function handleQueueJob(e: React.FormEvent) {
@@ -123,8 +155,10 @@ export default function ScraperPage() {
     setQueuing(true)
     const toastId = toast.loading('Queueing scrape job...')
     try {
-      // Append :email to provider if enrichment is checked
-      const finalProvider = includeEmails ? `${provider}:email` : provider;
+      // Append :email or query options to provider
+      const finalProvider = provider === 'instagram'
+        ? `instagram?minFollowers=${minFollowers}&maxFollowers=${maxFollowers}&reachAmount=${reachAmount}`
+        : includeEmails ? `${provider}:email` : provider;
 
       let finalCity = city.trim()
       if (searchScope === 'global') {
@@ -133,7 +167,7 @@ export default function ScraperPage() {
         finalCity = `Country: ${country.trim()}`
       }
 
-      const res = await fetch('/api/scraper/start', {
+      const res = await fetchWithRouting('/api/scraper/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -166,7 +200,7 @@ export default function ScraperPage() {
   // Pause a job
   async function handlePauseJob(jobId: string) {
     try {
-      const res = await fetch('/api/scraper/pause', {
+      const res = await fetchWithRouting('/api/scraper/pause', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId })
@@ -183,7 +217,7 @@ export default function ScraperPage() {
   // Resume a job
   async function handleResumeJob(jobId: string) {
     try {
-      const res = await fetch('/api/scraper/resume', {
+      const res = await fetchWithRouting('/api/scraper/resume', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId })
@@ -200,7 +234,7 @@ export default function ScraperPage() {
   // Stop a job
   async function handleStopJob(jobId: string) {
     try {
-      const res = await fetch('/api/scraper/stop', {
+      const res = await fetchWithRouting('/api/scraper/stop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId })
@@ -217,7 +251,7 @@ export default function ScraperPage() {
   // Retry / Clone a job
   async function handleRetryJob(jobId: string) {
     try {
-      const res = await fetch('/api/scraper/retry', {
+      const res = await fetchWithRouting('/api/scraper/retry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId })
@@ -283,6 +317,17 @@ export default function ScraperPage() {
       toast.error(message, { id: toastId })
     } finally {
       setAddingLead(false)
+    }
+  }
+
+  function handleSaveBackendSettings(e: React.FormEvent) {
+    e.preventDefault()
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('scraper_primary_backend', primaryBackend.trim())
+      localStorage.setItem('scraper_secondary_backend', secondaryBackend.trim())
+      localStorage.setItem('scraper_backend_mode', backendMode)
+      toast.success('API Routing configurations successfully updated and saved!')
+      fetchJobs() // reload job lists using the new configured target URLs
     }
   }
 
@@ -380,6 +425,44 @@ export default function ScraperPage() {
                     required
                     className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
                   />
+                </div>
+              )}
+
+              {provider === 'instagram' && (
+                <div className="space-y-4 border-l-2 border-pink-400 pl-3.5 py-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-pink-600 mb-1 uppercase tracking-wider">Min Followers</label>
+                      <input
+                        type="number"
+                        value={minFollowers}
+                        onChange={(e) => setMinFollowers(parseInt(e.target.value, 10) || 0)}
+                        min="0"
+                        className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-pink-600 mb-1 uppercase tracking-wider">Max Followers</label>
+                      <input
+                        type="number"
+                        value={maxFollowers}
+                        onChange={(e) => setMaxFollowers(parseInt(e.target.value, 10) || 0)}
+                        min="0"
+                        className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-pink-600 mb-1 uppercase tracking-wider">Reach Target (Est.)</label>
+                    <input
+                      type="number"
+                      value={reachAmount}
+                      onChange={(e) => setReachAmount(parseInt(e.target.value, 10) || 0)}
+                      min="0"
+                      placeholder="e.g. 500 estimated impressions"
+                      className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -503,6 +586,55 @@ export default function ScraperPage() {
               </button>
             </form>
           </div>
+
+          {/* API Backend Config Card */}
+          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+            <h3 className="font-bold text-[#1C1C1E] text-md mb-1 uppercase tracking-wider text-[11px] text-gray-500">🔌 API Backend Routing</h3>
+            <p className="text-[10px] text-gray-400 mb-4 font-medium">Configure primary and secondary API targets</p>
+            <form onSubmit={handleSaveBackendSettings} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Primary Backend URL</label>
+                <input
+                  type="url"
+                  value={primaryBackend}
+                  onChange={(e) => setPrimaryBackend(e.target.value)}
+                  placeholder="e.g. http://localhost:3001"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Secondary Backend URL</label>
+                <input
+                  type="url"
+                  value={secondaryBackend}
+                  onChange={(e) => setSecondaryBackend(e.target.value)}
+                  placeholder="e.g. http://localhost:3002"
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Active Target Routing Mode</label>
+                <select
+                  value={backendMode}
+                  onChange={(e) => setBackendMode(e.target.value as 'primary' | 'secondary' | 'both')}
+                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500"
+                >
+                  <option value="primary">🎯 Primary Server Only</option>
+                  <option value="secondary">🥈 Secondary Server Only</option>
+                  <option value="both">⚡ Dual Broadcast (Both Servers)</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] text-xs font-bold uppercase tracking-wider text-white py-3.5 mt-2 transition-all shadow-sm"
+              >
+                Save Settings
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Right Column: Live Status & History */}
@@ -620,32 +752,65 @@ export default function ScraperPage() {
               <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
                 <table className="w-full text-left text-[11px] border-collapse min-w-[700px]">
                   <thead className="sticky top-0 bg-white">
-                    <tr className="border-b border-purple-200 text-purple-950 font-bold uppercase tracking-wider text-[9px]">
-                      <th className="pb-2.5 pr-4">Name</th>
-                      <th className="pb-2.5 pr-4">Phone</th>
-                      <th className="pb-2.5 pr-4">Email</th>
-                      <th className="pb-2.5 pr-4">Address</th>
-                      <th className="pb-2.5 pr-4">Category</th>
-                      <th className="pb-2.5 pr-4">Rating</th>
-                      <th className="pb-2.5">Website</th>
-                    </tr>
+                    {activeJob.current_provider.includes('instagram') ? (
+                      <tr className="border-b border-purple-200 text-purple-950 font-bold uppercase tracking-wider text-[9px]">
+                        <th className="pb-2.5 pr-4">User</th>
+                        <th className="pb-2.5 pr-4">Followers</th>
+                        <th className="pb-2.5 pr-4">Following</th>
+                        <th className="pb-2.5 pr-4">Est. Reach</th>
+                        <th className="pb-2.5 pr-4">Verified</th>
+                        <th className="pb-2.5 pr-4">Email</th>
+                        <th className="pb-2.5 pr-4">Phone</th>
+                        <th className="pb-2.5 pr-4">Bio</th>
+                        <th className="pb-2.5">Website</th>
+                      </tr>
+                    ) : (
+                      <tr className="border-b border-purple-200 text-purple-950 font-bold uppercase tracking-wider text-[9px]">
+                        <th className="pb-2.5 pr-4">Name</th>
+                        <th className="pb-2.5 pr-4">Phone</th>
+                        <th className="pb-2.5 pr-4">Email</th>
+                        <th className="pb-2.5 pr-4">Address</th>
+                        <th className="pb-2.5 pr-4">Category</th>
+                        <th className="pb-2.5 pr-4">Rating</th>
+                        <th className="pb-2.5">Website</th>
+                      </tr>
+                    )}
                   </thead>
                   <tbody className="divide-y divide-purple-100 text-gray-700">
-                    {activeJob.scraped_leads!.slice(-15).map((lead, i) => (
-                      <tr key={i} className="hover:bg-purple-50/50">
-                        <td className="py-2.5 pr-4 font-bold text-purple-950 max-w-[130px] truncate">{lead.name}</td>
-                        <td className="py-2.5 pr-4 font-mono text-gray-500 text-[10px] whitespace-nowrap">{lead.phone || '—'}</td>
-                        <td className="py-2.5 pr-4 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
-                        <td className="py-2.5 pr-4 text-gray-500 max-w-[140px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
-                        <td className="py-2.5 pr-4 text-gray-500 max-w-[90px] truncate">{lead.category || '—'}</td>
-                        <td className="py-2.5 pr-4 text-yellow-600 font-bold whitespace-nowrap">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
-                        <td className="py-2.5 text-blue-600 max-w-[120px] truncate font-semibold">
-                          {lead.website
-                            ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-500">{lead.website.replace(/^https?:\/\//, '')}</a>
-                            : '—'}
-                        </td>
-                      </tr>
-                    ))}
+                    {activeJob.scraped_leads!.slice(-15).map((lead, i) => {
+                      const isInsta = activeJob.current_provider.includes('instagram');
+                      return isInsta ? (
+                        <tr key={i} className="hover:bg-purple-50/50">
+                          <td className="py-2.5 pr-4 font-bold text-purple-950 max-w-[130px] truncate">{lead.name}</td>
+                          <td className="py-2.5 pr-4 font-bold text-gray-700">{(lead as any).instagram_followers ?? '—'}</td>
+                          <td className="py-2.5 pr-4 font-medium text-gray-500">{(lead as any).instagram_following ?? '—'}</td>
+                          <td className="py-2.5 pr-4 font-bold text-pink-600">{(lead as any).instagram_reach ? `⚡ ${(lead as any).instagram_reach}` : '—'}</td>
+                          <td className="py-2.5 pr-4 font-semibold text-gray-500">{(lead as any).instagram_verified ? '✅ Yes' : 'No'}</td>
+                          <td className="py-2.5 pr-4 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
+                          <td className="py-2.5 pr-4 font-mono text-gray-500 text-[10px] whitespace-nowrap">{lead.phone || '—'}</td>
+                          <td className="py-2.5 pr-4 text-gray-500 max-w-[150px] truncate" title={(lead as any).instagram_bio || lead.notes || ''}>{(lead as any).instagram_bio || lead.notes || '—'}</td>
+                          <td className="py-2.5 text-blue-600 max-w-[120px] truncate font-semibold">
+                            {lead.website
+                              ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-500">{lead.website.replace(/^https?:\/\//, '')}</a>
+                              : '—'}
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={i} className="hover:bg-purple-50/50">
+                          <td className="py-2.5 pr-4 font-bold text-purple-950 max-w-[130px] truncate">{lead.name}</td>
+                          <td className="py-2.5 pr-4 font-mono text-gray-500 text-[10px] whitespace-nowrap">{lead.phone || '—'}</td>
+                          <td className="py-2.5 pr-4 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
+                          <td className="py-2.5 pr-4 text-gray-500 max-w-[140px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
+                          <td className="py-2.5 pr-4 text-gray-500 max-w-[90px] truncate">{lead.category || '—'}</td>
+                          <td className="py-2.5 pr-4 text-yellow-600 font-bold whitespace-nowrap">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
+                          <td className="py-2.5 text-blue-600 max-w-[120px] truncate font-semibold">
+                            {lead.website
+                              ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-500">{lead.website.replace(/^https?:\/\//, '')}</a>
+                              : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -761,32 +926,65 @@ export default function ScraperPage() {
                                     <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
                                       <table className="w-full text-left text-[10px] border-collapse min-w-[600px]">
                                         <thead className="sticky top-0 bg-white">
-                                          <tr className="text-gray-400 font-bold uppercase tracking-wider border-b border-[#E4E3DD] text-[8px]">
-                                            <th className="pb-1.5 pr-2">Name</th>
-                                            <th className="pb-1.5 pr-2">Phone</th>
-                                            <th className="pb-1.5 pr-2">Email</th>
-                                            <th className="pb-1.5 pr-2">Address</th>
-                                            <th className="pb-1.5 pr-2">Category</th>
-                                            <th className="pb-1.5 pr-2">Rating</th>
-                                            <th className="pb-1.5">Website</th>
-                                          </tr>
+                                          {job.current_provider.includes('instagram') ? (
+                                            <tr className="text-gray-400 font-bold uppercase tracking-wider border-b border-[#E4E3DD] text-[8px]">
+                                              <th className="pb-1.5 pr-2">User</th>
+                                              <th className="pb-1.5 pr-2">Followers</th>
+                                              <th className="pb-1.5 pr-2">Following</th>
+                                              <th className="pb-1.5 pr-2">Est. Reach</th>
+                                              <th className="pb-1.5 pr-2">Verified</th>
+                                              <th className="pb-1.5 pr-2">Email</th>
+                                              <th className="pb-1.5 pr-2">Phone</th>
+                                              <th className="pb-1.5 pr-2">Bio</th>
+                                              <th className="pb-1.5">Website</th>
+                                            </tr>
+                                          ) : (
+                                            <tr className="text-gray-400 font-bold uppercase tracking-wider border-b border-[#E4E3DD] text-[8px]">
+                                              <th className="pb-1.5 pr-2">Name</th>
+                                              <th className="pb-1.5 pr-2">Phone</th>
+                                              <th className="pb-1.5 pr-2">Email</th>
+                                              <th className="pb-1.5 pr-2">Address</th>
+                                              <th className="pb-1.5 pr-2">Category</th>
+                                              <th className="pb-1.5 pr-2">Rating</th>
+                                              <th className="pb-1.5">Website</th>
+                                            </tr>
+                                          )}
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 text-gray-700">
-                                          {leads.slice(0, 10).map((lead, idx) => (
-                                            <tr key={idx} className="hover:bg-gray-50">
-                                              <td className="py-2 pr-2 font-bold text-gray-800 max-w-[120px] truncate">{lead.name}</td>
-                                              <td className="py-2 pr-2 font-mono text-gray-500 text-[9px]">{lead.phone || '—'}</td>
-                                              <td className="py-2 pr-2 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
-                                              <td className="py-2 pr-2 text-gray-500 max-w-[120px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
-                                              <td className="py-2 pr-2 text-gray-500 max-w-[80px] truncate">{lead.category || '—'}</td>
-                                              <td className="py-2 pr-2 text-yellow-600 font-bold">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
-                                              <td className="py-2 text-blue-600 max-w-[100px] truncate font-semibold">
-                                                {lead.website
-                                                  ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
-                                                  : '—'}
-                                              </td>
-                                            </tr>
-                                          ))}
+                                          {leads.slice(0, 10).map((lead, idx) => {
+                                            const isInsta = job.current_provider.includes('instagram');
+                                            return isInsta ? (
+                                              <tr key={idx} className="hover:bg-gray-50">
+                                                <td className="py-2 pr-2 font-bold text-gray-800 max-w-[120px] truncate">{lead.name}</td>
+                                                <td className="py-2 pr-2 font-bold text-gray-600">{(lead as any).instagram_followers ?? '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-500">{(lead as any).instagram_following ?? '—'}</td>
+                                                <td className="py-2 pr-2 font-bold text-pink-600">{(lead as any).instagram_reach ? `⚡ ${(lead as any).instagram_reach}` : '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-500">{(lead as any).instagram_verified ? 'Yes' : 'No'}</td>
+                                                <td className="py-2 pr-2 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
+                                                <td className="py-2 pr-2 font-mono text-gray-500 text-[9px]">{lead.phone || '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-400 max-w-[140px] truncate" title={(lead as any).instagram_bio || lead.notes || ''}>{(lead as any).instagram_bio || lead.notes || '—'}</td>
+                                                <td className="py-2 text-blue-600 max-w-[100px] truncate font-semibold">
+                                                  {lead.website
+                                                    ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
+                                                    : '—'}
+                                                </td>
+                                              </tr>
+                                            ) : (
+                                              <tr key={idx} className="hover:bg-gray-50">
+                                                <td className="py-2 pr-2 font-bold text-gray-800 max-w-[120px] truncate">{lead.name}</td>
+                                                <td className="py-2 pr-2 font-mono text-gray-500 text-[9px]">{lead.phone || '—'}</td>
+                                                <td className="py-2 pr-2 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-500 max-w-[120px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
+                                                <td className="py-2 pr-2 text-gray-500 max-w-[80px] truncate">{lead.category || '—'}</td>
+                                                <td className="py-2 pr-2 text-yellow-600 font-bold">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
+                                                <td className="py-2 text-blue-600 max-w-[100px] truncate font-semibold">
+                                                  {lead.website
+                                                    ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
+                                                    : '—'}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
                                         </tbody>
                                       </table>
                                     </div>

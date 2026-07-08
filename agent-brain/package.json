@@ -1,0 +1,21 @@
+{
+  "name": "agent-brain",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gemini-driven lead enrichment orchestrator. Calls backend providers and TinyFish APIs as tools, decides next action per lead, tracks state in Supabase.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "@supabase/supabase-js": "^2.43.4",
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^16.4.5",
+    "pino": "^9.5.0"
+  }
+}

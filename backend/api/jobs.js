@@ -121,14 +121,9 @@ function combineBatchJobs(jobs) {
       parent.completed_at = job.completed_at;
     }
     
-    if (job.current_business) {
-      parent.current_business = parent.current_business 
-        ? `${parent.current_business}, ${job.current_business}`
-        : job.current_business;
-    }
   }
 
-  // Sort logs in grouped batches
+  // Sort logs in grouped batches and construct dynamic status descriptions
   for (const bId of Object.keys(grouped)) {
     const parent = grouped[bId];
     parent.logs.sort((a, b) => {
@@ -139,6 +134,32 @@ function combineBatchJobs(jobs) {
       }
       return 0;
     });
+
+    const runningSubJob = parent.subJobs.find(j => j.status === 'running');
+    if (runningSubJob) {
+      const remainingCities = parent.subJobs
+        .filter(j => j.status === 'queued')
+        .map(j => j.city);
+      const nextStr = remainingCities.length > 0 ? ` (Next: ${remainingCities.join(', ')})` : '';
+      const currentBiz = runningSubJob.current_business ? ` - ${runningSubJob.current_business}` : '';
+      parent.current_business = `Scraping ${runningSubJob.city}${currentBiz}${nextStr}`;
+    } else {
+      const queuedSubJob = parent.subJobs.find(j => j.status === 'queued');
+      if (queuedSubJob) {
+        const remainingCities = parent.subJobs
+          .filter(j => j.status === 'queued')
+          .map(j => j.city);
+        parent.current_business = `Waiting to scrape ${queuedSubJob.city} (Remaining: ${remainingCities.join(', ')})`;
+      } else {
+        const failedSubJob = parent.subJobs.find(j => j.status === 'failed');
+        if (failedSubJob) {
+          parent.current_business = 'Failed';
+        } else {
+          parent.current_business = 'Completed';
+        }
+      }
+    }
+
     resultList.push(parent);
   }
 
@@ -270,12 +291,11 @@ router.post('/start-batch', async (req, res, next) => {
           worker_count: workerCount || 1,
           current_provider: provider || 'google_maps'
         });
-        createdJobs.push({ jobId: job.id, keyword: finalKeyword });
+        createdJobs.push({ jobId: job.id, keyword: kw.trim(), area: area || null });
       }
     }
 
-    formatResponse(res, req, {
-      message: `Batch job successfully queued. Spawned ${createdJobs.length} scrape jobs.`,
+    res.json({
       jobs: createdJobs
     });
   } catch (err) {

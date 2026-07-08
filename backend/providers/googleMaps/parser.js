@@ -37,6 +37,7 @@ class GoogleMapsParser {
       review_count: reviewCount,
       source: 'google_maps',
       status: 'new',
+      notes: raw.description ? raw.description.trim() : null,
     };
   }
 }

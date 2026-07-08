@@ -10,6 +10,7 @@ const leadsRepository = require('../repositories/leadsRepository');
 const aiService = require('./aiService');
 const conversationEngine = require('./conversationEngine');
 const logger = require('../worker/logger');
+const { sendEmail } = require('./emailService');
 
 // Environment helpers
 const WHATSAPP_SERVICE_URL = () => (process.env.WHATSAPP_SERVICE_URL || '').replace(/\/$/, '');
@@ -76,6 +77,18 @@ class OutreachService {
   async processFollowupQueue() {
     logger.info('[Outreach Service] Checking followup queue for due tasks...');
     const nowStr = new Date().toISOString();
+    
+    let settings = { whatsapp_delay_ms: 5000 };
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const configPath = path.join(__dirname, '../config/outreach_settings.json');
+      if (fs.existsSync(configPath)) {
+        settings = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      }
+    } catch (e) {
+      logger.warn(`[Outreach Service] Failed to read dynamic settings: ${e.message}`);
+    }
     
     // Fetch all pending followups due right now
     const pendingTasks = await followupRepo.list({
@@ -191,29 +204,22 @@ class OutreachService {
                     timeout: 8000
                   });
                   gatewayResponse = res.data;
+
+                  // Rate limit sleep after dispatching to WhatsApp to protect account from spam blocks
+                  const delayMs = settings.whatsapp_delay_ms || 5000;
+                  logger.info(`[Outreach Service] WhatsApp sent to ${recipient}. Throttling loop: sleeping for ${delayMs}ms...`);
+                  await new Promise(resolve => setTimeout(resolve, delayMs));
                 } else {
                   gatewayResponse = { mock: true, note: 'WhatsApp Service URL not set.' };
                 }
               } else {
-                // Email via Resend API
-                const resendKey = (process.env.RESEND_API_KEY || '').trim();
-                if (resendKey) {
-                  const res = await axios.post('https://api.resend.com/emails', {
-                    from: 'Outreach <onboarding@resend.dev>',
-                    to: recipient,
-                    subject: 'Partnership Inquiry - Growth Audit',
-                    html: `<p>${draftText.replace(/\n/g, '<br>')}</p>`
-                  }, {
-                    headers: {
-                      'Authorization': `Bearer ${resendKey}`,
-                      'Content-Type': 'application/json'
-                    },
-                    timeout: 6000
-                  });
-                  gatewayResponse = res.data;
-                } else {
-                  gatewayResponse = { mock: true, note: 'Resend API key not set.' };
-                }
+                // Email via unified emailService (Nodemailer → Resend fallback)
+                const emailResult = await sendEmail({
+                  to: recipient,
+                  subject: 'Partnership Inquiry - Growth Audit',
+                  html: `<p>${draftText.replace(/\n/g, '<br>')}</p>`,
+                });
+                gatewayResponse = emailResult;
               }
             } catch (err) {
               status = 'failed';

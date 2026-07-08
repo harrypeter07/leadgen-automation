@@ -7,17 +7,20 @@ RUN apt-get update && apt-get install -y curl && \
 
 WORKDIR /app
 
-# Prevent playwright from downloading browser binaries during npm install,
-# since they are already pre-installed in the base image.
+# Browsers are pre-installed in the base image at /ms-playwright.
+# Set the path BEFORE npm install so postinstall.js does NOT trigger a second download.
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 COPY package*.json ./
 COPY scripts/ ./scripts/
-RUN npm install
+
+# npm_config_ignore_scripts skips postinstall so Playwright doesn't re-download browsers
+RUN npm install --ignore-scripts
 
 COPY . .
 
-EXPOSE 3001
+EXPOSE 8080
 
-CMD ["npm", "start"]
+CMD ["node", "index.js"]
+

@@ -1,0 +1,331 @@
+{
+  "name": "Publishing Hub",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "e4f8a1b2-2001-4000-8000-000000000001",
+      "name": "Poll Queue Every 5 Min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/publish/queue?status=scheduled",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "27pwgfjvq491aircy8lh6nz3eb5mkus0"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "e4f8a1b2-2002-4000-8000-000000000002",
+      "name": "Get Scheduled Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-queue",
+              "leftValue": "={{ $json.queue?.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "e4f8a1b2-200a-4000-8000-000000000010",
+      "name": "Has Items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "queue",
+        "options": {}
+      },
+      "id": "e4f8a1b2-2003-4000-8000-000000000003",
+      "name": "Split Queue Items",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [700, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/accounts/credentials",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "27pwgfjvq491aircy8lh6nz3eb5mkus0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"platform\": \"{{ $json.platform }}\",\n  \"account_name\": \"{{ $json.account_name }}\"\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "e4f8a1b2-2004-4000-8000-000000000004",
+      "name": "Fetch Page Credentials",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $('Split Queue Items').item.json.platform }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "facebook",
+              "output": 0
+            },
+            {
+              "value2": "instagram",
+              "output": 1
+            }
+          ]
+        },
+        "fallbackOutput": 0
+      },
+      "id": "e4f8a1b2-2005-4000-8000-000000000005",
+      "name": "Route by Platform",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $('Split Queue Items').item.json.page_id }}/feed",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": \"{{ $('Split Queue Items').item.json.content }}\",\n  \"access_token\": \"{{ $json.access_token }}\"\n}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "e4f8a1b2-2006-4000-8000-000000000006",
+      "name": "Post Facebook Feed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1300, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $('Split Queue Items').item.json.instagram_id }}/media",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"image_url\": \"{{ $('Split Queue Items').item.json.media_url }}\",\n  \"caption\": \"{{ $('Split Queue Items').item.json.content }}\",\n  \"access_token\": \"{{ $('Fetch Page Credentials').item.json.access_token }}\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "e4f8a1b2-2007-4000-8000-000000000007",
+      "name": "Create IG Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $('Split Queue Items').item.json.instagram_id }}/media_publish",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"creation_id\": \"{{ $json.id }}\",\n  \"access_token\": \"{{ $('Fetch Page Credentials').item.json.access_token }}\"\n}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "e4f8a1b2-2008-4000-8000-000000000008",
+      "name": "Publish IG Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/publish/queue/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "27pwgfjvq491aircy8lh6nz3eb5mkus0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"id\": \"{{ $('Split Queue Items').item.json.id }}\",\n  \"status\": \"published\",\n  \"published_id\": \"{{ $json.id }}\",\n  \"published_at\": \"{{ new Date().toISOString() }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-2009-4000-8000-000000000009",
+      "name": "Mark Published",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1700, 200]
+    }
+  ],
+  "connections": {
+    "Poll Queue Every 5 Min": {
+      "main": [
+        [
+          {
+            "node": "Get Scheduled Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scheduled Posts": {
+      "main": [
+        [
+          {
+            "node": "Has Items?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Items?": {
+      "main": [
+        [
+          {
+            "node": "Split Queue Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Queue Items": {
+      "main": [
+        [
+          {
+            "node": "Fetch Page Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Page Credentials": {
+      "main": [
+        [
+          {
+            "node": "Route by Platform",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Platform": {
+      "main": [
+        [
+          {
+            "node": "Post Facebook Feed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create IG Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Facebook Feed": {
+      "main": [
+        [
+          {
+            "node": "Mark Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create IG Container": {
+      "main": [
+        [
+          {
+            "node": "Publish IG Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish IG Post": {
+      "main": [
+        [
+          {
+            "node": "Mark Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "e4f8a1b2-2000-4000-8001-000000000000",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "flowfyp-production"
+  },
+  "tags": [
+    { "id": "meta-integration", "name": "Meta Integration" },
+    { "id": "publishing", "name": "Publishing" }
+  ]
+}

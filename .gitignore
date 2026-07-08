@@ -7,3 +7,5 @@ __pycache__/
 .wwebjs_auth/
 qr-code.png
 .wwebjs_cache/
+scratch/
+scripts/

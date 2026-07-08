@@ -91,11 +91,29 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       )
     },
     {
+      name: 'Social Automation',
+      href: '/automation',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      )
+    },
+    {
       name: 'Google Scraper',
       href: '/scraper',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      )
+    },
+    {
+      name: 'Email Outreach',
+      href: '/automation/email-outreach',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
       )
     },
@@ -240,7 +258,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F3EF] text-[#2D2D2D] flex flex-col md:flex-row font-sans">
+    <div className="min-h-screen bg-[#141416] text-[#2D2D2D] flex flex-col md:flex-row font-sans">
       <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: '#1c1c1e', color: '#f3f4f6', border: '1px solid #2d2d30' } }} />
 
       {/* Mobile Top Bar */}
@@ -289,7 +307,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-x-hidden min-w-0">
-        <div className="px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto">
+        <div className="min-h-screen">
           {children}
         </div>
       </main>

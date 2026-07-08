@@ -100,6 +100,44 @@ router.post('/orchestrate', authenticateWorkflowRequest, async (req, res, next) 
         break;
       }
 
+      // ─── Meta Platform Inbound Events (from Communication Hub / System Dispatcher) ───
+
+      case 'messenger_message': {
+        const { sender_id, message_text, page_id, channel } = payload || {};
+        logger.info({ sender_id, page_id }, '[Workflow Orchestrator] Inbound Messenger message received.');
+        // Log the inbound event — future: resolve sender to a CRM lead and route to conversationEngine
+        nextAction = 'LOG_INBOUND';
+        actionPayload = { channel: channel || 'messenger', sender_id, page_id, received: true };
+        break;
+      }
+
+      case 'instagram_message': {
+        const { sender_id: igSender, message_text: igText, ig_business_id } = payload || {};
+        logger.info({ igSender, ig_business_id }, '[Workflow Orchestrator] Inbound Instagram DM received.');
+        nextAction = 'LOG_INBOUND';
+        actionPayload = { channel: 'instagram', sender_id: igSender, ig_business_id, received: true };
+        break;
+      }
+
+      case 'whatsapp_message': {
+        const { sender_phone, message_text: waText, waba_id } = payload || {};
+        logger.info({ sender_phone, waba_id }, '[Workflow Orchestrator] Inbound WhatsApp message received.');
+        nextAction = 'LOG_INBOUND';
+        actionPayload = { channel: 'whatsapp', sender_phone, waba_id, received: true };
+        break;
+      }
+
+      case 'retry_job': {
+        const { id: retryId } = payload || {};
+        if (!retryId) {
+          throw new ValidationError('retry_job payload is missing "id" parameter.');
+        }
+        logger.info({ retryId }, '[Workflow Orchestrator] Retry job triggered for queue item.');
+        nextAction = 'RETRY_QUEUED';
+        actionPayload = { id: retryId, retried: true };
+        break;
+      }
+
       case 'action_completed': {
         const { leadId, actionType, status, messageId } = payload || {};
         logger.info({ leadId, actionType, status, messageId }, `[Workflow Orchestrator] Action completed callback received.`);

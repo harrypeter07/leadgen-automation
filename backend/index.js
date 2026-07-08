@@ -23,6 +23,7 @@ app.use(sanitizeMiddleware);
 
 // Mount Routes
 app.use('/api/jobs', require('./api/jobs'));
+app.use('/api/enrich', require('./api/enrich'));
 app.use('/api/metrics', require('./api/metrics'));
 app.use('/api/providers', require('./api/providers'));
 app.use('/api/health', require('./api/health'));
@@ -36,6 +37,8 @@ app.use('/api/whatsapp-webhook', require('./api/whatsappWebhooks'));
 app.use('/api/docs', require('./api/docs'));
 app.use('/api/analytics', require('./api/analytics'));
 app.use('/api/workflows', require('./api/workflows'));
+app.use('/api/automation/accounts', require('./api/automationAccounts'));
+app.use('/api/automation/workflows', require('./api/automationWorkflows'));
 
 // System diagnostic health endpoints
 app.get('/health', (_req, res) => {
@@ -52,6 +55,71 @@ app.get('/health', (_req, res) => {
 
 app.get('/health/system', (_req, res) => {
   res.json(bootstrapManager.getSystemStatus());
+});
+
+app.get('/health/env-check', (req, res) => {
+  res.json({
+    SUPABASE_URL_defined: !!process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY_defined: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+  });
+});
+
+app.get('/health/smtp-check', async (req, res) => {
+  const supabase = require('./database/connection');
+  if (!supabase) {
+    return res.json({ error: 'Supabase client is null' });
+  }
+  try {
+    const { data, error } = await supabase
+      .from('meta_config')
+      .select('key, value')
+      .in('key', ['SMTP_USER', 'SMTP_PASS', 'SMTP_FROM_NAME']);
+    res.json({ data, error });
+  } catch (err) {
+    res.json({ catch_error: err.message });
+  }
+});
+
+app.get('/health/smtp-send-check', async (req, res) => {
+  const emailService = require('./services/emailService');
+  let serviceConfig = null;
+  let serviceErr = null;
+  
+  try {
+    const data = await emailService.getSMTPConfigFromDB();
+    if (data) {
+      serviceConfig = {
+        user: data.user,
+        pass_exists: !!data.pass,
+        fromName: data.fromName
+      };
+    } else {
+      serviceConfig = 'returned null';
+    }
+  } catch (err) {
+    serviceErr = err.message;
+  }
+
+  try {
+    const result = await emailService.sendEmail({
+      to: 'mansurihh@rknec.edu',
+      subject: 'production test diagnostic',
+      html: 'testing'
+    });
+    res.json({
+      result,
+      serviceConfig,
+      serviceErr,
+      supabase_in_service_is_null: !emailService.supabase
+    });
+  } catch (err) {
+    res.json({
+      send_error: err.message,
+      serviceConfig,
+      serviceErr,
+      supabase_in_service_is_null: !emailService.supabase
+    });
+  }
 });
 
 // Liveness probe

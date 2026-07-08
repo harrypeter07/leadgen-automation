@@ -1,0 +1,368 @@
+{
+  "name": "Email Outreach Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-outreach/generate",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "e1f2a3b4-0001-4000-8000-000000000001",
+      "name": "Webhook Generate",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [100, 200]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const leadIds = $input.first().json.body.leadIds || [];\nreturn leadIds.map(id => ({ json: { id } }));"
+      },
+      "id": "e1f2a3b4-0015-4000-8000-000000000015",
+      "name": "Normalize Gen Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [280, 200]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "e1f2a3b4-0003-4000-8000-000000000003",
+      "name": "Loop Lead IDs",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL.replace(/\\/+$/, '') }}/rest/v1/leads?id=eq.{{ $json.id }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e1f2a3b4-0004-4000-8000-000000000004",
+      "name": "Fetch Lead Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const lead = $input.first().json;\nconst enrichment = lead.enrichment_fields || {};\nconst description = enrichment.business_description || lead.notes || 'local business';\nconst offerings = (enrichment.key_offerings || []).join(', ') || lead.category || 'services';\nconst contactName = enrichment.contact_person || '';\nconst contactTitle = enrichment.contact_position || '';\n\nconst salutation = contactName ? `Hi ${contactName.split(' ')[0]}` : 'Hi there';\n\nconst prompt = `You are a professional outreach writer. Write a simple, conversational email to a business owner.\\nIt MUST sound like it was hand-written by a real person, not a marketing team or AI template.\\n\\nRules:\\n1. Short paragraphs (2 to 3 lines maximum).\\n2. Avoid ALL tech jargon & hype words (API, SMTP, OAuth, Port 465, infrastructure, verified SMTP, webhook, integration, pipeline, synergy, optimize, guaranteed, boost, revolutionary).\\n3. Do not use centered layout phrasing, centered titles, hero sections, bold text, or multiple call-to-actions.\\n4. Keep the reading level simple (8th grade English), friendly, and direct.\\n\\nDetails:\\n- Business Name: ${lead.name}\\n- Category/Industry: ${lead.category || 'business'}\\n- What they do: ${description}\\n- Main offerings: ${offerings}\\n\\nOur pitch:\\nWe build clean, modern design mockups for local businesses to show what a high-converting homepage can look like. We share these mockups completely free, with no obligations.\\n\\nGenerate exactly this JSON and nothing else (no markdown blocks, raw JSON only):\\n{\\n  \\\"email_subject\\\": \\\"A natural, conversational subject line under 50 characters, no exclamation marks or emojis (e.g. 'quick homepage idea for ${lead.name}')\\\",\\n  \\\"email_body\\\": \\\"Write a 3-paragraph outreach message. Paragraph 1: Start with '${salutation},' and mention a specific offering or detail of theirs. Paragraph 2: Mention that we created a free custom homepage mockup for their business, with no strings attached, just to show what is possible. Paragraph 3: Ask a soft question (e.g. 'Would you be open to taking a quick look at it?'). Sign off with: 'Best regards,\\\\\nZarss Outreach Team'\\\"\\n}`;\n\\nreturn [{ json: { id: lead.id, prompt } }];"
+      },
+      "id": "e1f2a3b4-0005-4000-8000-000000000005",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\"parts\": [{\"text\": {{ JSON.stringify($json.prompt) }}}]}],\n  \"generationConfig\": {\n    \"temperature\": 0.6,\n    \"maxOutputTokens\": 8192,\n    \"responseMimeType\": \"application/json\"\n  }\n}",
+        "options": {}
+      },
+      "id": "e1f2a3b4-0006-4000-8000-000000000006",
+      "name": "Call Gemini AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1060, 200]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const gemini = $json;\nconst text = gemini.candidates[0].content.parts[0].text;\n\nlet parsed;\ntry {\n  parsed = JSON.parse(text);\n} catch (e) {\n  const match = text.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    try { parsed = JSON.parse(match[0]); } catch (_) { parsed = {}; }\n  } else {\n    parsed = {};\n  }\n}\n\nconst id = $('Build Prompt').item.json.id;\n\nreturn [{\n  json: {\n    id,\n    subject: parsed.email_subject || 'Quick question relative to website',\n    body: parsed.email_body || ''\n  }\n}];"
+      },
+      "id": "e1f2a3b4-0007-4000-8000-000000000007",
+      "name": "Parse AI Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1260, 200]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL.replace(/\\/+$/, '') }}/rest/v1/leads?id=eq.{{ $json.id }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ai_message_email_subject\": {{ JSON.stringify($json.subject) }},\n  \"ai_message_email_body\": {{ JSON.stringify($json.body) }},\n  \"status\": \"new\"\n}",
+        "options": {}
+      },
+      "id": "e1f2a3b4-0008-4000-8000-000000000008",
+      "name": "Save Email Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1460, 200]
+    },
+    {
+      "parameters": {
+        "unit": "seconds",
+        "amount": 2
+      },
+      "id": "e1f2a3b4-0009-4000-8000-000000000009",
+      "name": "Wait between drafts",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1660, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-outreach/send",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "e1f2a3b4-0002-4000-8000-000000000002",
+      "name": "Webhook Send",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [100, 500]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const leadIds = $input.first().json.body.leadIds || [];\nreturn leadIds.map(id => ({ json: { id } }));"
+      },
+      "id": "e1f2a3b4-0016-4000-8000-000000000016",
+      "name": "Normalize Send Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [280, 500]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "e1f2a3b4-0010-4000-8000-000000000010",
+      "name": "Loop Leads Send",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL.replace(/\\/+$/, '') }}/rest/v1/leads?id=eq.{{ $json.id }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e1f2a3b4-0011-4000-8000-000000000011",
+      "name": "Fetch Lead Send Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.BACKEND_URL || $env.V3_BACKEND_URL || $env.WHATSAPP_SERVICE_URL).replace(/\\/+$/, '') }}/api/outreach/email/send-single",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "x-api-secret", "value": "={{ $env.WHATSAPP_API_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": {{ JSON.stringify($json.email) }},\n  \"subject\": {{ JSON.stringify($json.ai_message_email_subject) }},\n  \"body\": {{ JSON.stringify($json.ai_message_email_body) }}\n}",
+        "options": {}
+      },
+      "id": "e1f2a3b4-0012-4000-8000-000000000012",
+      "name": "Call Email API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 500]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL.replace(/\\/+$/, '') }}/rest/v1/leads?id=eq.{{ $('Fetch Lead Send Details').item.json.id }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"email_sent\",\n  \"email_sent_at\": \"{{ $now }}\",\n  \"last_contacted_at\": \"{{ $now }}\"\n}",
+        "options": {}
+      },
+      "id": "e1f2a3b4-0013-4000-8000-000000000013",
+      "name": "Mark Email Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1060, 500]
+    },
+    {
+      "parameters": {
+        "unit": "seconds",
+        "amount": 5
+      },
+      "id": "e1f2a3b4-0014-4000-8000-000000000014",
+      "name": "Wait between sends",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1260, 500]
+    }
+  ],
+  "connections": {
+    "Webhook Generate": {
+      "main": [
+        [
+          { "node": "Normalize Gen Input", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Normalize Gen Input": {
+      "main": [
+        [
+          { "node": "Loop Lead IDs", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Loop Lead IDs": {
+      "main": [
+        [
+          { "node": "Fetch Lead Details", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Lead Details": {
+      "main": [
+        [
+          { "node": "Build Prompt", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          { "node": "Call Gemini AI", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Call Gemini AI": {
+      "main": [
+        [
+          { "node": "Parse AI Output", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse AI Output": {
+      "main": [
+        [
+          { "node": "Save Email Draft", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Save Email Draft": {
+      "main": [
+        [
+          { "node": "Wait between drafts", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Wait between drafts": {
+      "main": [
+        [
+          { "node": "Loop Lead IDs", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Webhook Send": {
+      "main": [
+        [
+          { "node": "Normalize Send Input", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Normalize Send Input": {
+      "main": [
+        [
+          { "node": "Loop Leads Send", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Loop Leads Send": {
+      "main": [
+        [
+          { "node": "Fetch Lead Send Details", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Lead Send Details": {
+      "main": [
+        [
+          { "node": "Call Email API", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Call Email API": {
+      "main": [
+        [
+          { "node": "Mark Email Sent", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Mark Email Sent": {
+      "main": [
+        [
+          { "node": "Wait between sends", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Wait between sends": {
+      "main": [
+        [
+          { "node": "Loop Leads Send", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  }
+}
