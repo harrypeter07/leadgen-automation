@@ -53,3 +53,29 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+// POST /api/leads — Upserts or updates a lead record (e.g. status, subject, body)
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = getSupabase()
+    const payload = await req.json()
+
+    if (!payload.id) {
+      return NextResponse.json({ error: 'lead ID required for update' }, { status: 400 })
+    }
+
+    const { error } = await supabase
+      .from('leads')
+      .upsert(payload, { onConflict: 'id' })
+
+    if (error) {
+      console.error('[Leads API] update error:', error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true, message: 'Lead updated successfully' })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Update failed'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
