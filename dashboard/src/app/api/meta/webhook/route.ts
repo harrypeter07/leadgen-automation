@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { supabaseAdmin } from '@/lib/supabase'
+import { InstagramService } from '@/lib/meta/instagram-service'
+import { FacebookService } from '@/lib/meta/facebook-service'
+import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'FLOWFYP_VERIFY_TOKEN'
 const APP_SECRET   = process.env.META_APP_SECRET || ''
@@ -13,7 +17,6 @@ export async function GET(req: NextRequest) {
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
     console.log('[Meta Webhook] ✓ Verification challenge passed.')
-    // Must return the raw challenge string
     return new Response(challenge, { status: 200, headers: { 'Content-Type': 'text/plain' } })
   }
 
@@ -21,12 +24,94 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ error: 'Verification failed.' }, { status: 403 })
 }
 
+// Helper to check rules and send AI/Keyword replies
+async function handleAutoReply(
+  platform: 'instagram' | 'messenger',
+  senderId: string,
+  messageText: string
+) {
+  try {
+    await ensureMetaConfig()
+    const pageId = process.env.META_PAGE_ID || '1165738093294228'
+    const igId = process.env.INSTAGRAM_BUSINESS_ID || '17841411718913026'
+
+    // Skip if sender is ourselves
+    if (senderId === pageId || senderId === igId) return
+
+    // Fetch config
+    const { data: configRows } = await supabaseAdmin
+      .from('meta_config')
+      .select('key, value')
+      .in('key', ['AUTO_REPLY_RULES', 'AI_CHATBOT_ENABLED', 'AI_CHATBOT_PERSONA'])
+
+    const settings: Record<string, string> = {}
+    for (const r of configRows || []) {
+      settings[r.key] = r.value || ''
+    }
+
+    const rules = settings.AUTO_REPLY_RULES ? JSON.parse(settings.AUTO_REPLY_RULES) : []
+    const chatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
+    const chatbotPersona = settings.AI_CHATBOT_PERSONA || 'You are a helpful, professional business assistant.'
+
+    const textLower = messageText.toLowerCase()
+    let replied = false
+
+    // 1. Keyword check
+    for (const rule of rules) {
+      const keywords = Array.isArray(rule.keywords) ? rule.keywords : String(rule.keywords || '').split(',')
+      const matched = keywords.some((kw: string) => textLower.includes(kw.trim().toLowerCase()))
+      if (matched && rule.reply) {
+        console.log(`[AutoReply] Keyword match for "${messageText}". Replying...`)
+        if (platform === 'instagram') {
+          await InstagramService.sendDM(senderId, rule.reply)
+        } else {
+          await FacebookService.sendMessage(senderId, rule.reply)
+        }
+        replied = true
+        break
+      }
+    }
+
+    // 2. AI Chatbot check
+    if (!replied && chatbotEnabled) {
+      console.log(`[AutoReply] Generating AI response for "${messageText}"...`)
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
+      if (apiKey) {
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: chatbotPersona }] },
+              contents: [{ role: 'user', parts: [{ text: messageText }] }],
+              generationConfig: { maxOutputTokens: 150, temperature: 0.7 },
+            }),
+          }
+        )
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json()
+          const aiReply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+          if (aiReply.trim()) {
+            if (platform === 'instagram') {
+              await InstagramService.sendDM(senderId, aiReply.trim())
+            } else {
+              await FacebookService.sendMessage(senderId, aiReply.trim())
+            }
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.error('[AutoReply] Processor error:', err.message)
+  }
+}
+
 // POST /api/meta/webhook — Incoming event delivery
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
 
-    // Validate X-Hub-Signature-256 if APP_SECRET is set
     if (APP_SECRET) {
       const signature = req.headers.get('x-hub-signature-256') || ''
       const expected  = 'sha256=' + crypto.createHmac('sha256', APP_SECRET).update(rawBody).digest('hex')
@@ -39,9 +124,63 @@ export async function POST(req: NextRequest) {
     const body = JSON.parse(rawBody)
     const object = body.object as string
 
-    console.log(`[Meta Webhook] Received ${object} event:`, JSON.stringify(body).slice(0, 400))
+    console.log(`[Meta Webhook] Received ${object} event:`, JSON.stringify(body).slice(0, 450))
 
-    // Route to n8n communication hub (forward the raw payload)
+    // Parse messages
+    if (body.entry && Array.isArray(body.entry)) {
+      for (const entry of body.entry) {
+        // Platform detection
+        const platform = object === 'instagram' ? 'instagram' : 'messenger'
+
+        // 1. Messenger Messaging
+        if (entry.messaging && Array.isArray(entry.messaging)) {
+          for (const msgEvent of entry.messaging) {
+            const senderId = msgEvent.sender?.id
+            const text = msgEvent.message?.text
+            if (senderId && text) {
+              // Handle in background to keep response under 20s
+              handleAutoReply(platform, senderId, text)
+            }
+          }
+        }
+
+        // 2. Instagram changes (comments, feed mentions)
+        if (entry.changes && Array.isArray(entry.changes)) {
+          for (const change of entry.changes) {
+            // Instagram Comments
+            if (change.field === 'comments' && change.value) {
+              const commentId = change.value.id
+              const text = change.value.text
+              const fromId = change.value.from?.id
+              if (commentId && text && fromId) {
+                // Auto-reply to comment if configured
+                ensureMetaConfig().then(async () => {
+                  const myIgId = process.env.INSTAGRAM_BUSINESS_ID || '17841411718913026'
+                  if (fromId !== myIgId) {
+                    const { data: configRows } = await supabaseAdmin
+                      .from('meta_config')
+                      .select('key, value')
+                      .eq('key', 'AUTO_REPLY_RULES')
+                    const rules = configRows?.[0]?.value ? JSON.parse(configRows[0].value) : []
+                    const textLower = text.toLowerCase()
+                    for (const rule of rules) {
+                      const keywords = Array.isArray(rule.keywords) ? rule.keywords : String(rule.keywords || '').split(',')
+                      const matched = keywords.some((kw: string) => textLower.includes(kw.trim().toLowerCase()))
+                      if (matched && rule.reply) {
+                        await InstagramService.replyToComment(commentId, rule.reply)
+                        break
+                      }
+                    }
+                  }
+                }).catch(() => {})
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Forward to n8n communication hub
     const n8nUrl = process.env.N8N_BASE_URL || process.env.N8N_WEBHOOK_BASE_URL
     if (n8nUrl) {
       fetch(`${n8nUrl}/webhook/meta-communication-inbound`, {
@@ -51,7 +190,7 @@ export async function POST(req: NextRequest) {
       }).catch(err => console.error('[Meta Webhook] Failed to forward to n8n:', err.message))
     }
 
-    // Also log to backend if available
+    // Log event
     const backendUrl = process.env.V3_BACKEND_URL || process.env.WHATSAPP_SERVICE_URL
     if (backendUrl) {
       fetch(`${backendUrl}/api/automation/accounts/logs`, {
@@ -67,7 +206,6 @@ export async function POST(req: NextRequest) {
       }).catch(() => {})
     }
 
-    // Meta requires a 200 OK within 20 seconds
     return NextResponse.json({ received: true })
   } catch (err: unknown) {
     console.error('[Meta Webhook] POST error:', err)

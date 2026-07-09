@@ -1,83 +1,160 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
+
+interface SummaryStats {
+  totalFollowers: number
+  totalReach: number
+  totalImpressions: number
+  totalEngagement: number
+}
+
+interface PlatformDetails {
+  id: string | null
+  name?: string
+  username?: string
+  followers: number
+  reach: number
+  engagement?: number
+  impressions?: number
+  picture: string | null
+}
 
 export default function AnalyticsInsightsPage() {
-  const kpis = [
-    { label: 'Followers Growth', value: '45,820', change: '+8.4%', desc: 'Across connected Meta accounts' },
-    { label: 'Total Reach', value: '245.8K', change: '+14.2%', desc: 'Unique platform page viewers' },
-    { label: 'Engagement Rate', value: '5.2%', change: '+0.8%', desc: 'Likes, comments, shares average' },
-    { label: 'Response Time', value: '4m 12s', change: '-1m 30s', desc: 'Average AI reply dispatch speed' },
-  ]
+  const [stats, setStats] = useState<SummaryStats | null>(null)
+  const [platforms, setPlatforms] = useState<{ facebook: PlatformDetails; instagram: PlatformDetails } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const res = await fetch('/api/meta/insights')
+        const data = await res.json()
+        if (res.ok && data.success) {
+          setStats(data.summary)
+          setPlatforms(data.platforms)
+        } else {
+          setError(data.error || 'Failed to fetch insights')
+        }
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchAnalytics()
+  }, [])
 
   return (
-    <div className="space-y-8 select-none">
+    <div className="space-y-8 select-none text-white">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-black text-white tracking-tight">Analytics & Insights</h1>
-        <p className="mt-1 text-sm text-gray-500 font-medium">Monitor audience growth, page impressions, campaign response latencies, and cross-channel conversion stats.</p>
+        <h1 className="text-3xl font-black tracking-tight">📈 Analytics & Insights</h1>
+        <p className="mt-1 text-sm text-gray-500 font-medium">Real-time audience reach, impressions, engagement, and profile metrics fetched via Meta API.</p>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4 shadow-sm">
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">{kpi.label}</span>
-            <div className="space-y-1">
-              <h3 className="text-2xl font-black text-white tracking-tight">{kpi.value}</h3>
-              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
-                <span className={kpi.change.startsWith('+') ? 'text-green-400' : 'text-green-400'}>{kpi.change}</span>
-                <span className="text-gray-600">vs last month</span>
-              </div>
-            </div>
-            <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">{kpi.desc}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Placeholder Charts Panel */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2">📈 Reach & Impressions Over Time</h3>
-          
-          <div className="h-64 flex items-end gap-3 pt-6 px-4">
-            {[40, 55, 45, 60, 75, 90, 85, 100, 95, 110, 105, 120].map((h, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                <div 
-                  style={{ height: `${h}%` }}
-                  className="w-full bg-gradient-to-t from-blue-500/40 to-[#E3B859]/60 hover:to-[#E3B859] rounded-lg transition-all duration-300 relative"
-                >
-                  <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#2D2D30] border border-gray-700 px-1.5 py-0.5 rounded text-[8px] text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-mono">{h * 2}K</span>
-                </div>
-                <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider font-mono">M{i+1}</span>
-              </div>
-            ))}
+      {loading ? (
+        <div className="py-20 text-center text-gray-500 animate-pulse text-sm">Loading performance metrics…</div>
+      ) : error ? (
+        <div className="rounded-2xl border border-red-900/30 bg-red-950/20 p-6 space-y-3">
+          <div className="text-sm font-bold text-red-400">⚠️ API Configuration Limit</div>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Could not fetch profile reach and follower growth. Ensure your Facebook Page Access Token and Instagram Business ID are fully configured in settings, and the token has the necessary permissions (<code className="text-red-300">read_insights</code>, <code className="text-red-300">instagram_basic</code>).
+          </p>
+          <div className="text-[10px] font-mono text-red-300 bg-black/40 p-3 rounded-lg overflow-x-auto">
+            Error: {error}
           </div>
         </div>
-
-        <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2D2D30] pb-2">🎯 Engagement Breakdown by Channel</h3>
-          
-          <div className="h-64 flex flex-col justify-center space-y-4 px-4 text-xs font-semibold">
+      ) : (
+        <>
+          {/* KPI Grid */}
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { name: 'Instagram Feed Posts', count: '48%', color: 'w-[48%] bg-purple-500/80' },
-              { name: 'WhatsApp Bot Dialogs', count: '32%', color: 'w-[32%] bg-green-500/80' },
-              { name: 'Facebook Pages Outbound', count: '14%', color: 'w-[14%] bg-blue-500/80' },
-              { name: 'Messenger Platform replies', count: '6%', color: 'w-[6%] bg-pink-500/80' },
-            ].map(item => (
-              <div key={item.name} className="space-y-1.5">
-                <div className="flex justify-between text-[10px] uppercase tracking-wider font-bold text-gray-400">
-                  <span>{item.name}</span>
-                  <span className="text-white font-mono">{item.count}</span>
+              { label: 'Total Followers', value: stats?.totalFollowers.toLocaleString() || '0', icon: '👥', desc: 'Combined audience size' },
+              { label: 'Total Reach', value: stats?.totalReach.toLocaleString() || '0', icon: '🌐', desc: 'Daily unique views' },
+              { label: 'Total Impressions', value: stats?.totalImpressions.toLocaleString() || '0', icon: '📈', desc: 'Daily total views' },
+              { label: 'Total Engagement', value: stats?.totalEngagement.toLocaleString() || '0', icon: '🎯', desc: 'Comments & reactions' },
+            ].map(kpi => (
+              <div key={kpi.label} className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4 shadow-sm relative overflow-hidden">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">{kpi.label}</span>
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-black tracking-tight">{kpi.value}</h3>
+                  <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">{kpi.desc}</p>
                 </div>
-                <div className="w-full bg-gray-900 h-2.5 rounded-full overflow-hidden border border-[#2D2D30]/60">
-                  <div className={`h-full rounded-full ${item.color}`} />
-                </div>
+                <span className="absolute right-4 bottom-4 text-2xl opacity-10">{kpi.icon}</span>
               </div>
             ))}
           </div>
-        </div>
-      </div>
+
+          {/* Platform Performance breakdown */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Facebook card */}
+            {platforms?.facebook && (
+              <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-5">
+                <div className="flex items-center gap-3 border-b border-[#2D2D30] pb-3">
+                  {platforms.facebook.picture ? (
+                    <img src={platforms.facebook.picture} alt="FB" className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <span className="text-2xl">📘</span>
+                  )}
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider">{platforms.facebook.name || 'Facebook Page'}</h3>
+                    <span className="text-[10px] text-gray-500 font-mono">ID: {platforms.facebook.id}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="p-3 bg-[#141416] rounded-xl border border-[#2D2D30]/60">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Followers</span>
+                    <span className="text-sm font-black font-mono">{platforms.facebook.followers.toLocaleString()}</span>
+                  </div>
+                  <div className="p-3 bg-[#141416] rounded-xl border border-[#2D2D30]/60">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Reach</span>
+                    <span className="text-sm font-black font-mono">{platforms.facebook.reach.toLocaleString()}</span>
+                  </div>
+                  <div className="p-3 bg-[#141416] rounded-xl border border-[#2D2D30]/60">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Engagement</span>
+                    <span className="text-sm font-black font-mono">{platforms.facebook.engagement?.toLocaleString() || '0'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Instagram card */}
+            {platforms?.instagram && (
+              <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-5">
+                <div className="flex items-center gap-3 border-b border-[#2D2D30] pb-3">
+                  {platforms.instagram.picture ? (
+                    <img src={platforms.instagram.picture} alt="IG" className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <span className="text-2xl">📸</span>
+                  )}
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider">@{platforms.instagram.username}</h3>
+                    <span className="text-[10px] text-gray-500 font-mono">ID: {platforms.instagram.id}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="p-3 bg-[#141416] rounded-xl border border-[#2D2D30]/60">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Followers</span>
+                    <span className="text-sm font-black font-mono">{platforms.instagram.followers.toLocaleString()}</span>
+                  </div>
+                  <div className="p-3 bg-[#141416] rounded-xl border border-[#2D2D30]/60">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Reach</span>
+                    <span className="text-sm font-black font-mono">{platforms.instagram.reach.toLocaleString()}</span>
+                  </div>
+                  <div className="p-3 bg-[#141416] rounded-xl border border-[#2D2D30]/60">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Impressions</span>
+                    <span className="text-sm font-black font-mono">{platforms.instagram.impressions?.toLocaleString() || '0'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
