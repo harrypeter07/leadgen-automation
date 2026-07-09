@@ -34,12 +34,27 @@ export default function PublishComposerPage() {
   const [activeTab, setActiveTab]               = useState<'compose' | 'history'>('compose')
   const [publishLog, setPublishLog]             = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  
+  // Cloudinary Integration States
+  const [mediaMode, setMediaMode]               = useState<'supabase' | 'cloudinary'>('supabase')
+  const [cloudinaryFolder, setCloudinaryFolder] = useState('')
+  const [cloudinaryAssets, setCloudinaryAssets] = useState<Array<{ publicId: string; url: string }>>([])
+  const [scanningFolder, setScanningFolder]     = useState(false)
+  const cloudinaryFileRef = useRef<HTMLInputElement>(null)
 
   function togglePlatform(p: string) {
     setSelectedPlatforms(prev =>
       prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
     )
   }
+
+  React.useEffect(() => {
+    const draft = localStorage.getItem('draft_post_caption')
+    if (draft) {
+      setContent(draft)
+      localStorage.removeItem('draft_post_caption')
+    }
+  }, [])
 
   async function handleGenerateAICaption() {
     setGeneratingCaption(true)
@@ -67,9 +82,12 @@ export default function PublishComposerPage() {
     setGeneratingCaption(false)
   }
 
-  async function handleMediaUpload(source: 'file' | 'drive') {
+  async function handleMediaUpload(source: 'file' | 'drive' | 'cloudinary_file') {
     setUploading(true)
-    const toastId = toast.loading(source === 'drive' ? 'Converting Drive link…' : 'Uploading image…')
+    const toastId = toast.loading(
+      source === 'drive' ? 'Converting Drive link…' : 
+      source === 'cloudinary_file' ? 'Uploading to Cloudinary…' : 'Uploading image…'
+    )
     try {
       let res: Response
       if (source === 'drive') {
@@ -79,6 +97,12 @@ export default function PublishComposerPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ driveUrl: driveInput.trim() }),
         })
+      } else if (source === 'cloudinary_file') {
+        const file = cloudinaryFileRef.current?.files?.[0]
+        if (!file) { toast.error('Select a file first', { id: toastId }); setUploading(false); return }
+        const formData = new FormData()
+        formData.append('file', file)
+        res = await fetch('/api/meta/cloudinary', { method: 'POST', body: formData })
       } else {
         const file = fileRef.current?.files?.[0]
         if (!file) { toast.error('Select a file first', { id: toastId }); setUploading(false); return }
@@ -98,6 +122,24 @@ export default function PublishComposerPage() {
       toast.error(err instanceof Error ? err.message : 'Upload failed', { id: toastId })
     }
     setUploading(false)
+  }
+
+  async function handleScanCloudinaryFolder() {
+    setScanningFolder(true)
+    const toastId = toast.loading(`Scanning folder "${cloudinaryFolder || 'root'}"…`)
+    try {
+      const res = await fetch(`/api/meta/cloudinary?folder=${encodeURIComponent(cloudinaryFolder)}`)
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setCloudinaryAssets(data.assets || [])
+        toast.success(`Found ${data.assets?.length || 0} assets!`, { id: toastId })
+      } else {
+        throw new Error(data.error || 'Scan failed')
+      }
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId })
+    }
+    setScanningFolder(false)
   }
 
   function addLog(msg: string) {
@@ -275,29 +317,84 @@ export default function PublishComposerPage() {
             {/* Image / Media Panel */}
             {selectedPlatforms.includes('instagram') && (
               <div className="space-y-3">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block">Image for Instagram <span className="text-red-400">*</span></label>
-
-                {/* Option A: Upload file */}
-                <div className="flex gap-2">
-                  <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('file')} />
-                  <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-                    className="px-3 py-2 rounded-xl bg-[#141416] border border-[#2D2D30] text-gray-400 text-xs font-bold hover:text-white hover:border-gray-500 transition-colors disabled:opacity-40">
-                    {uploading ? '⏳ Uploading…' : '📁 Upload File'}
-                  </button>
-                  <span className="text-gray-600 text-xs self-center">or</span>
-
-                  {/* Option B: Google Drive link */}
-                  <input
-                    value={driveInput}
-                    onChange={e => setDriveInput(e.target.value)}
-                    placeholder="Google Drive share link…"
-                    className="flex-1 bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500"
-                  />
-                  <button type="button" onClick={() => handleMediaUpload('drive')} disabled={uploading || !driveInput.trim()}
-                    className="px-3 py-2 rounded-xl bg-blue-950/40 border border-blue-900/30 text-blue-300 text-xs font-bold hover:bg-blue-900/30 transition-colors disabled:opacity-40">
-                    {uploading ? '⏳' : '☁️ Upload'}
-                  </button>
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block">Image for Instagram <span className="text-red-400">*</span></label>
+                  {/* Mode switcher tabs */}
+                  <div className="flex gap-1 bg-[#141416] border border-[#2D2D30] rounded-lg p-0.5">
+                    <button type="button" onClick={() => setMediaMode('supabase')}
+                      className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors ${mediaMode === 'supabase' ? 'bg-[#222225] text-white' : 'text-gray-500 hover:text-white'}`}>
+                      Supabase/Drive
+                    </button>
+                    <button type="button" onClick={() => setMediaMode('cloudinary')}
+                      className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors ${mediaMode === 'cloudinary' ? 'bg-[#222225] text-white' : 'text-gray-500 hover:text-white'}`}>
+                      Cloudinary CDN
+                    </button>
+                  </div>
                 </div>
+
+                {mediaMode === 'supabase' ? (
+                  /* Option A: Supabase Upload / Drive Link */
+                  <div className="flex gap-2">
+                    <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('file')} />
+                    <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                      className="px-3 py-2 rounded-xl bg-[#141416] border border-[#2D2D30] text-gray-400 text-xs font-bold hover:text-white hover:border-gray-500 transition-colors disabled:opacity-40">
+                      {uploading ? '⏳ Uploading…' : '📁 Upload File'}
+                    </button>
+                    <span className="text-gray-600 text-xs self-center">or</span>
+
+                    <input
+                      value={driveInput}
+                      onChange={e => setDriveInput(e.target.value)}
+                      placeholder="Google Drive share link…"
+                      className="flex-1 bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500"
+                    />
+                    <button type="button" onClick={() => handleMediaUpload('drive')} disabled={uploading || !driveInput.trim()}
+                      className="px-3 py-2 rounded-xl bg-blue-950/40 border border-blue-900/30 text-blue-300 text-xs font-bold hover:bg-blue-900/30 transition-colors disabled:opacity-40">
+                      {uploading ? '⏳' : '☁️ Upload'}
+                    </button>
+                  </div>
+                ) : (
+                  /* Option B: Cloudinary Integration */
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <input ref={cloudinaryFileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('cloudinary_file')} />
+                      <button type="button" onClick={() => cloudinaryFileRef.current?.click()} disabled={uploading}
+                        className="px-3 py-2 rounded-xl bg-[#141416] border border-[#2D2D30] text-gray-400 text-xs font-bold hover:text-white hover:border-gray-500 transition-colors disabled:opacity-40">
+                        {uploading ? '⏳ Uploading…' : '☁️ Cloudinary Upload'}
+                      </button>
+                      <span className="text-gray-600 text-xs self-center">or</span>
+
+                      <input
+                        value={cloudinaryFolder}
+                        onChange={e => setCloudinaryFolder(e.target.value)}
+                        placeholder="Cloudinary folder path (e.g. campaign1)…"
+                        className="flex-1 bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white font-mono placeholder-gray-600 focus:outline-none"
+                      />
+                      <button type="button" onClick={handleScanCloudinaryFolder} disabled={scanningFolder}
+                        className="px-3 py-2 rounded-xl bg-purple-950/40 border border-purple-900/30 text-purple-300 text-xs font-bold hover:bg-purple-900/30 transition-colors">
+                        {scanningFolder ? '⏳' : '🔍 Scan Folder'}
+                      </button>
+                    </div>
+
+                    {/* Scanned assets grid */}
+                    {cloudinaryAssets.length > 0 && (
+                      <div className="grid grid-cols-4 gap-2 max-h-32 overflow-y-auto p-2 bg-[#0E0E10] border border-[#2D2D30] rounded-xl">
+                        {cloudinaryAssets.map(asset => (
+                          <button
+                            key={asset.publicId}
+                            type="button"
+                            onClick={() => setImageUrl(asset.url)}
+                            className={`relative aspect-square rounded-lg overflow-hidden border-2 ${
+                              imageUrl === asset.url ? 'border-[#E3B859]' : 'border-transparent'
+                            }`}
+                          >
+                            <img src={asset.url} alt="asset" className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Current URL + Preview */}
                 {imageUrl && (

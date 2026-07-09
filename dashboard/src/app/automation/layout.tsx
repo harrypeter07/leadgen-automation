@@ -109,6 +109,7 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
               { label: 'Content Publishing', items: [
                 { name: 'Campaign Composer', href: '/automation/publish', icon: '📝' },
                 { name: 'Content Calendar', href: '/automation/calendar', icon: '📅' },
+                { name: 'Trending Research', href: '/automation/trending', icon: '🔥' },
                 { name: 'Media Library', href: '/automation/media', icon: '🖼️' },
               ]},
               { label: 'System Operations', items: [

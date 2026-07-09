@@ -174,7 +174,7 @@ export default function EmailOutreachPage() {
     (l.category && l.category.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
-  // 1. Generate AI Outreach Drafts via Gemini
+  // 1. Generate AI Outreach Drafts via Gemini in Batches
   const handleGenerateOutreach = async () => {
     if (selectedLeadIds.length === 0) {
       toast.error('Please select at least one lead.')
@@ -183,31 +183,45 @@ export default function EmailOutreachPage() {
 
     setIsGenerating(true)
     setGenerateProgress({ done: 0, total: selectedLeadIds.length })
-    const toastId = toast.loading(`Drafting AI emails for ${selectedLeadIds.length} leads...`)
+    const toastId = toast.loading(`Starting batch AI email drafting for ${selectedLeadIds.length} leads...`)
+
+    const batchSize = 3
+    let generatedCount = 0
+    let failedCount = 0
 
     try {
-      const res = await fetch('/api/automation/outreach/email/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadIds: selectedLeadIds })
-      })
-      const data = await res.json()
-      if (res.ok && data.success !== false) {
-        setGenerateProgress({ done: data.generated || selectedLeadIds.length, total: selectedLeadIds.length })
-        toast.success(`🎉 ${data.generated} AI drafts generated! ${data.failed > 0 ? `(${data.failed} failed)` : ''}`, { id: toastId })
-        fetchLeads()
-      } else {
-        throw new Error(data.error || 'Failed to generate drafts')
+      for (let i = 0; i < selectedLeadIds.length; i += batchSize) {
+        const batch = selectedLeadIds.slice(i, i + batchSize)
+        const batchProgressMsg = `Drafting batch ${Math.floor(i / batchSize) + 1} (${generatedCount} done, ${selectedLeadIds.length - generatedCount} remaining)…`
+        toast.loading(batchProgressMsg, { id: toastId })
+
+        const res = await fetch('/api/automation/outreach/email/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadIds: batch })
+        })
+        const data = await res.json()
+        if (res.ok && data.success !== false) {
+          generatedCount += data.generated || batch.length
+          failedCount += data.failed || 0
+        } else {
+          failedCount += batch.length
+        }
+        // Update live progress state
+        setGenerateProgress({ done: generatedCount + failedCount, total: selectedLeadIds.length })
       }
+      toast.success(`🎉 Completed! Generated ${generatedCount} drafts, failed ${failedCount}`, { id: toastId })
+      fetchLeads()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Generation failed'
-      toast.error(`Generation failed: ${msg}`, { id: toastId })
+      toast.error(`Generation error: ${msg}`, { id: toastId })
     } finally {
       setIsGenerating(false)
+      setGenerateProgress(null)
     }
   }
 
-  // 2. Send Emails via Resend API
+  // 2. Send Emails via Resend API in Batches
   const handleSendEmails = async () => {
     const leadsToSend = filteredLeads.filter(l => selectedLeadIds.includes(l.id))
     const missingDrafts = leadsToSend.filter(l => !l.ai_message_email_subject || !l.ai_message_email_body)
@@ -224,28 +238,44 @@ export default function EmailOutreachPage() {
 
     setIsSending(true)
     setSendResults(null)
-    const toastId = toast.loading(`Dispatching emails to ${selectedLeadIds.length} recipients...`)
+    setGenerateProgress({ done: 0, total: selectedLeadIds.length })
+    const toastId = toast.loading(`Starting batch dispatch to ${selectedLeadIds.length} recipients...`)
+
+    const batchSize = 3
+    let sentCount = 0
+    let failedCount = 0
 
     try {
-      const res = await fetch('/api/automation/outreach/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadIds: selectedLeadIds })
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setSendResults({ sent: data.sent || 0, failed: data.failed || 0 })
-        toast.success(`✉️ ${data.sent} emails sent! ${data.failed > 0 ? `(${data.failed} failed)` : ''}`, { id: toastId })
-        setSelectedLeadIds([])
-        fetchLeads()
-      } else {
-        throw new Error(data.error || 'Failed to send emails')
+      for (let i = 0; i < selectedLeadIds.length; i += batchSize) {
+        const batch = selectedLeadIds.slice(i, i + batchSize)
+        const batchProgressMsg = `Sending batch ${Math.floor(i / batchSize) + 1} (${sentCount} sent, ${selectedLeadIds.length - sentCount} remaining)…`
+        toast.loading(batchProgressMsg, { id: toastId })
+
+        const res = await fetch('/api/automation/outreach/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadIds: batch })
+        })
+        const data = await res.json()
+        if (res.ok) {
+          sentCount += data.sent || 0
+          failedCount += data.failed || 0
+        } else {
+          failedCount += batch.length
+        }
+        // Update live progress state
+        setGenerateProgress({ done: sentCount + failedCount, total: selectedLeadIds.length })
       }
+      setSendResults({ sent: sentCount, failed: failedCount })
+      toast.success(`✉️ Dispatched! Sent: ${sentCount}, Failed: ${failedCount}`, { id: toastId })
+      setSelectedLeadIds([])
+      fetchLeads()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Send failed'
       toast.error(`Sending failed: ${msg}`, { id: toastId })
     } finally {
       setIsSending(false)
+      setGenerateProgress(null)
     }
   }
 
@@ -288,6 +318,24 @@ export default function EmailOutreachPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Real-time Progress Bar Panel */}
+      {generateProgress && (
+        <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-5 space-y-3">
+          <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-[#E3B859]">
+            <span>⏳ Processing outreach pipeline…</span>
+            <span className="font-mono">
+              {generateProgress.done} / {generateProgress.total} completed ({Math.round((generateProgress.done / generateProgress.total) * 100)}%)
+            </span>
+          </div>
+          <div className="w-full bg-[#18181A] h-3 rounded-full overflow-hidden border border-[#2D2D30]">
+            <div
+              className="h-full bg-gradient-to-r from-yellow-500 to-[#E3B859] transition-all duration-300"
+              style={{ width: `${(generateProgress.done / generateProgress.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="relative rounded-2xl overflow-hidden border border-[#2D2D30] bg-gradient-to-r from-[#1E1E22] to-[#141416] p-8 shadow-xl">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(227,184,89,0.08),transparent)] pointer-events-none" />

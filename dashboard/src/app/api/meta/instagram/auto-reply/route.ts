@@ -8,7 +8,7 @@ export async function GET() {
     const { data, error } = await supabaseAdmin
       .from('meta_config')
       .select('key, value')
-      .in('key', ['AUTO_REPLY_RULES', 'AI_CHATBOT_ENABLED', 'AI_CHATBOT_PERSONA'])
+      .in('key', ['AUTO_REPLY_RULES', 'AI_CHATBOT_ENABLED', 'AI_CHATBOT_PERSONA', 'SAVED_CHATBOT_PERSONAS'])
 
     if (error) throw error
 
@@ -22,11 +22,17 @@ export async function GET() {
       rules = settings.AUTO_REPLY_RULES ? JSON.parse(settings.AUTO_REPLY_RULES) : []
     } catch {}
 
+    let personas = []
+    try {
+      personas = settings.SAVED_CHATBOT_PERSONAS ? JSON.parse(settings.SAVED_CHATBOT_PERSONAS) : []
+    } catch {}
+
     return NextResponse.json({
       success: true,
       rules,
       chatbotEnabled: settings.AI_CHATBOT_ENABLED === 'true',
       chatbotPersona: settings.AI_CHATBOT_PERSONA || '',
+      personas,
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -34,10 +40,10 @@ export async function GET() {
 }
 
 // POST /api/meta/instagram/auto-reply
-// Saves rules, chatbot status, or persona
+// Saves rules, chatbot status, persona, or saved personas list
 export async function POST(req: NextRequest) {
   try {
-    const { rules, chatbotEnabled, chatbotPersona } = await req.json()
+    const { rules, chatbotEnabled, chatbotPersona, personas } = await req.json()
 
     const rows = []
 
@@ -63,6 +69,15 @@ export async function POST(req: NextRequest) {
       rows.push({
         key: 'AI_CHATBOT_PERSONA',
         value: chatbotPersona,
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    if (personas !== undefined) {
+      rows.push({
+        key: 'SAVED_CHATBOT_PERSONAS',
+        value: JSON.stringify(personas),
         encrypted: false,
         updated_at: new Date().toISOString(),
       })

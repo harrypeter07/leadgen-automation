@@ -8,6 +8,11 @@ interface Rule {
   reply: string
 }
 
+interface Persona {
+  name: string
+  instructions: string
+}
+
 interface AutoReplyModalProps {
   onClose: () => void
 }
@@ -16,8 +21,20 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
   const [rules, setRules] = useState<Rule[]>([])
   const [chatbotEnabled, setChatbotEnabled] = useState(false)
   const [chatbotPersona, setChatbotPersona] = useState('')
+  const [personas, setPersonas] = useState<Persona[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  // Custom persona creator inputs
+  const [newPersonaName, setNewPersonaName] = useState('')
+  const [newPersonaInst, setNewPersonaInst] = useState('')
+
+  // Seeded default personas if none exist
+  const DEFAULT_PERSONAS: Persona[] = [
+    { name: 'Friendly Assistant', instructions: 'You are a warm, helpful, and concise customer support agent. Answer questions simply and invite them to leave their contact details.' },
+    { name: 'Direct Sales Rep', instructions: 'You are a results-oriented sales representative. Highlight the benefits of our smart automation solutions starting at $99, and push for a scheduled demo or email address.' },
+    { name: 'Technical Support', instructions: 'You are a clear, technical agent. Assist with troubleshooting API configurations, SMTP server checks, and Google Scraper parameters in a helpful tone.' },
+  ]
 
   // Load settings on mount
   useEffect(() => {
@@ -29,6 +46,7 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
           setRules(data.rules || [])
           setChatbotEnabled(data.chatbotEnabled)
           setChatbotPersona(data.chatbotPersona || '')
+          setPersonas(data.personas && data.personas.length > 0 ? data.personas : DEFAULT_PERSONAS)
         }
       } catch (err) {
         console.error('Failed to load auto-reply settings:', err)
@@ -54,6 +72,29 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
     )
   }
 
+  const handleAddCustomPersona = () => {
+    if (!newPersonaName.trim() || !newPersonaInst.trim()) {
+      toast.error('Enter both name and instructions for the persona')
+      return
+    }
+    // Check for duplicate names
+    if (personas.some(p => p.name.toLowerCase() === newPersonaName.trim().toLowerCase())) {
+      toast.error('A persona with this name already exists')
+      return
+    }
+    const created = { name: newPersonaName.trim(), instructions: newPersonaInst.trim() }
+    setPersonas(prev => [...prev, created])
+    setChatbotPersona(created.instructions)
+    setNewPersonaName('')
+    setNewPersonaInst('')
+    toast.success(`Custom persona "${created.name}" created!`)
+  }
+
+  const handleRemovePersona = (nameToRemove: string) => {
+    setPersonas(prev => prev.filter(p => p.name !== nameToRemove))
+    toast.success(`Removed persona "${nameToRemove}"`)
+  }
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
@@ -66,6 +107,7 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
           rules,
           chatbotEnabled,
           chatbotPersona: chatbotPersona.trim(),
+          personas,
         }),
       })
       const data = await res.json()
@@ -90,8 +132,8 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
       >
         <div className="flex items-center justify-between border-b border-[#2D2D30] pb-3">
           <div>
-            <h2 className="text-white font-black text-lg">🤖 AI & Auto-Reply Settings</h2>
-            <p className="text-[10px] text-gray-500 mt-0.5">Automate replies to direct messages based on keywords or Gemini AI chatbot</p>
+            <h2 className="text-white font-black text-lg">🤖 AI Chatbot & Auto-Reply Settings</h2>
+            <p className="text-[10px] text-gray-500 mt-0.5">Automate replies to direct messages based on keywords or custom Gemini AI personas</p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white text-xl transition-colors">✕</button>
         </div>
@@ -119,14 +161,74 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
               </div>
 
               {chatbotEnabled && (
-                <div className="space-y-1.5 pt-2">
-                  <label className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block">AI Business Persona / Instructions</label>
-                  <textarea
-                    value={chatbotPersona}
-                    onChange={e => setChatbotPersona(e.target.value)}
-                    className="w-full bg-[#0E0E10] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors resize-none leading-relaxed"                    rows={4}
-                    placeholder="E.g., You are a customer support agent for WHSoftec. We offer smart web dev and AI automation systems starting at $99. Be helpful, professional, and invite them to leave their email."
-                  />
+                <div className="space-y-3 pt-2 border-t border-[#2D2D30]/40">
+                  {/* Select Predefined Persona */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block">Load Predefined Persona</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {personas.map(p => (
+                        <div key={p.name} className="flex items-center bg-[#0E0E10] border border-[#2D2D30] rounded-xl pl-2.5 pr-1.5 py-1">
+                          <button
+                            type="button"
+                            onClick={() => setChatbotPersona(p.instructions)}
+                            className={`text-[9px] font-bold uppercase transition-colors mr-2 ${
+                              chatbotPersona === p.instructions ? 'text-[#E3B859]' : 'text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            👤 {p.name}
+                          </button>
+                          {!DEFAULT_PERSONAS.some(d => d.name === p.name) && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePersona(p.name)}
+                              className="text-[9px] text-gray-600 hover:text-red-400 font-mono"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Active instructions text area */}
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block">Active AI Chatbot Instructions</label>
+                    <textarea
+                      value={chatbotPersona}
+                      onChange={e => setChatbotPersona(e.target.value)}
+                      className="w-full bg-[#0E0E10] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors resize-none leading-relaxed"
+                      rows={3}
+                      placeholder="Write active prompt instructions..."
+                    />
+                  </div>
+
+                  {/* Add custom persona fields */}
+                  <div className="p-3 bg-[#0E0E10] border border-[#2D2D30] rounded-xl space-y-2">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block">➕ Save Custom Persona Template</span>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <input
+                        value={newPersonaName}
+                        onChange={e => setNewPersonaName(e.target.value)}
+                        placeholder="Persona Name (e.g. Sales Expert)"
+                        className="sm:col-span-1 bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                      />
+                      <input
+                        value={newPersonaInst}
+                        onChange={e => setNewPersonaInst(e.target.value)}
+                        placeholder="AI instructions / business goal..."
+                        className="sm:col-span-2 bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddCustomPersona}
+                      disabled={!newPersonaName.trim() || !newPersonaInst.trim()}
+                      className="w-full py-1.5 rounded-lg bg-purple-900/40 border border-purple-800/30 text-purple-300 text-[9px] font-bold uppercase hover:bg-purple-800/30 transition-colors disabled:opacity-40"
+                    >
+                      Save Persona Template
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
