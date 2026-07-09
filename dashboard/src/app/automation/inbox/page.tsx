@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
+import AutoReplyModal from './AutoReplyModal'
 
 interface Thread {
   id: string
@@ -249,6 +250,7 @@ export default function SocialInboxPage() {
   const [igError, setIgError]               = useState('')
   const [fbError, setFbError]               = useState('')
   const [showCompose, setShowCompose]       = useState(false)
+  const [showAutoReply, setShowAutoReply]   = useState(false)
 
   const fetchThreads = useCallback(async () => {
     setLoadingThreads(true)
@@ -429,6 +431,7 @@ export default function SocialInboxPage() {
   return (
     <>
       {showCompose && <ComposeDMModal onClose={() => { setShowCompose(false); fetchThreads() }} threads={threads} />}
+      {showAutoReply && <AutoReplyModal onClose={() => setShowAutoReply(false)} />}
 
       <div className="flex flex-col h-[calc(100vh-120px)] gap-0 rounded-2xl border border-[#2D2D30] overflow-hidden bg-[#0E0E10] text-white select-none">
 
@@ -439,6 +442,13 @@ export default function SocialInboxPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-white">💬 Inbox</h2>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowAutoReply(true)}
+                    className="p-1.5 rounded-lg bg-[#141416] border border-[#2D2D30] hover:bg-[#222225] text-xs transition-all"
+                    title="Configure Auto-Replies & AI Bot"
+                  >
+                    🤖
+                  </button>
                   <button
                     onClick={() => setShowCompose(true)}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-pink-600/80 to-purple-600/80 hover:from-pink-500 hover:to-purple-500 text-white text-[10px] font-bold uppercase tracking-wider transition-all"

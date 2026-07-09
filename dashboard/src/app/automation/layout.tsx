@@ -101,6 +101,7 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
             {[
               { label: 'Business Communication', items: [
                 { name: 'Unified Inbox', href: '/automation/inbox', icon: '📥' },
+                { name: 'Comment Manager', href: '/automation/comments', icon: '💬' },
                 { name: 'CRM Pipelines', href: '/automation/crm', icon: '💼' },
                 { name: 'Outreach Campaigns', href: '/automation/campaigns', icon: '📤' },
                 { name: 'Email Outreach', href: '/automation/email-outreach', icon: '📧' },
