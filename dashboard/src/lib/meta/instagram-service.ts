@@ -85,8 +85,9 @@ export const InstagramService = {
     return igPost<{ id: string }>(`/${commentId}/replies`, { message })
   },
   async getMessages(limit = 20) {
-    // Uses new Instagram API endpoint - /me/conversations
-    return igGet<{ data: unknown[] }>(`/me/conversations?platform=instagram&fields=id,participants,messages{message,from,created_time}&limit=${limit}`)
+    // Uses new Instagram API - /me/conversations
+    // NOTE: participants return 'username' not 'name' in live mode
+    return igGet<{ data: unknown[] }>(`/me/conversations?fields=id,participants{id,name,username},messages{id,message,from,created_time},updated_time&limit=${limit}`)
   },
   async sendDM(recipientId: string, text: string) {
     MetaLogger.request(SOURCE, 'POST', `${IG_BASE}/me/messages`, { recipientId, text })
