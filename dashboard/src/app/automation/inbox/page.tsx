@@ -41,33 +41,6 @@ function timeAgo(ts: string) {
   } catch { return ts }
 }
 
-// ─── Dev Mode Banner ─────────────────────────────────────────────────────────
-function DevModeBanner() {
-  const [dismissed, setDismissed] = useState(false)
-  if (dismissed) return null
-  return (
-    <div className="mx-4 mt-4 mb-0 bg-amber-950/30 border border-amber-800/40 rounded-xl p-3.5 text-[11px] text-amber-300 leading-relaxed relative">
-      <button
-        onClick={() => setDismissed(true)}
-        className="absolute top-2 right-2.5 text-amber-500 hover:text-amber-300 text-sm"
-      >✕</button>
-      <div className="font-black text-amber-400 mb-1">⚠️ App in Development Mode</div>
-      <p>
-        Your Meta app is in <strong>Development Mode</strong>. Instagram & Messenger APIs only return conversations with people who are added as <strong>Testers or Developers</strong> in your Meta app. Real followers (like Kashi Singh, smriti shah) won&apos;t appear until the app is <strong>submitted for App Review</strong> and approved.
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <a
-          href="https://developers.facebook.com/apps"
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-900/40 border border-amber-800/40 text-amber-300 text-[10px] font-bold hover:bg-amber-900/60 transition-colors"
-        >
-          📋 Add Testers in App Dashboard →
-        </a>
-      </div>
-    </div>
-  )
-}
 
 // ─── Compose DM Modal ─────────────────────────────────────────────────────────
 interface ComposeDMModalProps {
@@ -277,8 +250,10 @@ export default function SocialInboxPage() {
     try {
       const fbRes  = await fetch('/api/meta/facebook/messages?limit=20')
       const fbData = await fbRes.json()
-      if (fbData.data && Array.isArray(fbData.data)) {
-        for (const conv of fbData.data) {
+      // API returns { success, data: { data: [...conversations] } } — need .data.data
+      const fbConvs = fbData.data?.data ?? fbData.data ?? []
+      if (Array.isArray(fbConvs) && fbConvs.length > 0) {
+        for (const conv of fbConvs) {
           const msgs = conv.messages?.data || []
           const last = msgs[0]
           fetched.push({
@@ -300,12 +275,13 @@ export default function SocialInboxPage() {
     try {
       const igRes  = await fetch('/api/meta/instagram/messages?limit=20')
       const igData = await igRes.json()
-      const igConvs = igData.data ?? []
+      // API returns { success, data: { data: [...conversations] } } — need .data.data
+      const igConvs = igData.data?.data ?? igData.data ?? []
       if (Array.isArray(igConvs) && igConvs.length > 0) {
         for (const conv of igConvs) {
           const msgs = conv.messages?.data || []
           const last = msgs[0]
-          // Filter out the business account (smritifyp) to show the OTHER person's name
+          // Filter out own account (smritifyp) to show the OTHER person
           const otherParticipant = conv.participants?.data?.find(
             (p: { id: string; name?: string; username?: string }) =>
               p.username !== 'smritifyp' && p.id !== '17841411718913026'
@@ -325,7 +301,7 @@ export default function SocialInboxPage() {
       } else if (igData.error) {
         setIgError(typeof igData.error === 'object' ? igData.error.message || JSON.stringify(igData.error) : igData.error)
       } else {
-        setIgError('') // no error, just empty (dev mode restriction)
+        setIgError('')
       }
     } catch { /* ignore */ }
 
@@ -412,9 +388,6 @@ export default function SocialInboxPage() {
       {showCompose && <ComposeDMModal onClose={() => { setShowCompose(false); fetchThreads() }} threads={threads} />}
 
       <div className="flex flex-col h-[calc(100vh-120px)] gap-0 rounded-2xl border border-[#2D2D30] overflow-hidden bg-[#0E0E10] text-white select-none">
-
-        {/* Dev Mode Banner at top */}
-        <DevModeBanner />
 
         <div className="flex flex-1 overflow-hidden">
           {/* ── Thread Sidebar ─────────────────────────────────────────────── */}
