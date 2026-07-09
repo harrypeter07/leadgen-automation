@@ -42,6 +42,8 @@ export default function EmailOutreachPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  const [generateProgress, setGenerateProgress] = useState<{ done: number; total: number } | null>(null)
+  const [sendResults, setSendResults] = useState<{ sent: number; failed: number } | null>(null)
 
   // Editing Lead Details Modal State
   const [editingLead, setEditingLead] = useState<Lead | null>(null)
@@ -172,7 +174,7 @@ export default function EmailOutreachPage() {
     (l.category && l.category.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
-  // 1. Generate AI Outreach Drafts (calls Next.js proxy route to Express backend)
+  // 1. Generate AI Outreach Drafts via Gemini
   const handleGenerateOutreach = async () => {
     if (selectedLeadIds.length === 0) {
       toast.error('Please select at least one lead.')
@@ -180,6 +182,7 @@ export default function EmailOutreachPage() {
     }
 
     setIsGenerating(true)
+    setGenerateProgress({ done: 0, total: selectedLeadIds.length })
     const toastId = toast.loading(`Drafting AI emails for ${selectedLeadIds.length} leads...`)
 
     try {
@@ -189,20 +192,22 @@ export default function EmailOutreachPage() {
         body: JSON.stringify({ leadIds: selectedLeadIds })
       })
       const data = await res.json()
-      if (res.ok && data.success) {
-        toast.success('🎉 AI email drafts successfully generated!', { id: toastId })
-        fetchLeads() // refresh leads list to load drafts
+      if (res.ok && data.success !== false) {
+        setGenerateProgress({ done: data.generated || selectedLeadIds.length, total: selectedLeadIds.length })
+        toast.success(`🎉 ${data.generated} AI drafts generated! ${data.failed > 0 ? `(${data.failed} failed)` : ''}`, { id: toastId })
+        fetchLeads()
       } else {
         throw new Error(data.error || 'Failed to generate drafts')
       }
-    } catch (err: any) {
-      toast.error(`Generation failed: ${err.message}`, { id: toastId })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Generation failed'
+      toast.error(`Generation failed: ${msg}`, { id: toastId })
     } finally {
       setIsGenerating(false)
     }
   }
 
-  // 2. Send Emails (calls Next.js proxy route to Express backend)
+  // 2. Send Emails via Resend API
   const handleSendEmails = async () => {
     const leadsToSend = filteredLeads.filter(l => selectedLeadIds.includes(l.id))
     const missingDrafts = leadsToSend.filter(l => !l.ai_message_email_subject || !l.ai_message_email_body)
@@ -213,11 +218,12 @@ export default function EmailOutreachPage() {
     }
 
     if (missingDrafts.length > 0) {
-      toast.error(`Cannot send: ${missingDrafts.length} selected lead(s) have no AI draft generated yet.`)
+      toast.error(`Cannot send: ${missingDrafts.length} selected lead(s) have no AI draft yet.`)
       return
     }
 
     setIsSending(true)
+    setSendResults(null)
     const toastId = toast.loading(`Dispatching emails to ${selectedLeadIds.length} recipients...`)
 
     try {
@@ -227,15 +233,17 @@ export default function EmailOutreachPage() {
         body: JSON.stringify({ leadIds: selectedLeadIds })
       })
       const data = await res.json()
-      if (res.ok && data.success) {
-        toast.success('✉️ Outreach emails successfully dispatched!', { id: toastId })
+      if (res.ok) {
+        setSendResults({ sent: data.sent || 0, failed: data.failed || 0 })
+        toast.success(`✉️ ${data.sent} emails sent! ${data.failed > 0 ? `(${data.failed} failed)` : ''}`, { id: toastId })
         setSelectedLeadIds([])
-        fetchLeads() // refresh to show sent state
+        fetchLeads()
       } else {
         throw new Error(data.error || 'Failed to send emails')
       }
-    } catch (err: any) {
-      toast.error(`Sending failed: ${err.message}`, { id: toastId })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Send failed'
+      toast.error(`Sending failed: ${msg}`, { id: toastId })
     } finally {
       setIsSending(false)
     }

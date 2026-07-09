@@ -78,6 +78,12 @@ export const FacebookService = {
     const endpoint = `/${pageId}/conversations?platform=messenger&fields=id,link,participants,messages{message,from,created_time}&limit=${limit}&access_token=${token}`
     return MetaClient.get<{ data: unknown[] }>(endpoint, { source: SOURCE })
   },
+  async getConversationMessages(conversationId: string, limit = 50) {
+    const token = await getPageToken()
+    // Fetch ALL messages for a specific conversation with attachments
+    const endpoint = `/${conversationId}/messages?fields=id,message,from,created_time,attachments&limit=${limit}&access_token=${token}`
+    return MetaClient.get<{ data: unknown[]; paging?: unknown }>(endpoint, { source: SOURCE })
+  },
   async sendMessage(recipientId: string, text: string) {
     const pageId = await getPageId(); const token = await getPageToken()
     MetaLogger.request(SOURCE, 'POST', `/${pageId}/messages`, { recipientId, text })
