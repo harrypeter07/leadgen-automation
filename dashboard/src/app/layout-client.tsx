@@ -15,6 +15,37 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   const router = useRouter()
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+
+  // Load theme & collapse preferences from localStorage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('zarss_theme') as 'dark' | 'light' | null
+    if (savedTheme) {
+      setTheme(savedTheme)
+      document.documentElement.className = savedTheme
+      document.documentElement.setAttribute('data-theme', savedTheme)
+    }
+    const savedCollapse = localStorage.getItem('zarss_main_sidebar_collapsed')
+    if (savedCollapse) {
+      setSidebarCollapsed(savedCollapse === 'true')
+    }
+  }, [])
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(nextTheme)
+    localStorage.setItem('zarss_theme', nextTheme)
+    document.documentElement.className = nextTheme
+    document.documentElement.setAttribute('data-theme', nextTheme)
+    toast.success(`Switched to ${nextTheme === 'dark' ? '🌙 Dark' : '☀️ Light'} mode`)
+  }
+
+  const toggleSidebar = () => {
+    const nextCollapse = !sidebarCollapsed
+    setSidebarCollapsed(nextCollapse)
+    localStorage.setItem('zarss_main_sidebar_collapsed', String(nextCollapse))
+  }
 
   // Handle user logout
   const handleLogout = async () => {
@@ -165,43 +196,65 @@ export default function LayoutClient({ children }: LayoutClientProps) {
     }
   ]
 
+  const isDark = theme === 'dark'
+
   const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-[#18181A] text-gray-400 select-none">
+    <div className={`flex flex-col h-full border-r transition-colors select-none ${
+      isDark ? 'bg-[#18181A] border-[#252528] text-gray-400' : 'bg-white border-gray-200 text-gray-600'
+    }`}>
       {/* Brand Logo - Zarss Style */}
-      <div className="flex items-center gap-3 px-6 py-6 border-b border-[#252528]">
-        <div className="w-8 h-8 rounded-lg bg-[#E3B859] flex items-center justify-center text-[#18181A] font-black text-lg shadow-md shadow-[#E3B859]/20">
+      <div className={`flex items-center gap-3 px-6 py-6 border-b ${
+        isDark ? 'border-[#252528]' : 'border-gray-200'
+      } ${sidebarCollapsed ? 'justify-center px-2' : ''}`}>
+        <div className="w-8 h-8 rounded-lg bg-[#E3B859] flex items-center justify-center text-[#18181A] font-black text-lg shadow-md shadow-[#E3B859]/20 flex-shrink-0">
           Z
         </div>
-        <Link href="/" className="text-xl font-bold text-white tracking-tight flex items-center gap-1.5">
-          <span>Zarss</span>
-          <span className="text-[10px] uppercase bg-[#252528] text-gray-400 px-1.5 py-0.5 rounded font-mono font-normal">v3</span>
-        </Link>
+        {!sidebarCollapsed && (
+          <Link href="/" className={`text-xl font-bold tracking-tight flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <span>Zarss</span>
+            <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-mono font-normal ${
+              isDark ? 'bg-[#252528] text-gray-400' : 'bg-gray-100 text-gray-600'
+            }`}>v3</span>
+          </Link>
+        )}
       </div>
 
-      {/* User profile widget inside sidebar (Zarss style) */}
-      <div className="px-6 py-6 border-b border-[#252528] flex flex-col items-center text-center">
-        <div className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600 to-[#E3B859] p-0.5 shadow-xl">
-          <div className="w-full h-full rounded-full bg-[#18181A] flex items-center justify-center text-white text-xl font-black">
-            OP
+      {/* User profile widget inside sidebar */}
+      {!sidebarCollapsed ? (
+        <div className={`px-6 py-5 border-b flex flex-col items-center text-center ${
+          isDark ? 'border-[#252528]' : 'border-gray-200'
+        }`}>
+          <div className="relative w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 to-[#E3B859] p-0.5 shadow-xl">
+            <div className={`w-full h-full rounded-full flex items-center justify-center text-white text-sm font-black ${
+              isDark ? 'bg-[#18181A]' : 'bg-[#E5E5EB]'
+            }`}>
+              OP
+            </div>
+            <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-inherit bg-green-500 shadow-sm" />
           </div>
-          {/* Active green dot indicator */}
-          <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-[#18181A] bg-green-500 shadow-sm" />
+          <span className="mt-2.5 text-[10px] text-gray-500 font-semibold uppercase tracking-wider block">Welcome Back,</span>
+          <span className={`text-xs font-bold tracking-tight mt-0.5 ${isDark ? 'text-white' : 'text-gray-900'}`}>Operator LeadGen</span>
+          <button
+            onClick={handleLogout}
+            className={`mt-2.5 px-2.5 py-1 text-[9px] uppercase tracking-wider rounded-lg border transition-all duration-200 active:scale-95 flex items-center gap-1.5 focus:outline-none ${
+              isDark ? 'bg-red-950/20 hover:bg-red-950/40 border-red-900/30 text-red-400' : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-600'
+            }`}
+          >
+            Logout
+          </button>
         </div>
-        <span className="mt-3 text-xs text-gray-500 font-semibold uppercase tracking-wider block">Welcome Back,</span>
-        <span className="text-sm font-bold text-white tracking-tight mt-0.5">Operator LeadGen</span>
-        <button
-          onClick={handleLogout}
-          className="mt-3 px-3 py-1 bg-red-950/20 hover:bg-red-950/40 text-red-400 hover:text-red-300 font-semibold text-[10px] uppercase tracking-wider rounded-lg border border-red-900/30 transition-all duration-200 active:scale-95 flex items-center gap-1.5 focus:outline-none"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Logout
-        </button>
-      </div>
+      ) : (
+        <div className="py-4 border-b border-inherit flex justify-center">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-[#E3B859] p-0.5">
+            <div className="w-full h-full rounded-full bg-[#18181A] flex items-center justify-center text-white text-[10px] font-black">
+              OP
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Nav Menu */}
-      <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navLinks.map((link) => {
           const isActive = pathname === link.href
           return (
@@ -209,41 +262,60 @@ export default function LayoutClient({ children }: LayoutClientProps) {
               key={link.name}
               href={link.href}
               onClick={() => setMobileMenuOpen(false)}
-              className={`flex items-center gap-3 px-4 py-3 text-xs font-semibold uppercase tracking-wider rounded-xl transition-all duration-200 group relative ${
+              title={sidebarCollapsed ? link.name : undefined}
+              className={`flex items-center gap-3 px-3 py-2.5 text-xs font-semibold uppercase tracking-wider rounded-xl transition-all duration-200 group relative ${
                 isActive
                   ? 'text-[#E3B859] bg-[#222225] font-bold shadow-sm'
-                  : 'text-gray-400 hover:bg-[#202022] hover:text-gray-200'
-              }`}
+                  : isDark
+                  ? 'text-gray-400 hover:bg-[#202022] hover:text-gray-200'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              } ${sidebarCollapsed ? 'justify-center' : ''}`}
             >
-              {/* Left active line indicator (Zarss style) */}
               {isActive && (
-                <span className="absolute left-0 top-3 bottom-3 w-1 bg-[#E3B859] rounded-r-md" />
+                <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#E3B859] rounded-r-md" />
               )}
               <span className={`transition-colors duration-200 ${isActive ? 'text-[#E3B859]' : 'text-gray-500 group-hover:text-gray-300'}`}>
                 {link.icon}
               </span>
-              {link.name}
+              {!sidebarCollapsed && <span>{link.name}</span>}
             </Link>
           )
         })}
       </nav>
 
       {/* Footer Status Indicators */}
-      <div className="p-5 border-t border-[#252528] flex flex-col gap-3 text-xs text-gray-500 bg-[#141416]">
-        <div className="flex items-center justify-between">
-          <span className="font-semibold uppercase tracking-wider text-[10px]">WhatsApp Status</span>
-          {whatsappConnected === null ? (
-            <span className="px-2 py-0.5 rounded bg-gray-800 text-gray-400 font-mono text-[9px] animate-pulse">CHECKING</span>
-          ) : whatsappConnected ? (
-            <span className="px-2 py-0.5 rounded bg-green-950/40 text-green-400 font-mono text-[9px] font-bold border border-green-900/30">ONLINE</span>
-          ) : (
-            <span className="px-2 py-0.5 rounded bg-red-950/40 text-red-400 font-mono text-[9px] font-bold border border-red-900/30">OFFLINE</span>
-          )}
-        </div>
-        <div className="flex items-center justify-between text-[10px]">
-          <span className="text-gray-600">Engine Node:</span>
-          <span className="font-mono text-gray-400">Railway v3</span>
-        </div>
+      <div className={`p-4 border-t flex flex-col gap-2.5 text-[10px] bg-inherit ${
+        isDark ? 'border-[#252528] text-gray-500' : 'border-gray-200 text-gray-500'
+      }`}>
+        {/* Toggle Theme Control */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className={`w-full py-2 rounded-lg border transition-all duration-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 ${
+            isDark ? 'bg-[#222225] border-[#2D2D30] text-white hover:bg-[#2D2D30]' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          {isDark ? '☀️ Light Mode' : '🌙 Dark Mode'}
+        </button>
+
+        {!sidebarCollapsed && (
+          <>
+            <div className="flex items-center justify-between border-t border-inherit pt-2">
+              <span className="font-semibold uppercase tracking-wider text-[9px]">WhatsApp Status</span>
+              {whatsappConnected === null ? (
+                <span className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 font-mono text-[8px] animate-pulse">CHECKING</span>
+              ) : whatsappConnected ? (
+                <span className="px-1.5 py-0.5 rounded bg-green-950/40 text-green-400 font-mono text-[8px] font-bold border border-green-900/30">ONLINE</span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded bg-red-950/40 text-red-400 font-mono text-[8px] font-bold border border-red-900/30">OFFLINE</span>
+              )}
+            </div>
+            <div className="flex items-center justify-between text-[9px]">
+              <span className="text-gray-600">Engine Node:</span>
+              <span className="font-mono text-gray-400">Railway v3</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -258,11 +330,15 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#141416] text-[#2D2D2D] flex flex-col md:flex-row font-sans">
-      <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: '#1c1c1e', color: '#f3f4f6', border: '1px solid #2d2d30' } }} />
+    <div className={`min-h-screen flex flex-col md:flex-row font-sans transition-colors duration-300 ${
+      isDark ? 'bg-[#141416] text-white' : 'bg-[#F4F4F6] text-gray-900'
+    }`}>
+      <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: isDark ? '#1c1c1e' : '#ffffff', color: isDark ? '#f3f4f6' : '#1c1c1e', border: isDark ? '1px solid #2d2d30' : '1px solid #e5e5eb' } }} />
 
       {/* Mobile Top Bar */}
-      <div className="flex md:hidden items-center justify-between px-6 py-4 bg-[#18181A] border-b border-[#252528] text-white">
+      <div className={`flex md:hidden items-center justify-between px-6 py-4 border-b text-white ${
+        isDark ? 'bg-[#18181A] border-[#252528]' : 'bg-[#18181A] border-[#252528]'
+      }`}>
         <Link href="/" className="text-lg font-bold flex items-center gap-2">
           <div className="w-6 h-6 rounded bg-[#E3B859] flex items-center justify-center text-[#18181A] font-black text-xs">
             Z
@@ -287,8 +363,24 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       </div>
 
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:block w-64 flex-shrink-0 z-20">
+      <aside 
+        className="hidden md:block flex-shrink-0 z-20 transition-all duration-300 relative"
+        style={{ width: sidebarCollapsed ? '64px' : '256px' }}
+      >
         <div className="h-screen sticky top-0">
+          {/* Main Sidebar Collapse Arrow Trigger (Zarss Style) */}
+          <button
+            onClick={toggleSidebar}
+            className={`absolute -right-3 top-7 z-30 w-6 h-6 rounded-full flex items-center justify-center text-gray-400 border transition-all shadow-md focus:outline-none ${
+              isDark ? 'bg-[#252528] border-[#3D3D40] hover:text-white' : 'bg-white border-gray-300 hover:text-gray-900'
+            }`}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <svg className={`w-3 h-3 transition-transform duration-300 ${sidebarCollapsed ? 'rotate-180' : 'rotate-0'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+
           <SidebarContent />
         </div>
       </aside>
