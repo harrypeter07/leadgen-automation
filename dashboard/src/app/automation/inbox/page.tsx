@@ -305,14 +305,20 @@ export default function SocialInboxPage() {
         for (const conv of igConvs) {
           const msgs = conv.messages?.data || []
           const last = msgs[0]
+          // Filter out the business account (smritifyp) to show the OTHER person's name
+          const otherParticipant = conv.participants?.data?.find(
+            (p: { id: string; name?: string; username?: string }) =>
+              p.username !== 'smritifyp' && p.id !== '17841411718913026'
+          ) || conv.participants?.data?.[0]
+          const displayName = otherParticipant?.name || (otherParticipant?.username ? `@${otherParticipant.username}` : 'Instagram User')
           fetched.push({
             id: `ig_${conv.id}`,
-            name: conv.participants?.data?.[0]?.name || 'Instagram User',
+            name: displayName,
             platform: 'instagram',
-            lastMessage: last?.message || '(no message)',
-            time: last?.created_time ? timeAgo(last.created_time) : '',
+            lastMessage: last?.message || (last ? '📎 Attachment' : '(no message)'),
+            time: conv.updated_time ? timeAgo(conv.updated_time) : (last?.created_time ? timeAgo(last.created_time) : ''),
             unread: false,
-            participantId: conv.participants?.data?.[0]?.id,
+            participantId: otherParticipant?.id,
           })
         }
         setIgError('')
