@@ -1,72 +1,106 @@
 // lib/meta/instagram-service.ts
+// Uses graph.instagram.com (new Instagram API) with the INSTAGRAM_ACCESS_TOKEN
 import { MetaClient, MetaApiResponse } from './meta-client'
 import { MetaLogger } from './meta-logger'
 import { ensureMetaConfig } from './runtime-config'
 
 const SOURCE = 'InstagramService'
+// New Instagram API base URL - different from Facebook Graph API
+const IG_BASE = 'https://graph.instagram.com/v25.0'
 
-async function getIgBizId() { 
+async function getIgBizId() {
   await ensureMetaConfig()
-  return process.env.INSTAGRAM_BUSINESS_ID || '' 
+  return process.env.INSTAGRAM_BUSINESS_ID || ''
 }
 
 async function getIgToken() {
   await ensureMetaConfig()
-  // Use dedicated Instagram token (IGAAo...) if available, fallback to page access token
+  // Prefer dedicated Instagram token (IGAAo...) over page access token
   return process.env.INSTAGRAM_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''
+}
+
+async function igGet<T>(path: string): Promise<{ success: boolean; data?: T; error?: MetaApiResponse['error']; statusCode: number; duration: number }> {
+  const token = await getIgToken()
+  const url = `${IG_BASE}${path}${path.includes('?') ? '&' : '?'}access_token=${token}`
+  MetaLogger.request(SOURCE, 'GET', url)
+  const start = Date.now()
+  try {
+    const res = await fetch(url)
+    const data = await res.json() as Record<string, unknown>
+    const duration = Date.now() - start
+    if (!res.ok || (data as Record<string, unknown>).error) {
+      return { success: false, error: (data as Record<string, unknown>).error as MetaApiResponse['error'], statusCode: res.status, duration }
+    }
+    return { success: true, data: data as T, statusCode: res.status, duration }
+  } catch (err) {
+    return { success: false, error: { message: String(err), type: 'NetworkError', code: 0, fbtrace_id: '' }, statusCode: 0, duration: Date.now() - start }
+  }
+}
+
+async function igPost<T>(path: string, body: Record<string, unknown>): Promise<{ success: boolean; data?: T; error?: MetaApiResponse['error']; statusCode: number; duration: number }> {
+  const token = await getIgToken()
+  const url = `${IG_BASE}${path}`
+  MetaLogger.request(SOURCE, 'POST', url, body)
+  const start = Date.now()
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(body)
+    })
+    const data = await res.json() as Record<string, unknown>
+    const duration = Date.now() - start
+    if (!res.ok || (data as Record<string, unknown>).error) {
+      return { success: false, error: (data as Record<string, unknown>).error as MetaApiResponse['error'], statusCode: res.status, duration }
+    }
+    return { success: true, data: data as T, statusCode: res.status, duration }
+  } catch (err) {
+    return { success: false, error: { message: String(err), type: 'NetworkError', code: 0, fbtrace_id: '' }, statusCode: 0, duration: Date.now() - start }
+  }
 }
 
 export const InstagramService = {
   async getProfile() {
-    const igId = await getIgBizId(); const token = await getIgToken()
-    const endpoint = `/${igId}?fields=id,name,username,biography,followers_count,follows_count,media_count,profile_picture_url,website&access_token=${token}`
-    MetaLogger.request(SOURCE, 'GET', endpoint)
-    const res = await MetaClient.get<Record<string,unknown>>(endpoint, { source: SOURCE })
-    MetaLogger.response(SOURCE, endpoint, res.statusCode, res.duration, res.error as MetaApiResponse['error'])
-    return res
+    return igGet<Record<string, unknown>>('/me?fields=id,name,username,biography,followers_count,follows_count,media_count,profile_picture_url,website')
   },
   async getMedia(limit = 20) {
-    const igId = await getIgBizId(); const token = await getIgToken()
-    const endpoint = `/${igId}/media?fields=id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count,thumbnail_url&limit=${limit}&access_token=${token}`
-    return MetaClient.get<{ data: unknown[] }>(endpoint, { source: SOURCE })
+    return igGet<{ data: unknown[] }>(`/me/media?fields=id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count,thumbnail_url&limit=${limit}`)
   },
   async publishPost(imageUrl: string, caption: string) {
-    const igId = await getIgBizId(); const token = await getIgToken()
-    MetaLogger.request(SOURCE, 'POST', `/${igId}/media`, { imageUrl, caption })
-    const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, { image_url: imageUrl, caption, access_token: token }, { source: SOURCE })
+    // Step 1: Create media container
+    const container = await igPost<{ id: string }>('/me/media', { image_url: imageUrl, caption })
     if (!container.success || !container.data?.id) return container
-    const publish = await MetaClient.post<{ id: string }>(`/${igId}/media_publish`, { creation_id: container.data.id, access_token: token }, { source: SOURCE })
-    MetaLogger.response(SOURCE, `/${igId}/media_publish`, publish.statusCode, publish.duration, publish.error as MetaApiResponse['error'])
-    return { ...publish, containerId: container.data.id }
+    // Step 2: Publish
+    return igPost<{ id: string }>('/me/media_publish', { creation_id: container.data.id })
   },
   async publishReel(videoUrl: string, caption: string) {
-    const igId = await getIgBizId(); const token = await getIgToken()
-    const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, { video_url: videoUrl, caption, media_type: 'REELS', access_token: token }, { source: SOURCE })
+    const container = await igPost<{ id: string }>('/me/media', { video_url: videoUrl, caption, media_type: 'REELS' })
     if (!container.success || !container.data?.id) return container
-    return MetaClient.post<{ id: string }>(`/${igId}/media_publish`, { creation_id: container.data.id, access_token: token }, { source: SOURCE })
+    return igPost<{ id: string }>('/me/media_publish', { creation_id: container.data.id })
   },
   async getComments(mediaId: string, limit = 25) {
-    const token = await getIgToken()
-    return MetaClient.get<{ data: unknown[] }>(`/${mediaId}/comments?fields=id,text,from,timestamp,like_count,replies{text,from,timestamp}&limit=${limit}&access_token=${token}`, { source: SOURCE })
+    return igGet<{ data: unknown[] }>(`/${mediaId}/comments?fields=id,text,from,timestamp,like_count,replies{text,from,timestamp}&limit=${limit}`)
   },
   async replyToComment(commentId: string, message: string) {
-    const token = await getIgToken()
-    return MetaClient.post<{ id: string }>(`/${commentId}/replies`, { message, access_token: token }, { source: SOURCE })
+    return igPost<{ id: string }>(`/${commentId}/replies`, { message })
   },
   async getMessages(limit = 20) {
-    const igId = await getIgBizId(); const token = await getIgToken()
-    return MetaClient.get<{ data: unknown[] }>(`/${igId}/conversations?platform=instagram&fields=id,participants,messages{message,from,created_time}&limit=${limit}&access_token=${token}`, { source: SOURCE })
+    // Uses new Instagram API endpoint - /me/conversations
+    return igGet<{ data: unknown[] }>(`/me/conversations?platform=instagram&fields=id,participants,messages{message,from,created_time}&limit=${limit}`)
   },
   async sendDM(recipientId: string, text: string) {
-    const igId = await getIgBizId(); const token = await getIgToken()
-    MetaLogger.request(SOURCE, 'POST', `/${igId}/messages`, { recipientId, text })
-    const res = await MetaClient.post<{ message_id: string }>(`/${igId}/messages`, { recipient: { id: recipientId }, message: { text }, access_token: token }, { source: SOURCE })
-    MetaLogger.response(SOURCE, `/${igId}/messages`, res.statusCode, res.duration, res.error as MetaApiResponse['error'])
-    return res
+    MetaLogger.request(SOURCE, 'POST', `${IG_BASE}/me/messages`, { recipientId, text })
+    // Uses Authorization Bearer header format for Instagram Messaging API
+    return igPost<{ message_id: string }>('/me/messages', {
+      recipient: { id: recipientId },
+      message: { text }
+    })
   },
   async getInsights(metric = 'reach,profile_views,follower_count', period = 'day') {
-    const igId = await getIgBizId(); const token = await getIgToken()
-    const endpoint = `/${igId}/insights?metric=${metric}&period=${period}&access_token=${token}`
-    return MetaClient.get<{ data: unknown[] }>(endpoint, { source: SOURCE })
+    const igId = await getIgBizId()
+    // Insights requires the numeric IG business account ID via the graph.facebook.com endpoint with PAGE token
+    const token = await getIgToken()
+    const res = await MetaClient.get<{ data: unknown[] }>(`/${igId}/insights?metric=${metric}&period=${period}&access_token=${token}`, { source: SOURCE })
+    return res
   },
 }
