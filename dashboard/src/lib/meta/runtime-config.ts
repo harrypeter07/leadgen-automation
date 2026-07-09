@@ -15,6 +15,7 @@ const waiters: Array<() => void> = []
 const ENCRYPTED_KEYS = new Set([
   'META_APP_SECRET', 'META_PAGE_ACCESS_TOKEN', 'META_VERIFY_TOKEN',
   'META_WEBHOOK_SECRET', 'META_LONG_LIVED_USER_TOKEN', 'META_SYSTEM_USER_TOKEN', 'WHATSAPP_PERMANENT_TOKEN',
+  'INSTAGRAM_ACCESS_TOKEN',
 ])
 
 function getEncKey(): Buffer {
@@ -43,8 +44,8 @@ function decrypt(value: string): string {
  * Thread-safe: concurrent calls wait for a single hydration pass.
  */
 export async function ensureMetaConfig(): Promise<void> {
-  // Fast path: already set in env
-  if (process.env.META_PAGE_ACCESS_TOKEN && process.env.META_APP_ID) {
+  // Fast path: already set in env (must have both FB page token AND IG token)
+  if (process.env.META_PAGE_ACCESS_TOKEN && process.env.META_APP_ID && process.env.INSTAGRAM_ACCESS_TOKEN) {
     return
   }
 
