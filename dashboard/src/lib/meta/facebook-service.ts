@@ -5,14 +5,17 @@ import { ensureMetaConfig } from './runtime-config'
 
 const SOURCE = 'FacebookService'
 
-async function getPageId() { 
+async function getPageId() {
   await ensureMetaConfig()
-  return process.env.META_PAGE_ID || '' 
+  // META_PAGE_ID from config, fallback to the Smriti page linked to Instagram
+  return process.env.META_PAGE_ID || '1165738093294228'
 }
 
-async function getPageToken() { 
+async function getPageToken() {
   await ensureMetaConfig()
-  return process.env.META_PAGE_ACCESS_TOKEN || '' 
+  // MESSENGER_PAGE_TOKEN = Smriti page token from Instagram Messaging API section
+  // Falls back to META_PAGE_ACCESS_TOKEN if not separately configured
+  return process.env.MESSENGER_PAGE_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''
 }
 
 export const FacebookService = {
