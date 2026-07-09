@@ -18,6 +18,13 @@ interface Message {
   sender: 'lead' | 'system'
   body: string
   time: string
+  attachments?: Array<{
+    id: string
+    mime_type?: string
+    file_url?: string
+    name?: string
+    image_data?: { url?: string }
+  }>
 }
 
 const PLATFORM_ICON: Record<string, string> = {
@@ -316,22 +323,39 @@ export default function SocialInboxPage() {
     setMessages([])
     setLoadingMsgs(true)
     try {
-      const endpoint = thread.platform === 'instagram'
-        ? `/api/meta/instagram/messages?limit=50`
-        : `/api/meta/facebook/messages?limit=50`
-      const res  = await fetch(endpoint)
-      const data = await res.json()
-      const convs = data.data || []
       const rawId = thread.id.replace('ig_', '')
-      const conv  = convs.find((c: { id: string }) => c.id === rawId) || convs[0]
-      const msgs  = conv?.messages?.data || []
-      setMessages(msgs.map((m: { id: string; from?: { name?: string }; message?: string; created_time?: string }) => ({
+      const platform = thread.platform === 'instagram' ? 'instagram' : 'facebook'
+      // Call the conversation-specific endpoint to get ALL messages
+      const res  = await fetch(`/api/meta/${platform}/messages/${rawId}?limit=50`)
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        console.error('[Inbox] Failed to load messages:', data.error)
+        setMessages([])
+        setLoadingMsgs(false)
+        return
+      }
+
+      const rawMsgs: Array<{
+        id: string
+        from?: { name?: string; username?: string; id?: string }
+        message?: string
+        created_time?: string
+        attachments?: { data?: Array<{ id: string; mime_type?: string; file_url?: string; name?: string; image_data?: { url?: string } }> }
+      }> = data.data?.data ?? data.data ?? []
+
+      const pageId = '1165738093294228' // META_PAGE_ID
+      const myIgId = '17841411718913026'  // INSTAGRAM_BUSINESS_ID
+
+      setMessages(rawMsgs.map(m => ({
         id:     m.id || String(Math.random()),
-        sender: m.from?.name?.toLowerCase().includes('page') ? 'system' : 'lead',
-        body:   m.message || '(media)',
+        sender: ((m.from?.id === pageId || m.from?.id === myIgId) ? 'system' : 'lead') as 'system' | 'lead',
+        body:   m.message || (m.attachments?.data?.length ? '' : '(media)'),
         time:   m.created_time ? new Date(m.created_time).toLocaleTimeString() : '',
+        attachments: m.attachments?.data || [],
       })).reverse())
-    } catch {
+    } catch (err) {
+      console.error('[Inbox] openThread error:', err)
       setMessages([])
     }
     setLoadingMsgs(false)
@@ -371,14 +395,33 @@ export default function SocialInboxPage() {
     setSending(false)
   }
 
-  function handleGenerateAI() {
+  async function handleGenerateAI() {
+    if (!selectedThread) return
     setAiGenerating(true)
-    toast.loading('Generating AI response…', { duration: 2000 })
-    setTimeout(() => {
-      setReplyText('Thank you for reaching out! We\'d love to help. Could you share more details about what you\'re looking for so we can provide the best solution for your needs?')
-      setAiGenerating(false)
-      toast.success('AI draft ready!')
-    }, 1800)
+    const toastId = toast.loading('Generating AI response…')
+    try {
+      // Build conversation history for context
+      const history = messages.slice(-6).map(m => ({
+        role: m.sender === 'system' ? 'system' : 'user',
+        text: m.body,
+      }))
+      const lastUserMsg = messages.filter(m => m.sender === 'lead').slice(-1)[0]?.body || 'Hello'
+      const res = await fetch('/api/meta/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: lastUserMsg, conversationHistory: history }),
+      })
+      const data = await res.json()
+      if (res.ok && data.reply) {
+        setReplyText(data.reply)
+        toast.success('AI draft ready!', { id: toastId })
+      } else {
+        throw new Error(data.error || 'AI generation failed')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI failed', { id: toastId })
+    }
+    setAiGenerating(false)
   }
 
   const visibleThreads = filter === 'all' ? threads : threads.filter(t => t.platform === filter)
@@ -525,7 +568,28 @@ export default function SocialInboxPage() {
                             ? 'bg-[#E3B859] text-[#141416] font-semibold rounded-br-sm'
                             : 'bg-[#222225] text-gray-200 border border-[#2D2D30] rounded-bl-sm'
                         }`}>
-                          {msg.body}
+                          {/* Text body */}
+                          {msg.body && <p>{msg.body}</p>}
+                          {/* Attachments */}
+                          {msg.attachments && msg.attachments.length > 0 && msg.attachments.map(att => {
+                            const imgUrl = att.file_url || att.image_data?.url
+                            const isImage = att.mime_type?.startsWith('image') || (imgUrl && /\.(jpg|jpeg|png|gif|webp)/i.test(imgUrl))
+                            const isVideo = att.mime_type?.startsWith('video') || (imgUrl && /\.(mp4|mov|avi)/i.test(imgUrl || ''))
+                            if (isImage && imgUrl) return (
+                              <a key={att.id} href={imgUrl} target="_blank" rel="noreferrer" className="block mt-1.5">
+                                <img src={imgUrl} alt={att.name || 'attachment'} className="rounded-xl max-w-[220px] max-h-[200px] object-cover border border-white/10" />
+                              </a>
+                            )
+                            if (isVideo && imgUrl) return (
+                              <video key={att.id} src={imgUrl} controls className="rounded-xl mt-1.5 max-w-[220px]" />
+                            )
+                            return (
+                              <a key={att.id} href={imgUrl || '#'} target="_blank" rel="noreferrer"
+                                className="flex items-center gap-1.5 mt-1.5 text-[10px] underline opacity-80">
+                                📎 {att.name || 'Attachment'}
+                              </a>
+                            )
+                          })}
                           <div className={`text-[9px] mt-1 ${msg.sender === 'system' ? 'text-[#141416]/60' : 'text-gray-500'}`}>{msg.time}</div>
                         </div>
                       </div>

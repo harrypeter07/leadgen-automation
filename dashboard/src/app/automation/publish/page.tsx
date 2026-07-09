@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 
 interface PostJob {
@@ -13,6 +13,7 @@ interface PostJob {
   publishedAt?: string
   fbPostId?: string
   igPostId?: string
+  logs?: string[]
 }
 
 const PLATFORMS = [
@@ -24,11 +25,15 @@ export default function PublishComposerPage() {
   const [content, setContent]                   = useState('')
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['facebook'])
   const [imageUrl, setImageUrl]                 = useState('')
+  const [driveInput, setDriveInput]             = useState('')
   const [scheduledFor, setScheduledFor]         = useState('')
   const [generatingCaption, setGeneratingCaption] = useState(false)
   const [publishing, setPublishing]             = useState(false)
+  const [uploading, setUploading]               = useState(false)
   const [jobs, setJobs]                         = useState<PostJob[]>([])
   const [activeTab, setActiveTab]               = useState<'compose' | 'history'>('compose')
+  const [publishLog, setPublishLog]             = useState<string[]>([])
+  const fileRef = useRef<HTMLInputElement>(null)
 
   function togglePlatform(p: string) {
     setSelectedPlatforms(prev =>
@@ -38,15 +43,65 @@ export default function PublishComposerPage() {
 
   async function handleGenerateAICaption() {
     setGeneratingCaption(true)
-    toast.loading('Generating AI caption…', { duration: 2500 })
-    setTimeout(() => {
-      setContent(prev =>
-        (prev ? prev + '\n\n' : '') +
-        '🌟 Elevate your digital presence with intelligent automation! Our smart platform handles outreach, content, and lead nurturing — so you can focus on closing deals. DM us to learn more! 🚀\n\n#BusinessAutomation #LeadGeneration #DigitalMarketing'
-      )
-      setGeneratingCaption(false)
-      toast.success('AI caption ready!')
-    }, 2500)
+    const toastId = toast.loading('Generating AI caption…')
+    try {
+      const topic = content.trim() || 'business automation and lead generation'
+      const res = await fetch('/api/meta/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `Write a compelling, engaging social media caption about: ${topic}. Include 3-5 relevant hashtags at the end. Max 300 characters. Make it punchy and professional.`,
+          persona: 'You are a professional social media copywriter. Write in an engaging, concise style that drives engagement and conversions.',
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.reply) {
+        setContent(prev => (prev ? prev + '\n\n' : '') + data.reply)
+        toast.success('AI caption ready!', { id: toastId })
+      } else {
+        throw new Error(data.error || 'AI generation failed')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI failed', { id: toastId })
+    }
+    setGeneratingCaption(false)
+  }
+
+  async function handleMediaUpload(source: 'file' | 'drive') {
+    setUploading(true)
+    const toastId = toast.loading(source === 'drive' ? 'Converting Drive link…' : 'Uploading image…')
+    try {
+      let res: Response
+      if (source === 'drive') {
+        if (!driveInput.trim()) { toast.error('Enter a Google Drive link first', { id: toastId }); setUploading(false); return }
+        res = await fetch('/api/meta/media-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ driveUrl: driveInput.trim() }),
+        })
+      } else {
+        const file = fileRef.current?.files?.[0]
+        if (!file) { toast.error('Select a file first', { id: toastId }); setUploading(false); return }
+        const formData = new FormData()
+        formData.append('file', file)
+        res = await fetch('/api/meta/media-upload', { method: 'POST', body: formData })
+      }
+      const data = await res.json()
+      if (res.ok && data.publicUrl) {
+        setImageUrl(data.publicUrl)
+        setDriveInput('')
+        toast.success('Media uploaded! Public URL ready.', { id: toastId })
+      } else {
+        throw new Error(data.error || 'Upload failed')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed', { id: toastId })
+    }
+    setUploading(false)
+  }
+
+  function addLog(msg: string) {
+    setPublishLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`])
   }
 
   async function handlePublish(e: React.FormEvent) {
@@ -55,7 +110,9 @@ export default function PublishComposerPage() {
     if (!content.trim())                { toast.error('Post content cannot be empty.');  return }
 
     setPublishing(true)
+    setPublishLog([])
     const toastId = toast.loading('Publishing post…')
+    addLog('Starting publish job…')
 
     const results: PostJob = {
       id:          String(Date.now()),
@@ -64,6 +121,7 @@ export default function PublishComposerPage() {
       imageUrl:    imageUrl || undefined,
       scheduledFor: scheduledFor || undefined,
       status:      'draft',
+      logs:        [],
     }
 
     let anySuccess = false
@@ -71,6 +129,7 @@ export default function PublishComposerPage() {
 
     // Publish to Facebook
     if (selectedPlatforms.includes('facebook')) {
+      addLog('Facebook: Sending post to Graph API…')
       try {
         const res  = await fetch('/api/meta/facebook/post', {
           method:  'POST',
@@ -78,6 +137,7 @@ export default function PublishComposerPage() {
           body:    JSON.stringify({
             action:  'publish',
             message: content,
+            ...(imageUrl ? { image_url: imageUrl } : {}),
             ...(scheduledFor ? { scheduled_time: Math.floor(new Date(scheduledFor).getTime() / 1000) } : {}),
           }),
         })
@@ -85,12 +145,16 @@ export default function PublishComposerPage() {
         if (res.ok && data.success && data.data?.id) {
           results.fbPostId = data.data.id
           anySuccess = true
+          addLog(`Facebook: ✅ Published! Post ID: ${data.data.id}`)
         } else {
           anyFail = true
-          toast.error(`Facebook: ${data.error?.message || data.error || 'Failed'}`)
+          const errMsg = data.error?.message || data.error || 'Failed'
+          addLog(`Facebook: ❌ Failed — ${errMsg}`)
+          toast.error(`Facebook: ${errMsg}`)
         }
-      } catch {
+      } catch (err) {
         anyFail = true
+        addLog(`Facebook: ❌ Network error — ${err}`)
         toast.error('Facebook publish error')
       }
     }
@@ -98,9 +162,11 @@ export default function PublishComposerPage() {
     // Publish to Instagram (requires image URL for IG)
     if (selectedPlatforms.includes('instagram')) {
       if (!imageUrl) {
-        toast.error('Instagram requires an image URL.')
+        addLog('Instagram: ❌ No image URL — upload an image first')
+        toast.error('Instagram requires an image. Upload one using the media panel.')
         anyFail = true
       } else {
+        addLog(`Instagram: Creating media container with image…`)
         try {
           const res  = await fetch('/api/meta/instagram/post', {
             method:  'POST',
@@ -111,12 +177,17 @@ export default function PublishComposerPage() {
           if (res.ok && data.success) {
             results.igPostId = data.data?.id
             anySuccess = true
+            addLog(`Instagram: ✅ Published! Media ID: ${data.data?.id || 'ok'}`)
           } else {
             anyFail = true
-            toast.error(`Instagram: ${data.error?.message || data.error || 'Failed'}`)
+            const errMsg = data.error?.message || data.error || 'Failed'
+            addLog(`Instagram: ❌ Failed — ${errMsg}`)
+            addLog(`Instagram: Hint — image URL must be publicly accessible (not Google Drive direct view)`)
+            toast.error(`Instagram: ${errMsg}`)
           }
-        } catch {
+        } catch (err) {
           anyFail = true
+          addLog(`Instagram: ❌ Network error — ${err}`)
           toast.error('Instagram publish error')
         }
       }
@@ -124,20 +195,24 @@ export default function PublishComposerPage() {
 
     results.status = anySuccess ? (anyFail ? 'draft' : 'published') : 'failed'
     results.publishedAt = anySuccess ? new Date().toISOString() : undefined
+    results.logs = publishLog
 
     setJobs(prev => [results, ...prev])
     setPublishing(false)
 
     if (anySuccess && !anyFail) {
       toast.success('Published successfully!', { id: toastId })
+      addLog('Done — all platforms published.')
       setContent('')
       setImageUrl('')
       setScheduledFor('')
       setActiveTab('history')
     } else if (anyFail && !anySuccess) {
-      toast.error('Publish failed. Check errors above.', { id: toastId })
+      toast.error('Publish failed. See log panel below.', { id: toastId })
+      addLog('Done — all platforms failed.')
     } else {
       toast.success('Partially published.', { id: toastId })
+      addLog('Done — some platforms failed.')
       setActiveTab('history')
     }
   }
@@ -197,16 +272,44 @@ export default function PublishComposerPage() {
               />
             </div>
 
-            {/* Image URL */}
+            {/* Image / Media Panel */}
             {selectedPlatforms.includes('instagram') && (
-              <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Image URL <span className="text-red-400">*</span> (required for Instagram)</label>
-                <input
-                  value={imageUrl}
-                  onChange={e => setImageUrl(e.target.value)}
-                  placeholder="https://example.com/image.jpg (must be publicly accessible)"
-                  className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-4 py-2.5 text-xs text-white font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors"
-                />
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block">Image for Instagram <span className="text-red-400">*</span></label>
+
+                {/* Option A: Upload file */}
+                <div className="flex gap-2">
+                  <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('file')} />
+                  <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                    className="px-3 py-2 rounded-xl bg-[#141416] border border-[#2D2D30] text-gray-400 text-xs font-bold hover:text-white hover:border-gray-500 transition-colors disabled:opacity-40">
+                    {uploading ? '⏳ Uploading…' : '📁 Upload File'}
+                  </button>
+                  <span className="text-gray-600 text-xs self-center">or</span>
+
+                  {/* Option B: Google Drive link */}
+                  <input
+                    value={driveInput}
+                    onChange={e => setDriveInput(e.target.value)}
+                    placeholder="Google Drive share link…"
+                    className="flex-1 bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500"
+                  />
+                  <button type="button" onClick={() => handleMediaUpload('drive')} disabled={uploading || !driveInput.trim()}
+                    className="px-3 py-2 rounded-xl bg-blue-950/40 border border-blue-900/30 text-blue-300 text-xs font-bold hover:bg-blue-900/30 transition-colors disabled:opacity-40">
+                    {uploading ? '⏳' : '☁️ Upload'}
+                  </button>
+                </div>
+
+                {/* Current URL + Preview */}
+                {imageUrl && (
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <input value={imageUrl} onChange={e => setImageUrl(e.target.value)}
+                        className="flex-1 bg-[#141416] border border-green-800/40 rounded-xl px-3 py-2 text-[10px] text-green-400 font-mono focus:outline-none" />
+                      <button type="button" onClick={() => setImageUrl('')} className="text-gray-500 hover:text-red-400 text-xs">✕</button>
+                    </div>
+                    <img src={imageUrl} alt="preview" className="rounded-xl max-h-40 object-cover border border-[#2D2D30]" onError={e => (e.currentTarget.style.display = 'none')} />
+                  </div>
+                )}
               </div>
             )}
 
@@ -223,18 +326,27 @@ export default function PublishComposerPage() {
 
             {/* Actions */}
             <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={handleGenerateAICaption}
-                disabled={generatingCaption}
-                className="px-4 py-2.5 rounded-xl bg-purple-950/40 border border-purple-900/30 text-purple-300 text-xs font-bold hover:bg-purple-900/30 transition-colors disabled:opacity-40"
-              >{generatingCaption ? '⏳ Generating…' : '✨ AI Caption'}</button>
-              <button
-                type="submit"
-                disabled={publishing || !content.trim() || selectedPlatforms.length === 0}
-                className="flex-1 px-5 py-2.5 rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] disabled:opacity-40 text-[#141416] text-xs font-bold uppercase tracking-wider transition-colors"
-              >{publishing ? '⏳ Publishing…' : scheduledFor ? '📅 Schedule Post' : '📤 Publish Now'}</button>
+              <button type="button" onClick={handleGenerateAICaption} disabled={generatingCaption}
+                className="px-4 py-2.5 rounded-xl bg-purple-950/40 border border-purple-900/30 text-purple-300 text-xs font-bold hover:bg-purple-900/30 transition-colors disabled:opacity-40">
+                {generatingCaption ? '⏳ Generating…' : '✨ AI Caption'}
+              </button>
+              <button type="submit" disabled={publishing || !content.trim() || selectedPlatforms.length === 0}
+                className="flex-1 px-5 py-2.5 rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] disabled:opacity-40 text-[#141416] text-xs font-bold uppercase tracking-wider transition-colors">
+                {publishing ? '⏳ Publishing…' : scheduledFor ? '📅 Schedule Post' : '📤 Publish Now'}
+              </button>
             </div>
+
+            {/* Publish Log */}
+            {publishLog.length > 0 && (
+              <div className="rounded-xl border border-[#2D2D30] bg-[#0A0A0C] p-3 space-y-1 max-h-40 overflow-y-auto">
+                <div className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Publish Log</div>
+                {publishLog.map((line, i) => (
+                  <div key={i} className={`text-[10px] font-mono ${
+                    line.includes('✅') ? 'text-green-400' : line.includes('❌') ? 'text-red-400' : 'text-gray-400'
+                  }`}>{line}</div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Preview panel */}

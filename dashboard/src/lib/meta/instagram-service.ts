@@ -89,6 +89,12 @@ export const InstagramService = {
     // NOTE: participants return 'username' not 'name' in live mode
     return igGet<{ data: unknown[] }>(`/me/conversations?fields=id,participants{id,name,username},messages{id,message,from,created_time},updated_time&limit=${limit}`)
   },
+  async getConversationMessages(conversationId: string, limit = 50) {
+    // Fetch ALL messages for a specific conversation with attachments
+    return igGet<{ data: unknown[]; paging?: unknown }>(
+      `/${conversationId}/messages?fields=id,message,from,created_time,attachments{id,mime_type,file_url,name,image_data}&limit=${limit}`
+    )
+  },
   async sendDM(recipientId: string, text: string) {
     MetaLogger.request(SOURCE, 'POST', `${IG_BASE}/me/messages`, { recipientId, text })
     // Uses Authorization Bearer header format for Instagram Messaging API
