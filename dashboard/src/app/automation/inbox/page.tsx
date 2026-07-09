@@ -55,6 +55,7 @@ export default function SocialInboxPage() {
   const [aiGenerating, setAiGenerating] = useState(false)
   const [filter, setFilter]             = useState<'all' | 'messenger' | 'instagram'>('all')
   const [apiHint, setApiHint]           = useState('')
+  const [igApiHint, setIgApiHint]       = useState('')
 
   // ── Fetch FB Messenger Conversations ────────────────────────────────────────
   const fetchThreads = useCallback(async () => {
@@ -85,11 +86,13 @@ export default function SocialInboxPage() {
     } catch { /* ignore */ }
 
     try {
-      // Instagram conversations
+      // Instagram conversations (uses graph.instagram.com)
       const igRes  = await fetch('/api/meta/instagram/messages?limit=20')
       const igData = await igRes.json()
-      if (igData.data && Array.isArray(igData.data)) {
-        for (const conv of igData.data) {
+      // graph.instagram.com returns { data: [] } directly (no nested .data.data)
+      const igConvs = igData.data ?? []
+      if (Array.isArray(igConvs) && igConvs.length > 0) {
+        for (const conv of igConvs) {
           const msgs = conv.messages?.data || []
           const last = msgs[0]
           fetched.push({
@@ -102,6 +105,10 @@ export default function SocialInboxPage() {
             participantId: conv.participants?.data?.[0]?.id,
           })
         }
+      } else if (igData.error) {
+        setIgApiHint(`Instagram: ${typeof igData.error === 'object' ? igData.error.message || JSON.stringify(igData.error) : igData.error}`)
+      } else {
+        setIgApiHint('') // clear previous hint if successful
       }
     } catch { /* ignore */ }
 
@@ -227,7 +234,19 @@ export default function SocialInboxPage() {
           ) : visibleThreads.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-gray-600 gap-2 p-4 text-center">
               <span className="text-2xl">📭</span>
-              <span className="text-xs">No conversations found. Make sure your page has Messenger subscriptions.</span>
+              <span className="text-xs font-semibold text-gray-400">
+                {filter === 'instagram'
+                  ? 'No Instagram DMs yet. Send yourself a DM on @smritifyp to test!'
+                  : filter === 'messenger'
+                  ? 'No Messenger conversations yet. Make sure your page has Messenger subscriptions.'
+                  : 'No conversations found across any connected channel yet.'}
+              </span>
+              <button
+                onClick={fetchThreads}
+                className="mt-1 text-[10px] px-3 py-1.5 rounded-lg bg-purple-950/30 border border-purple-900/30 text-purple-400 hover:bg-purple-900/20 font-bold uppercase tracking-wider"
+              >
+                🔄 Reload
+              </button>
             </div>
           ) : (
             visibleThreads.map(thread => (
@@ -249,9 +268,12 @@ export default function SocialInboxPage() {
           )}
         </div>
 
-        {/* Hint */}
-        {apiHint && (
-          <div className="p-3 border-t border-[#2D2D30] text-[10px] text-amber-400 font-mono">{apiHint}</div>
+        {/* Hints */}
+        {(apiHint || igApiHint) && (
+          <div className="p-3 border-t border-[#2D2D30] space-y-1">
+            {apiHint && <div className="text-[10px] text-amber-400 font-mono">💬 {apiHint}</div>}
+            {igApiHint && <div className="text-[10px] text-pink-400 font-mono">📸 {igApiHint}</div>}
+          </div>
         )}
       </div>
 
