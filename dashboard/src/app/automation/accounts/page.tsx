@@ -28,7 +28,9 @@ export default function ConnectedAccountsPage() {
   const [accountName, setAccountName] = useState('')
   const [appId, setAppId] = useState('')
   const [accessToken, setAccessToken] = useState('')
+  const [showAccessToken, setShowAccessToken] = useState(false)
   const [appSecret, setAppSecret] = useState('')
+  const [showAppSecret, setShowAppSecret] = useState(false)
   const [pageId, setPageId] = useState('')
   const [wabaId, setWabaId] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -343,14 +345,24 @@ export default function ConnectedAccountsPage() {
 
               <div>
                 <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Access Token / WABA Token *</label>
-                <input
-                  type="password"
-                  required
-                  value={accessToken}
-                  onChange={(e) => setAccessToken(e.target.value)}
-                  placeholder="Graph API System Token or Cloud API Secret"
-                  className="w-full rounded-xl bg-[#141416] border border-[#2D2D30] px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 font-mono"
-                />
+                <div className="relative">
+                  <input
+                    type={showAccessToken ? "text" : "password"}
+                    required
+                    value={accessToken}
+                    onChange={(e) => setAccessToken(e.target.value)}
+                    placeholder="Graph API System Token or Cloud API Secret"
+                    className="w-full rounded-xl bg-[#141416] border border-[#2D2D30] pl-3.5 pr-10 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAccessToken(!showAccessToken)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors text-xs"
+                    title={showAccessToken ? 'Hide' : 'Reveal'}
+                  >
+                    {showAccessToken ? '🙈' : '👁️'}
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -366,13 +378,23 @@ export default function ConnectedAccountsPage() {
                 </div>
                 <div>
                   <label className="block text-[9px] font-bold text-gray-500 mb-1 uppercase tracking-wider">App Secret (Optional)</label>
-                  <input
-                    type="password"
-                    value={appSecret}
-                    onChange={(e) => setAppSecret(e.target.value)}
-                    placeholder="Meta App Secret"
-                    className="w-full rounded-xl bg-[#141416] border border-[#2D2D30] px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showAppSecret ? "text" : "password"}
+                      value={appSecret}
+                      onChange={(e) => setAppSecret(e.target.value)}
+                      placeholder="Meta App Secret"
+                      className="w-full rounded-xl bg-[#141416] border border-[#2D2D30] pl-3.5 pr-10 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAppSecret(!showAppSecret)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors text-xs"
+                      title={showAppSecret ? 'Hide' : 'Reveal'}
+                    >
+                      {showAppSecret ? '🙈' : '👁️'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
