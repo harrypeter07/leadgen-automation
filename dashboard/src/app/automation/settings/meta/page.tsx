@@ -509,16 +509,16 @@ export default function MetaSettingsPage() {
                         {statusInfo && !statusInfo.loading && (
                           <div className={`p-2.5 rounded-lg border text-[10px] font-mono leading-relaxed ${
                             statusInfo.status === 'active'
-                              ? 'bg-green-950/30 border-green-900/40 text-green-400'
+                              ? 'dark:bg-green-950/30 bg-green-50 dark:border-green-900/40 border-green-200 dark:text-green-400 text-green-800'
                               : statusInfo.status === 'limit_reached'
-                              ? 'bg-amber-950/30 border-amber-900/40 text-amber-400'
-                              : 'bg-red-950/30 border-red-900/40 text-red-400'
+                              ? 'dark:bg-amber-950/30 bg-amber-50 dark:border-amber-900/40 border-amber-200 dark:text-amber-400 text-amber-800'
+                              : 'dark:bg-red-950/30 bg-red-50 dark:border-red-900/40 border-red-200 dark:text-red-400 text-red-800'
                           }`}>
                             {statusInfo.status === 'active' ? (
                               <div>
                                 <span className="font-bold uppercase mr-1">✓ Active:</span> Key validation passed!
                                 {statusInfo.models && statusInfo.models.length > 0 && (
-                                  <div className="mt-1 text-[9px] text-green-500/80 uppercase tracking-wider">
+                                  <div className="mt-1 text-[9px] dark:text-green-500/80 text-green-700 uppercase tracking-wider">
                                     Available Models: {statusInfo.models.join(', ')}
                                   </div>
                                 )}

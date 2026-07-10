@@ -171,24 +171,40 @@ body {
 }
 
 :not(.dark) .text-white {
-  color: #111827 !important;
+  color: #0f172a !important;
+}
+
+:not(.dark) .text-slate-800 {
+  color: #0f172a !important;
+}
+
+:not(.dark) .text-slate-500 {
+  color: #334155 !important;
 }
 
 :not(.dark) .text-gray-400 {
-  color: #6b7280 !important;
+  color: #374151 !important;
 }
 
 :not(.dark) .text-gray-500 {
-  color: #6b7280 !important;
+  color: #1f2937 !important;
+}
+
+:not(.dark) .border-gray-200 {
+  border-color: #cbd5e1 !important;
+}
+
+:not(.dark) .border-gray-300 {
+  border-color: #94a3b8 !important;
 }
 
 :not(.dark) .placeholder-gray-600::placeholder {
-  color: #9ca3af !important;
+  color: #6b7280 !important;
 }
 
 :not(.dark) .hover\:bg-gray-800:hover {
-  background-color: #e5e7eb !important;
-  color: #111827 !important;
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
 }
 
 /* Custom premium scrollbar styling */

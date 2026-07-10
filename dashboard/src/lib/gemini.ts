@@ -79,10 +79,16 @@ export async function generateWithGemini(
         lastError = errText
         lastStatus = res.status
 
-        // If the key has hit a quota limit (429) or is invalid (400/401), rotate to the next key immediately
-        if (res.status === 429 || res.status === 400 || res.status === 401) {
-          console.warn(`[Gemini SDK] Key ${keyAbbr} hit status limit (${res.status}). Rotating key...`)
+        // If the key has hit invalid credentials (400/401), rotate to the next key immediately
+        if (res.status === 400 || res.status === 401) {
+          console.warn(`[Gemini SDK] Key ${keyAbbr} is invalid/unauthorized (status ${res.status}). Rotating key...`)
           break // Break model loop to advance to next key in keysToTry
+        }
+
+        // If the key has hit a quota limit (429) for this specific model, try other models before rotating keys
+        if (res.status === 429) {
+          console.warn(`[Gemini SDK] Key ${keyAbbr} hit quota limit on model ${modelName}. Trying other models...`)
+          continue // Try next model in fallback list for this key
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
