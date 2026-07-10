@@ -53,20 +53,14 @@ Write the email in two parts separated by "|||":
 
 Format: SUBJECT|||BODY`
 
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        const { generateWithGemini } = await import('@/lib/gemini')
+        const { text: raw } = await generateWithGemini(
           {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: prompt }] }],
-              generationConfig: { maxOutputTokens: 400, temperature: 0.7 },
-            }),
-          }
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: 400, temperature: 0.7 },
+          },
+          apiKey
         )
-
-        const geminiData = await geminiRes.json()
-        const raw = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || ''
         const parts = raw.split('|||')
 
         const subject = parts[0]?.trim().replace(/^subject[:\s]*/i, '') || `Following up — ${lead.name}`

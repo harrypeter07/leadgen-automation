@@ -252,6 +252,60 @@ export default function SocialInboxPage() {
   const [showCompose, setShowCompose]       = useState(false)
   const [showAutoReply, setShowAutoReply]   = useState(false)
 
+  // Thread specific autopilot state overrides
+  const [autopilotOverrides, setAutopilotOverrides] = useState<Record<string, boolean>>({})
+  const [globalAutopilotEnabled, setGlobalAutopilotEnabled] = useState(false)
+
+  // Fetch autopilot overrides & global config
+  const fetchAutopilotSettings = useCallback(async () => {
+    try {
+      const [overridesRes, configRes] = await Promise.all([
+        fetch('/api/meta/instagram/thread-autopilot'),
+        fetch('/api/meta/instagram/auto-reply'),
+      ])
+      const overridesData = await overridesRes.json()
+      const configData = await configRes.json()
+      if (overridesRes.ok && overridesData.success) {
+        setAutopilotOverrides(overridesData.overrides || {})
+      }
+      if (configRes.ok && configData.success) {
+        setGlobalAutopilotEnabled(configData.chatbotEnabled || false)
+      }
+    } catch (err) {
+      console.error('Failed to load autopilot settings:', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchAutopilotSettings()
+  }, [fetchAutopilotSettings])
+
+  const senderId = selectedThread?.participantId || selectedThread?.id.replace('ig_', '')
+  const threadOverride = senderId ? autopilotOverrides[senderId] : undefined
+  const isAutopilotActive = threadOverride !== undefined ? threadOverride : globalAutopilotEnabled
+
+  async function toggleThreadAutopilot() {
+    if (!selectedThread || !senderId) return
+    const nextState = !isAutopilotActive
+    const toastId = toast.loading(`${nextState ? 'Enabling' : 'Disabling'} Autopilot for this chat…`)
+    try {
+      const res = await fetch('/api/meta/instagram/thread-autopilot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderId, enabled: nextState }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setAutopilotOverrides(data.overrides || {})
+        toast.success(`Autopilot is now ${nextState ? 'ON' : 'OFF'} for this chat!`, { id: toastId })
+      } else {
+        throw new Error(data.error || 'Failed to update override')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Action failed', { id: toastId })
+    }
+  }
+
   const fetchThreads = useCallback(async () => {
     setLoadingThreads(true)
     const fetched: Thread[] = []
@@ -554,12 +608,24 @@ export default function SocialInboxPage() {
                       <div className="text-[10px] text-gray-500 capitalize">{selectedThread.platform} · {selectedThread.time}</div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setShowCompose(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-950/40 to-purple-950/40 border border-pink-900/30 text-pink-300 text-[10px] font-bold hover:from-pink-900/40 transition-all"
-                  >
-                    ✏️ New DM
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={toggleThreadAutopilot}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all focus:outline-none ${
+                        isAutopilotActive
+                          ? 'bg-purple-950/40 border-purple-900/40 text-purple-300'
+                          : 'bg-[#141416] border-[#2D2D30] text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      🤖 Autopilot: {isAutopilotActive ? 'ON' : 'OFF'}
+                    </button>
+                    <button
+                      onClick={() => setShowCompose(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-950/40 to-purple-950/40 border border-pink-900/30 text-pink-300 text-[10px] font-bold hover:from-pink-900/40 transition-all"
+                    >
+                      ✏️ New DM
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">

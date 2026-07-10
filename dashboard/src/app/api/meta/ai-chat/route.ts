@@ -32,30 +32,19 @@ Never use generic filler phrases. Sound human and genuine.`
       { role: 'user', parts: [{ text: message }] },
     ]
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    const { generateWithGemini } = await import('@/lib/gemini')
+    const { text: reply } = await generateWithGemini(
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPersona }] },
-          contents,
-          generationConfig: {
-            maxOutputTokens: 200,
-            temperature: 0.75,
-            topP: 0.9,
-          },
-        }),
-      }
+        system_instruction: { parts: [{ text: systemPersona }] },
+        contents,
+        generationConfig: {
+          maxOutputTokens: 200,
+          temperature: 0.75,
+          topP: 0.9,
+        },
+      },
+      apiKey
     )
-
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text()
-      return NextResponse.json({ error: `Gemini API error: ${errText}` }, { status: geminiRes.status })
-    }
-
-    const geminiData = await geminiRes.json()
-    const reply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || ''
 
     return NextResponse.json({ success: true, reply })
   } catch (err: unknown) {

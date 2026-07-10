@@ -25,3 +25,149 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Custom dark theme variable overrides for Zarss Premium Dashboard */
+.dark {
+  --background: #141416;
+  --foreground: #f3f4f6;
+}
+
+/* Force dark theme overrides on static light elements when .dark wrapper is active */
+.dark .bg-white {
+  background-color: #18181A !important;
+  color: #f3f4f6 !important;
+}
+
+.dark .text-\[\#1C1C1E\] {
+  color: #ffffff !important;
+}
+
+.dark .text-gray-800 {
+  color: #f3f4f6 !important;
+}
+
+.dark .text-gray-700 {
+  color: #e5e7eb !important;
+}
+
+.dark .text-gray-600 {
+  color: #d1d5db !important;
+}
+
+.dark .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+.dark .text-gray-400 {
+  color: #9ca3af !important;
+}
+
+.dark .border-\[\#E4E3DD\] {
+  border-color: #2D2D30 !important;
+}
+
+.dark .border-gray-100 {
+  border-color: #252528 !important;
+}
+
+.dark .border-slate-200 {
+  border-color: #2D2D30 !important;
+}
+
+.dark .border-gray-200 {
+  border-color: #2D2D30 !important;
+}
+
+.dark .divide-\[\#E4E3DD\]\/60 > * {
+  border-color: #2D2D30 !important;
+}
+
+.dark .divide-y tr {
+  border-color: #2D2D30 !important;
+}
+
+.dark .bg-gray-50\/50 {
+  background-color: #202022 !important;
+}
+
+.dark .bg-gray-50 {
+  background-color: #202022 !important;
+}
+
+.dark .hover\:bg-gray-50:hover {
+  background-color: #252528 !important;
+}
+
+.dark tr.hover\:bg-\[\#F4F3EF\]\/30:hover {
+  background-color: #252528 !important;
+}
+
+.dark .bg-\[\#F4F3EF\] {
+  background-color: #252528 !important;
+}
+
+.dark .bg-\[\#ECEAE4\] {
+  background-color: #2D2D30 !important;
+}
+
+.dark .bg-\[\#1C1C1E\] {
+  background-color: #3D3D40 !important;
+  color: #ffffff !important;
+}
+
+.dark .hover\:bg-\[\#252528\]:hover {
+  background-color: #4D4D50 !important;
+}
+
+.dark .text-slate-800 {
+  color: #e5e7eb !important;
+}
+
+.dark .text-slate-500 {
+  color: #9ca3af !important;
+}
+
+/* Map hardcoded dark theme sub-page elements to light theme when NOT in dark mode */
+:not(.dark) .bg-\[\#18181A\] {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+}
+
+:not(.dark) .bg-\[\#141416\] {
+  background-color: #f3f4f6 !important;
+  color: #1f2937 !important;
+}
+
+:not(.dark) .bg-\[\#222225\] {
+  background-color: #ece9e2 !important;
+  color: #1f2937 !important;
+}
+
+:not(.dark) .border-\[\#2D2D30\] {
+  border-color: #e5e7eb !important;
+}
+
+:not(.dark) .border-\[\#2D2D30\]\/60 {
+  border-color: #f3f4f6 !important;
+}
+
+:not(.dark) .text-white {
+  color: #111827 !important;
+}
+
+:not(.dark) .text-gray-400 {
+  color: #6b7280 !important;
+}
+
+:not(.dark) .text-gray-500 {
+  color: #6b7280 !important;
+}
+
+:not(.dark) .placeholder-gray-600::placeholder {
+  color: #9ca3af !important;
+}
+
+:not(.dark) .hover\:bg-gray-800:hover {
+  background-color: #e5e7eb !important;
+  color: #111827 !important;
+}

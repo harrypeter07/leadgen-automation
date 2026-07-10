@@ -42,7 +42,7 @@ async function handleAutoReply(
     const { data: configRows } = await supabaseAdmin
       .from('meta_config')
       .select('key, value')
-      .in('key', ['AUTO_REPLY_RULES', 'AI_CHATBOT_ENABLED', 'AI_CHATBOT_PERSONA'])
+      .in('key', ['AUTO_REPLY_RULES', 'AI_CHATBOT_ENABLED', 'AI_CHATBOT_PERSONA', 'THREAD_AUTOPILOT_OVERRIDES'])
 
     const settings: Record<string, string> = {}
     for (const r of configRows || []) {
@@ -50,8 +50,17 @@ async function handleAutoReply(
     }
 
     const rules = settings.AUTO_REPLY_RULES ? JSON.parse(settings.AUTO_REPLY_RULES) : []
-    const chatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
+    const globalChatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
     const chatbotPersona = settings.AI_CHATBOT_PERSONA || 'You are a helpful, professional business assistant.'
+
+    // Thread-level autopilot override checking
+    let overrides: Record<string, boolean> = {}
+    try {
+      overrides = settings.THREAD_AUTOPILOT_OVERRIDES ? JSON.parse(settings.THREAD_AUTOPILOT_OVERRIDES) : {}
+    } catch {}
+
+    // Override global config with thread-specific toggle if defined
+    const chatbotEnabled = overrides[senderId] !== undefined ? overrides[senderId] : globalChatbotEnabled
 
     const textLower = messageText.toLowerCase()
     let replied = false
@@ -77,27 +86,20 @@ async function handleAutoReply(
       console.log(`[AutoReply] Generating AI response for "${messageText}"...`)
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
       if (apiKey) {
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        const { generateWithGemini } = await import('@/lib/gemini')
+        const { text: aiReply } = await generateWithGemini(
           {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: chatbotPersona }] },
-              contents: [{ role: 'user', parts: [{ text: messageText }] }],
-              generationConfig: { maxOutputTokens: 150, temperature: 0.7 },
-            }),
-          }
+            system_instruction: { parts: [{ text: chatbotPersona }] },
+            contents: [{ role: 'user', parts: [{ text: messageText }] }],
+            generationConfig: { maxOutputTokens: 150, temperature: 0.7 },
+          },
+          apiKey
         )
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json()
-          const aiReply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || ''
-          if (aiReply.trim()) {
-            if (platform === 'instagram') {
-              await InstagramService.sendDM(senderId, aiReply.trim())
-            } else {
-              await FacebookService.sendMessage(senderId, aiReply.trim())
-            }
+        if (aiReply.trim()) {
+          if (platform === 'instagram') {
+            await InstagramService.sendDM(senderId, aiReply.trim())
+          } else {
+            await FacebookService.sendMessage(senderId, aiReply.trim())
           }
         }
       }

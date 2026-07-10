@@ -42,29 +42,18 @@ Provide the response as a JSON structure:
 
 Only return raw JSON format without markdown blocks.`
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    const { generateWithGemini } = await import('@/lib/gemini')
+    const { text: rawText } = await generateWithGemini(
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            maxOutputTokens: 500,
-            temperature: 0.7,
-            responseMimeType: 'application/json'
-          },
-        }),
-      }
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: 500,
+          temperature: 0.7,
+          responseMimeType: 'application/json'
+        },
+      },
+      apiKey
     )
-
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text()
-      return NextResponse.json({ error: `Gemini API error: ${errText}` }, { status: geminiRes.status })
-    }
-
-    const geminiData = await geminiRes.json()
-    const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '{}'
     const parsed = JSON.parse(rawText)
 
     return NextResponse.json({ success: true, ...parsed })

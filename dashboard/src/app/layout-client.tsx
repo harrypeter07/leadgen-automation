@@ -331,7 +331,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
 
   return (
     <div className={`min-h-screen flex flex-col md:flex-row font-sans transition-colors duration-300 ${
-      isDark ? 'bg-[#141416] text-white' : 'bg-[#F4F4F6] text-gray-900'
+      isDark ? 'dark bg-[#141416] text-white' : 'bg-[#F4F4F6] text-gray-900'
     }`}>
       <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: isDark ? '#1c1c1e' : '#ffffff', color: isDark ? '#f3f4f6' : '#1c1c1e', border: isDark ? '1px solid #2d2d30' : '1px solid #e5e5eb' } }} />
 
