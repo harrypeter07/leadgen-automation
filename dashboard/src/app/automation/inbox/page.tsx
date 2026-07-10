@@ -78,6 +78,15 @@ function ComposeDMModal({ onClose, threads }: ComposeDMModalProps) {
   const [message, setMessage]         = useState('')
   const [sending, setSending]         = useState(false)
 
+  // Lock background body scroll when modal is open
+  useEffect(() => {
+    const originalStyle = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = originalStyle
+    }
+  }, [])
+
   const existingRecipients = threads
     .filter(t => t.platform === platform && t.participantId)
     .map(t => ({ id: t.participantId!, name: t.name, platform: t.platform }))

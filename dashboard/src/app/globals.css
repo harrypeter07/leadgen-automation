@@ -171,3 +171,26 @@ body {
   background-color: #e5e7eb !important;
   color: #111827 !important;
 }
+
+/* Custom premium scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0E0E10;
+}
+::-webkit-scrollbar-thumb {
+  background: #2D2D30;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4D4D52;
+}
+
+/* Firefox styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2D2D30 #0E0E10;
+}
+

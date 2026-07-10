@@ -38,6 +38,15 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
     { name: 'Technical Support', instructions: 'You are a clear, technical agent. Assist with troubleshooting API configurations, SMTP server checks, and Google Scraper parameters in a helpful tone.' },
   ]
 
+  // Lock background body scroll when modal is open
+  useEffect(() => {
+    const originalStyle = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = originalStyle
+    }
+  }, [])
+
   // Load settings on mount
   useEffect(() => {
     const fetchSettings = async () => {
