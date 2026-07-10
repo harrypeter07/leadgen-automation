@@ -2,13 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 
 // GET /api/meta/instagram/auto-reply
-// Returns auto-reply settings: rules, chatbot enabled status, and chatbot persona
+// Returns auto-reply settings: rules, chatbot enabled status, chatbot persona, and delays
 export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
       .from('meta_config')
       .select('key, value')
-      .in('key', ['AUTO_REPLY_RULES', 'AI_CHATBOT_ENABLED', 'AI_CHATBOT_PERSONA', 'SAVED_CHATBOT_PERSONAS'])
+      .in('key', [
+        'AUTO_REPLY_RULES',
+        'AI_CHATBOT_ENABLED',
+        'AI_CHATBOT_PERSONA',
+        'SAVED_CHATBOT_PERSONAS',
+        'AI_FIRST_REPLY_DELAY',
+        'AI_CONVERSATION_DELAY'
+      ])
 
     if (error) throw error
 
@@ -33,6 +40,8 @@ export async function GET() {
       chatbotEnabled: settings.AI_CHATBOT_ENABLED === 'true',
       chatbotPersona: settings.AI_CHATBOT_PERSONA || '',
       personas,
+      firstReplyDelay: settings.AI_FIRST_REPLY_DELAY !== undefined ? Number(settings.AI_FIRST_REPLY_DELAY) : 5,
+      conversationDelay: settings.AI_CONVERSATION_DELAY !== undefined ? Number(settings.AI_CONVERSATION_DELAY) : 2,
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -40,10 +49,10 @@ export async function GET() {
 }
 
 // POST /api/meta/instagram/auto-reply
-// Saves rules, chatbot status, persona, or saved personas list
+// Saves rules, chatbot status, persona, delays, or saved personas list
 export async function POST(req: NextRequest) {
   try {
-    const { rules, chatbotEnabled, chatbotPersona, personas } = await req.json()
+    const { rules, chatbotEnabled, chatbotPersona, personas, firstReplyDelay, conversationDelay } = await req.json()
 
     const rows = []
 
@@ -78,6 +87,24 @@ export async function POST(req: NextRequest) {
       rows.push({
         key: 'SAVED_CHATBOT_PERSONAS',
         value: JSON.stringify(personas),
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    if (firstReplyDelay !== undefined) {
+      rows.push({
+        key: 'AI_FIRST_REPLY_DELAY',
+        value: String(firstReplyDelay),
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    if (conversationDelay !== undefined) {
+      rows.push({
+        key: 'AI_CONVERSATION_DELAY',
+        value: String(conversationDelay),
         encrypted: false,
         updated_at: new Date().toISOString(),
       })

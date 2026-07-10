@@ -22,6 +22,8 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
   const [chatbotEnabled, setChatbotEnabled] = useState(false)
   const [chatbotPersona, setChatbotPersona] = useState('')
   const [personas, setPersonas] = useState<Persona[]>([])
+  const [firstReplyDelay, setFirstReplyDelay] = useState(5)
+  const [conversationDelay, setConversationDelay] = useState(2)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -47,6 +49,8 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
           setChatbotEnabled(data.chatbotEnabled)
           setChatbotPersona(data.chatbotPersona || '')
           setPersonas(data.personas && data.personas.length > 0 ? data.personas : DEFAULT_PERSONAS)
+          setFirstReplyDelay(data.firstReplyDelay !== undefined ? Number(data.firstReplyDelay) : 5)
+          setConversationDelay(data.conversationDelay !== undefined ? Number(data.conversationDelay) : 2)
         }
       } catch (err) {
         console.error('Failed to load auto-reply settings:', err)
@@ -108,6 +112,8 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
           chatbotEnabled,
           chatbotPersona: chatbotPersona.trim(),
           personas,
+          firstReplyDelay,
+          conversationDelay,
         }),
       })
       const data = await res.json()
@@ -162,6 +168,33 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
 
               {chatbotEnabled && (
                 <div className="space-y-3 pt-2 border-t border-[#2D2D30]/40">
+                  {/* Reply Delays */}
+                  <div className="grid gap-3 sm:grid-cols-2 bg-[#0E0E10] border border-[#2D2D30] rounded-xl p-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">⏱️ First Reply Delay (seconds)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="300"
+                        value={firstReplyDelay}
+                        onChange={e => setFirstReplyDelay(Number(e.target.value))}
+                        className="w-full bg-[#141416] border border-[#2D2D30] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                      />
+                      <p className="text-[8px] text-gray-500">Delay for the first message in a new conversation</p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">🔁 Conversation Delay (seconds)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="300"
+                        value={conversationDelay}
+                        onChange={e => setConversationDelay(Number(e.target.value))}
+                        className="w-full bg-[#141416] border border-[#2D2D30] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                      />
+                      <p className="text-[8px] text-gray-500">Delay for subsequent messages after the first reply</p>
+                    </div>
+                  </div>
                   {/* Select Predefined Persona */}
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block">Load Predefined Persona</label>
