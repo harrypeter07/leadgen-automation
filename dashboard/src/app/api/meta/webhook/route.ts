@@ -48,7 +48,8 @@ async function handleAutoReply(
         'AI_CHATBOT_PERSONA',
         'THREAD_AUTOPILOT_OVERRIDES',
         'AI_FIRST_REPLY_DELAY',
-        'AI_CONVERSATION_DELAY'
+        'AI_CONVERSATION_DELAY',
+        'THREAD_AI_CONFIGS'
       ])
 
     const settings: Record<string, string> = {}
@@ -58,18 +59,36 @@ async function handleAutoReply(
 
     const rules = settings.AUTO_REPLY_RULES ? JSON.parse(settings.AUTO_REPLY_RULES) : []
     const globalChatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
-    const chatbotPersona = settings.AI_CHATBOT_PERSONA || 'You are a helpful, professional business assistant.'
-    const firstReplyDelay = settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 5
-    const conversationDelay = settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 2
 
-    // Thread-level autopilot override checking
+    // Thread-level configurations override
+    let threadConfigs: Record<string, any> = {}
+    try {
+      threadConfigs = settings.THREAD_AI_CONFIGS ? JSON.parse(settings.THREAD_AI_CONFIGS) : {}
+    } catch {}
+
+    const threadConfig = threadConfigs[senderId] || {}
+
+    // 1. Autopilot toggle override
     let overrides: Record<string, boolean> = {}
     try {
       overrides = settings.THREAD_AUTOPILOT_OVERRIDES ? JSON.parse(settings.THREAD_AUTOPILOT_OVERRIDES) : {}
     } catch {}
 
-    // Override global config with thread-specific toggle if defined
-    const chatbotEnabled = overrides[senderId] !== undefined ? overrides[senderId] : globalChatbotEnabled
+    const chatbotEnabled = threadConfig.enabled !== undefined
+      ? threadConfig.enabled
+      : (overrides[senderId] !== undefined ? overrides[senderId] : globalChatbotEnabled)
+
+    // 2. Persona override
+    const chatbotPersona = threadConfig.persona || settings.AI_CHATBOT_PERSONA || 'You are a helpful, professional business assistant.'
+
+    // 3. Delays override
+    const firstReplyDelay = threadConfig.firstReplyDelay !== undefined
+      ? Number(threadConfig.firstReplyDelay)
+      : (settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 5)
+
+    const conversationDelay = threadConfig.conversationDelay !== undefined
+      ? Number(threadConfig.conversationDelay)
+      : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 2)
 
     const textLower = messageText.toLowerCase()
     let replied = false

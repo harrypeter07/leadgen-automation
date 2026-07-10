@@ -270,6 +270,7 @@ export default function SocialInboxPage() {
   const [fbError, setFbError]               = useState('')
   const [showCompose, setShowCompose]       = useState(false)
   const [showAutoReply, setShowAutoReply]   = useState(false)
+  const [showThreadSettings, setShowThreadSettings] = useState(false)
   const [isTyping, setIsTyping]             = useState(false)
 
   // Thread specific autopilot state overrides
@@ -573,6 +574,16 @@ export default function SocialInboxPage() {
     <>
       {showCompose && <ComposeDMModal onClose={() => { setShowCompose(false); fetchThreads() }} threads={threads} />}
       {showAutoReply && <AutoReplyModal onClose={() => setShowAutoReply(false)} />}
+      {showThreadSettings && selectedThread && senderId && (
+        <AutoReplyModal
+          threadId={senderId}
+          threadName={selectedThread.name}
+          onClose={() => {
+            setShowThreadSettings(false)
+            fetchAutopilotSettings()
+          }}
+        />
+      )}
 
       <div className="flex flex-col h-[calc(100vh-120px)] rounded-2xl border border-gray-200 dark:border-[#2D2D30] overflow-hidden bg-white dark:bg-[#0A0A0C] text-slate-800 dark:text-white select-none shadow-sm">
         <div className="flex flex-1 overflow-hidden">
@@ -725,6 +736,13 @@ export default function SocialInboxPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowThreadSettings(true)}
+                      className="p-1.5 rounded-lg bg-white dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] hover:bg-gray-100 dark:hover:bg-[#1e1e21] text-xs transition-all shadow-sm"
+                      title="Custom Chat Settings"
+                    >
+                      ⚙️
+                    </button>
                     <button
                       onClick={toggleThreadAutopilot}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all ${

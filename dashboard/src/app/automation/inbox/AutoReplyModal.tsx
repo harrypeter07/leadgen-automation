@@ -15,9 +15,11 @@ interface Persona {
 
 interface AutoReplyModalProps {
   onClose: () => void
+  threadId?: string
+  threadName?: string
 }
 
-export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
+export default function AutoReplyModal({ onClose, threadId, threadName }: AutoReplyModalProps) {
   const [rules, setRules] = useState<Rule[]>([])
   const [chatbotEnabled, setChatbotEnabled] = useState(false)
   const [chatbotPersona, setChatbotPersona] = useState('')
@@ -51,25 +53,52 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await fetch('/api/meta/instagram/auto-reply')
-        const data = await res.json()
-        if (res.ok) {
-          setRules(data.rules || [])
-          setChatbotEnabled(data.chatbotEnabled)
-          setChatbotPersona(data.chatbotPersona || '')
-          setPersonas(data.personas && data.personas.length > 0 ? data.personas : DEFAULT_PERSONAS)
-          setFirstReplyDelay(data.firstReplyDelay !== undefined ? Number(data.firstReplyDelay) : 5)
-          setConversationDelay(data.conversationDelay !== undefined ? Number(data.conversationDelay) : 2)
+        const globalRes = await fetch('/api/meta/instagram/auto-reply')
+        const globalData = await globalRes.json()
+        
+        let initialRules = []
+        let initialChatbotEnabled = false
+        let initialChatbotPersona = ''
+        let initialPersonas = DEFAULT_PERSONAS
+        let initialFirstReplyDelay = 5
+        let initialConversationDelay = 2
+
+        if (globalRes.ok) {
+          initialRules = globalData.rules || []
+          initialChatbotEnabled = globalData.chatbotEnabled
+          initialChatbotPersona = globalData.chatbotPersona || ''
+          initialPersonas = globalData.personas && globalData.personas.length > 0 ? globalData.personas : DEFAULT_PERSONAS
+          initialFirstReplyDelay = globalData.firstReplyDelay !== undefined ? Number(globalData.firstReplyDelay) : 5
+          initialConversationDelay = globalData.conversationDelay !== undefined ? Number(globalData.conversationDelay) : 2
         }
+
+        if (threadId) {
+          const threadRes = await fetch(`/api/meta/instagram/thread-config?senderId=${threadId}`)
+          const threadData = await threadRes.json()
+          if (threadRes.ok && threadData.success && threadData.config) {
+            const cfg = threadData.config
+            if (cfg.enabled !== undefined) initialChatbotEnabled = cfg.enabled
+            if (cfg.persona !== undefined) initialChatbotPersona = cfg.persona
+            if (cfg.firstReplyDelay !== undefined) initialFirstReplyDelay = Number(cfg.firstReplyDelay)
+            if (cfg.conversationDelay !== undefined) initialConversationDelay = Number(cfg.conversationDelay)
+          }
+        }
+
+        setRules(initialRules)
+        setChatbotEnabled(initialChatbotEnabled)
+        setChatbotPersona(initialChatbotPersona)
+        setPersonas(initialPersonas)
+        setFirstReplyDelay(initialFirstReplyDelay)
+        setConversationDelay(initialConversationDelay)
       } catch (err) {
-        console.error('Failed to load auto-reply settings:', err)
-        toast.error('Failed to load auto-reply settings')
+        console.error('Failed to load settings:', err)
+        toast.error('Failed to load settings')
       } finally {
         setLoading(false)
       }
     }
     fetchSettings()
-  }, [])
+  }, [threadId])
 
   const handleAddRule = () => {
     setRules(prev => [...prev, { keywords: '', reply: '' }])
@@ -112,21 +141,36 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
     setSaving(true)
     const toastId = toast.loading('Saving settings…')
     try {
-      const res = await fetch('/api/meta/instagram/auto-reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rules,
-          chatbotEnabled,
-          chatbotPersona: chatbotPersona.trim(),
-          personas,
-          firstReplyDelay,
-          conversationDelay,
-        }),
-      })
+      let res
+      if (threadId) {
+        res = await fetch('/api/meta/instagram/thread-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            senderId: threadId,
+            enabled: chatbotEnabled,
+            firstReplyDelay,
+            conversationDelay,
+            persona: chatbotPersona.trim(),
+          }),
+        })
+      } else {
+        res = await fetch('/api/meta/instagram/auto-reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rules,
+            chatbotEnabled,
+            chatbotPersona: chatbotPersona.trim(),
+            personas,
+            firstReplyDelay,
+            conversationDelay,
+          }),
+        })
+      }
       const data = await res.json()
       if (res.ok && data.success) {
-        toast.success('Auto-reply configurations saved!', { id: toastId })
+        toast.success(threadId ? 'Thread-specific settings saved!' : 'Auto-reply configurations saved!', { id: toastId })
         onClose()
       } else {
         throw new Error(data.error || 'Failed to save settings')
@@ -146,8 +190,14 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
       >
         <div className="flex items-center justify-between border-b border-gray-200 dark:border-[#2D2D30] pb-3">
           <div>
-            <h2 className="text-slate-900 dark:text-white font-black text-lg">🤖 AI Chatbot & Auto-Reply Settings</h2>
-            <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">Automate replies to direct messages based on keywords or custom Gemini AI personas</p>
+            <h2 className="text-slate-900 dark:text-white font-black text-lg">
+              {threadId ? `🤖 Chat Settings: @${threadName}` : '🤖 AI Chatbot & Auto-Reply Settings'}
+            </h2>
+            <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">
+              {threadId
+                ? `Configure custom AI persona and delay times for this specific conversation`
+                : 'Automate replies to direct messages based on keywords or custom Gemini AI personas'}
+            </p>
           </div>
           <button onClick={onClose} className="text-slate-400 dark:text-gray-500 hover:text-slate-800 dark:hover:text-white text-xl transition-colors">✕</button>
         </div>
@@ -160,8 +210,14 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
             <div className="p-4 rounded-xl border border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416] space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider">Gemini AI Auto-Pilot</h3>
-                  <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">Enable human-like conversations using Gemini AI when keyword rules do not match</p>
+                  <h3 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider">
+                    {threadId ? 'Thread Auto-Pilot Override' : 'Gemini AI Auto-Pilot'}
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">
+                    {threadId
+                      ? 'Toggle whether Gemini AI auto-replies to this specific chat'
+                      : 'Enable human-like conversations using Gemini AI when keyword rules do not match'}
+                  </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
@@ -188,7 +244,7 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
                         onChange={e => setFirstReplyDelay(Number(e.target.value))}
                         className="w-full bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-purple-500"
                       />
-                      <p className="text-[8px] text-slate-400 dark:text-gray-500">Delay for the first message in a new conversation</p>
+                      <p className="text-[8px] text-slate-400 dark:text-gray-500">Delay for the first message in this conversation</p>
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">🔁 Conversation Delay (seconds)</label>
@@ -276,58 +332,60 @@ export default function AutoReplyModal({ onClose }: AutoReplyModalProps) {
             </div>
 
             {/* Keyword Rules Section */}
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">Keyword-based Rules</h3>
-                <button
-                  type="button"
-                  onClick={handleAddRule}
-                  className="px-2.5 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-bold uppercase transition-colors"
-                >
-                  + Add Rule
-                </button>
-              </div>
-
-              {rules.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-200 dark:border-[#2D2D30] p-6 text-center text-slate-400 dark:text-gray-600 text-xs">
-                  No keyword rules created.
+            {!threadId && (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">Keyword-based Rules</h3>
+                  <button
+                    type="button"
+                    onClick={handleAddRule}
+                    className="px-2.5 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-bold uppercase transition-colors"
+                  >
+                    + Add Rule
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-2.5 max-h-[35vh] overflow-y-auto pr-1">
-                  {rules.map((rule, index) => (
-                    <div key={index} className="p-3.5 rounded-xl border border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416] space-y-2.5 relative">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveRule(index)}
-                        className="absolute right-3 top-3 text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 text-xs transition-colors"
-                      >
-                        ✕
-                      </button>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">When message contains keywords</label>
-                          <input
-                            value={rule.keywords}
-                            onChange={e => handleRuleChange(index, 'keywords', e.target.value)}
-                            placeholder="price, cost, pricing (comma separated)"
-                            className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">Reply with message</label>
-                          <input
-                            value={rule.reply}
-                            onChange={e => handleRuleChange(index, 'reply', e.target.value)}
-                            placeholder="Our custom automation solutions start at $99..."
-                            className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500"
-                          />
+
+                {rules.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 dark:border-[#2D2D30] p-6 text-center text-slate-400 dark:text-gray-600 text-xs">
+                    No keyword rules created.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-[35vh] overflow-y-auto pr-1">
+                    {rules.map((rule, index) => (
+                      <div key={index} className="p-3.5 rounded-xl border border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416] space-y-2.5 relative">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveRule(index)}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 text-xs transition-colors"
+                        >
+                          ✕
+                        </button>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">When message contains keywords</label>
+                            <input
+                              value={rule.keywords}
+                              onChange={e => handleRuleChange(index, 'keywords', e.target.value)}
+                              placeholder="price, cost, pricing (comma separated)"
+                              className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">Reply with message</label>
+                            <input
+                              value={rule.reply}
+                              onChange={e => handleRuleChange(index, 'reply', e.target.value)}
+                              placeholder="Our custom automation solutions start at $99..."
+                              className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-3 pt-3 border-t border-gray-200 dark:border-[#2D2D30]">
