@@ -117,36 +117,12 @@ export const InstagramService = {
     )
   },
   async sendDM(recipientId: string, text: string) {
-    await ensureMetaConfig()
-    const pageId = process.env.META_PAGE_ID || ''
-    const token = await getPageToken()
-
-    // Instagram Business DMs MUST use the Facebook Graph API with a Page Access Token.
-    // graph.instagram.com/me/messages with an IG user token silently fails or errors.
-    // Correct endpoint: POST /{PAGE_ID}/messages with page token
-    const url = `https://graph.facebook.com/v25.0/${pageId}/messages`
-    MetaLogger.request(SOURCE, 'POST', url, { recipientId, text: text.slice(0, 60) })
-    const start = Date.now()
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          recipient: { id: recipientId },
-          message: { text },
-          messaging_type: 'RESPONSE',
-        }),
-      })
-      const data = await res.json() as Record<string, unknown>
-      const duration = Date.now() - start
-      if (!res.ok || data.error) {
-        console.error('[sendDM] API error:', JSON.stringify(data.error))
-        return { success: false, error: data.error as MetaApiResponse['error'], statusCode: res.status, duration }
-      }
-      return { success: true, data: data as { message_id: string }, statusCode: res.status, duration }
-    } catch (err) {
-      return { success: false, error: { message: String(err), type: 'NetworkError', code: 0, fbtrace_id: '' }, statusCode: 0, duration: Date.now() - start }
-    }
+    MetaLogger.request(SOURCE, 'POST', `${IG_BASE}/me/messages`, { recipientId, text })
+    // Instagram Messaging API — graph.instagram.com with IG user token
+    return igPost<{ message_id: string }>('/me/messages', {
+      recipient: { id: recipientId },
+      message: { text }
+    })
   },
   async getInsights(metric = 'reach,profile_views,follower_count', period = 'day') {
     const igId = await getIgBizId()

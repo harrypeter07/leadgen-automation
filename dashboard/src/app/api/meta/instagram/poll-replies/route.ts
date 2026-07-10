@@ -99,6 +99,13 @@ export async function GET() {
 
     for (const conv of conversations) {
       const convId = conv.id
+
+      // Get the OTHER participant (not us) — same logic as manual send in inbox
+      const otherParticipant = (conv.participants?.data as any[] || []).find(
+        (p: any) => p.id !== igId && p.username !== 'smritifyp'
+      ) || (conv.participants?.data as any[])?.[0]
+      const participantId = otherParticipant?.id
+
       // Get the last few messages in this conversation
       const msgsRes = await InstagramService.getConversationMessages(convId, 5)
       if (!msgsRes.success || !msgsRes.data?.data) continue
@@ -111,8 +118,13 @@ export async function GET() {
         if (msgTime <= lastPollTs) continue // already processed
         if (!msg.message?.trim()) continue // no text
 
-        const senderId = msg.from?.id
-        if (!senderId || senderId === igId) continue // skip our own messages
+        const fromId = msg.from?.id
+        if (!fromId || fromId === igId) continue // skip our own messages
+
+        // Use participantId (from conversation participants) as the recipient —
+        // same ID format that the manual Send button uses successfully
+        const senderId = participantId || fromId
+        console.log(`[PollReplies] msg.from.id=${fromId} | participantId=${participantId} | using senderId=${senderId}`)
 
         newMsgCount++
         const messageText = msg.message.trim()
