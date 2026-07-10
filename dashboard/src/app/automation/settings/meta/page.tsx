@@ -82,6 +82,10 @@ const SECTIONS: Array<{ title: string; icon: string; fields: FieldConfig[] }> = 
       { key: 'WHATSAPP_PERMANENT_TOKEN',     label: 'Permanent Token',            description: 'Permanent system-user access token for WA Cloud API' },
     ]
   },
+  {
+    title: 'Gemini Keys', icon: '✨',
+    fields: []
+  },
 ]
 
 // ─── FieldRow component ───────────────────────────────────────────────────────
@@ -156,6 +160,10 @@ export default function MetaSettingsPage() {
   const [missing, setMissing]         = useState<string[]>([])
   const [lastSaved, setLastSaved]     = useState<string | null>(null)
 
+  // Custom multiple Gemini Keys states
+  const [geminiKeys, setGeminiKeys] = useState<string[]>([''])
+  const [keyStatuses, setKeyStatuses] = useState<Record<number, { loading: boolean; status?: string; error?: string; models?: string[] }>>({})
+
   // ── Load settings from DB on mount ─────────────────────────────────────────
   const loadSettings = useCallback(async () => {
     setLoading(true)
@@ -177,6 +185,15 @@ export default function MetaSettingsPage() {
         setSetFlags(flags)
         setConfigured(data.configured ?? false)
         setMissing(data.missing ?? [])
+
+        // Load Gemini Keys state
+        try {
+          const keysVal = vals.SAVED_GEMINI_API_KEYS
+          const parsed = keysVal ? JSON.parse(keysVal) : []
+          setGeminiKeys(parsed.length > 0 ? parsed : [''])
+        } catch {
+          setGeminiKeys([''])
+        }
       }
     } catch {
       toast.error('Failed to load config from DB.')
@@ -210,6 +227,17 @@ export default function MetaSettingsPage() {
       for (const [k, v] of Object.entries(settings)) {
         if (v && !v.includes('•')) toSave[k] = v
       }
+
+      // Serialize multiple Gemini keys
+      const cleanKeys = geminiKeys.filter(Boolean)
+      toSave.SAVED_GEMINI_API_KEYS = JSON.stringify(cleanKeys)
+
+      // Sync the first active key to legacy GEMINI_API_KEY
+      const activeKeys = cleanKeys.filter(k => k && !k.includes('•'))
+      if (activeKeys.length > 0) {
+        toSave.GEMINI_API_KEY = activeKeys[0]
+      }
+
       const res  = await fetch('/api/meta/settings', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -227,6 +255,70 @@ export default function MetaSettingsPage() {
       toast.error(err instanceof Error ? err.message : 'Save failed', { id: toastId })
     }
     setSaving(false)
+  }
+
+  // Gemini keys list action handlers
+  function updateGeminiKey(index: number, val: string) {
+    const updated = [...geminiKeys]
+    updated[index] = val
+    setGeminiKeys(updated)
+  }
+
+  function addGeminiKey() {
+    setGeminiKeys([...geminiKeys, ''])
+  }
+
+  function removeGeminiKey(index: number) {
+    const updated = geminiKeys.filter((_, i) => i !== index)
+    setGeminiKeys(updated.length > 0 ? updated : [''])
+  }
+
+  async function testGeminiKey(index: number, keyStr: string) {
+    let keyToTest = keyStr.trim()
+    if (!keyToTest) {
+      toast.error('Please enter an API key to check.')
+      return
+    }
+
+    // If key is masked and we have flags, pull the masked value fallback warning
+    if (keyToTest.includes('•')) {
+      toast.error('Masked keys cannot be tested. Enter a new key to check status.')
+      return
+    }
+
+    setKeyStatuses(prev => ({ ...prev, [index]: { loading: true } }))
+    try {
+      const res = await fetch('/api/meta/gemini-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: keyToTest }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setKeyStatuses(prev => ({
+          ...prev,
+          [index]: {
+            loading: false,
+            status: data.status,
+            error: data.error,
+            models: data.models,
+          }
+        }))
+        if (data.status === 'active') {
+          toast.success(`Key #${index + 1} is Active!`)
+        } else {
+          toast.error(`Key #${index + 1} status: ${data.error || 'inactive'}`)
+        }
+      } else {
+        throw new Error(data.error || 'API verification request failed.')
+      }
+    } catch (err: any) {
+      setKeyStatuses(prev => ({
+        ...prev,
+        [index]: { loading: false, status: 'error', error: err.message }
+      }))
+      toast.error(err.message)
+    }
   }
 
   async function handleSeedFromEnv() {
@@ -312,7 +404,9 @@ export default function MetaSettingsPage() {
           {/* Left nav */}
           <aside className="w-44 flex-shrink-0 space-y-1">
             {SECTIONS.map(s => {
-              const hasValue = s.fields.some(f => settings[f.key] || setFlags[f.key])
+              const hasValue = s.title === 'Gemini Keys'
+                ? geminiKeys.some(k => k && !k.includes('•'))
+                : s.fields.some(f => settings[f.key] || setFlags[f.key])
               return (
                 <button
                   key={s.title}
@@ -341,15 +435,17 @@ export default function MetaSettingsPage() {
                 <span className="text-lg">{currentSection.icon}</span>
                 {currentSection.title} Settings
               </h2>
-              <button
-                onClick={() => handleTest(currentSection.title, `/api/meta/test?target=${currentSection.title.toLowerCase().replace(/\s+/g, '_')}`)}
-                disabled={testing === currentSection.title}
-                className="px-3 py-1.5 rounded-xl bg-purple-950/40 border border-purple-900/30 text-purple-400 hover:bg-purple-900/30 text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40"
-              >{testing === currentSection.title ? 'Testing…' : '⚡ Test Section'}</button>
+              {currentSection.title !== 'Gemini Keys' && (
+                <button
+                  onClick={() => handleTest(currentSection.title, `/api/meta/test?target=${currentSection.title.toLowerCase().replace(/\s+/g, '_')}`)}
+                  disabled={testing === currentSection.title}
+                  className="px-3 py-1.5 rounded-xl bg-purple-950/40 border border-purple-900/30 text-purple-400 hover:bg-purple-900/30 text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40"
+                >{testing === currentSection.title ? 'Testing…' : '⚡ Test Section'}</button>
+              )}
             </div>
 
             {/* Test result */}
-            {testResults[currentSection.title] && (
+            {currentSection.title !== 'Gemini Keys' && testResults[currentSection.title] && (
               <div className={`p-3 rounded-xl border text-xs font-mono flex items-center gap-3 ${
                 testResults[currentSection.title].status === 'success'
                   ? 'bg-green-950/30 border-green-900/40 text-green-400'
@@ -361,18 +457,109 @@ export default function MetaSettingsPage() {
               </div>
             )}
 
-            {/* Fields */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              {currentSection.fields.map(field => (
-                <FieldRow
-                  key={field.key}
-                  field={field}
-                  value={settings[field.key] || ''}
-                  isSet={setFlags[field.key]}
-                  onChange={handleChange}
-                />
-              ))}
-            </div>
+            {/* Fields / Content Panel */}
+            {activeSection === 'Gemini Keys' ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-purple-950/10 border border-purple-900/20 rounded-xl text-xs text-purple-300">
+                  <p className="font-bold flex items-center gap-1.5">⚡ Gemini API Key Rotation & Fault-Tolerance</p>
+                  <p className="mt-1 leading-relaxed text-[10px] text-gray-400">
+                    Add multiple Gemini API keys here. In case of quota exhaustion (<code className="text-[#E3B859]">429</code>) or validation failures, the background reply scheduler automatically cascades to the next working key dynamically without interruption.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {geminiKeys.map((key, idx) => {
+                    const statusInfo = keyStatuses[idx]
+                    const isMasked = key.includes('•') || (key.length > 20 && !key.startsWith('AQ.'))
+                    return (
+                      <div key={idx} className="p-4 bg-[#141416] border border-[#2D2D30]/80 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block font-bold">Key Slot #{idx + 1}</span>
+                          {geminiKeys.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeGeminiKey(idx)}
+                              className="text-gray-500 hover:text-red-400 text-[10px] font-bold uppercase transition-colors"
+                              title="Delete Key Slot"
+                            >
+                              ✕ Remove Key
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex gap-2">
+                          <input
+                            type="password"
+                            value={key}
+                            onChange={e => updateGeminiKey(idx, e.target.value)}
+                            placeholder={isMasked ? '(stored API key — enter new key to overwrite)' : 'Enter Gemini API key (AQ.Ab8...)'}
+                            className="flex-1 bg-[#0E0E10] border border-[#2D2D30] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors"
+                          />
+                          <button
+                            type="button"
+                            disabled={statusInfo?.loading || !key}
+                            onClick={() => testGeminiKey(idx, key)}
+                            className="px-4 py-2 rounded-xl bg-purple-950/40 border border-purple-900/30 hover:bg-purple-900/40 text-purple-300 text-xs font-bold transition-all disabled:opacity-40 whitespace-nowrap"
+                          >
+                            {statusInfo?.loading ? '⏳ Checking…' : '🔍 Check Status'}
+                          </button>
+                        </div>
+
+                        {/* Status feedback info */}
+                        {statusInfo && !statusInfo.loading && (
+                          <div className={`p-2.5 rounded-lg border text-[10px] font-mono leading-relaxed ${
+                            statusInfo.status === 'active'
+                              ? 'bg-green-950/30 border-green-900/40 text-green-400'
+                              : statusInfo.status === 'limit_reached'
+                              ? 'bg-amber-950/30 border-amber-900/40 text-amber-400'
+                              : 'bg-red-950/30 border-red-900/40 text-red-400'
+                          }`}>
+                            {statusInfo.status === 'active' ? (
+                              <div>
+                                <span className="font-bold uppercase mr-1">✓ Active:</span> Key validation passed!
+                                {statusInfo.models && statusInfo.models.length > 0 && (
+                                  <div className="mt-1 text-[9px] text-green-500/80 uppercase tracking-wider">
+                                    Available Models: {statusInfo.models.join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            ) : statusInfo.status === 'limit_reached' ? (
+                              <div>
+                                <span className="font-bold uppercase mr-1">⚠️ Quota Exhausted:</span> Request limit exceeded (status 429). The system will automatically rotate to the next slot.
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="font-bold uppercase mr-1">✗ Verification Failed:</span> {statusInfo.error || 'Invalid API Credentials.'}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={addGeminiKey}
+                  className="w-full py-2.5 border border-dashed border-[#2D2D30] hover:border-gray-500 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-all bg-[#141416]/40"
+                >
+                  ➕ Add Gemini API Key Slot
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {currentSection.fields.map(field => (
+                  <FieldRow
+                    key={field.key}
+                    field={field}
+                    value={settings[field.key] || ''}
+                    isSet={setFlags[field.key]}
+                    onChange={handleChange}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
