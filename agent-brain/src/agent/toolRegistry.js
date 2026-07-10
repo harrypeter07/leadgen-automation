@@ -160,20 +160,39 @@ async function callBackend(path, body) {
 }
 
 async function callTinyFish(path, body) {
-  const apiKey = process.env.TINYFISH_API_KEY;
+  const apiKey = process.env.TINYFISH_API_KEY || 'sk-tinyfish-0YxHuvbi-dw9Hfh7ynR7mRI9HixoEoQS';
   if (!apiKey) {
     return { error: 'TINYFISH_API_KEY not configured', skip: true };
   }
   try {
-    const res = await fetchWithRetry(
-      `${TINYFISH_URL}${path}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify(body),
-      },
-      { timeoutMs: TOOL_TIMEOUT_MS, retries: 1 }
-    );
+    let url = '';
+    let method = 'POST';
+    const requestOptions = {
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json'
+      }
+    };
+
+    if (path === '/search') {
+      const queryStr = new URLSearchParams({
+        query: body.query || '',
+        language: body.language || 'en',
+        page: body.page || '0'
+      }).toString();
+      url = `https://api.search.tinyfish.ai?${queryStr}`;
+      method = 'GET';
+    } else if (path === '/fetch') {
+      url = 'https://api.fetch.tinyfish.ai';
+      requestOptions.body = JSON.stringify({ urls: [body.url] });
+    } else {
+      url = `${TINYFISH_URL}${path}`;
+      requestOptions.body = JSON.stringify(body);
+    }
+
+    requestOptions.method = method;
+
+    const res = await fetchWithRetry(url, requestOptions, { timeoutMs: TOOL_TIMEOUT_MS, retries: 1 });
     const { ok, data, error } = await safeJson(res);
     if (!ok) return { error, skip: false };
     return data;
