@@ -53,8 +53,12 @@ async function enrichBatch(limit = 20, customPrompt = '') {
 
   const finalStates = await runWithConcurrencyLimit(leads, MAX_CONCURRENT, async (lead) => {
     const currentIdx = workerIdx++;
-    // Stagger starts by 3.5 seconds per lead to pace requests under free-tier 15 RPM
-    await new Promise((resolve) => setTimeout(resolve, currentIdx * 3500));
+    // Only stagger the initial concurrent slots (not every lead).
+    // Each parallel worker thread starts with a small offset (2s apart) so we
+    // don't blast Gemini all at once. Once a worker finishes a lead it immediately
+    // picks up the next one without additional delay.
+    const slotDelay = Math.min(currentIdx, MAX_CONCURRENT - 1) * 2000;
+    if (slotDelay > 0) await new Promise((resolve) => setTimeout(resolve, slotDelay));
     const state = await enrichLead(lead, customPrompt);
     const saved = await saveLeadState(state);
     return { leadId: state.id, status: state.enrichment_status, saved };
