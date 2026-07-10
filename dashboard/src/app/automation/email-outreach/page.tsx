@@ -68,6 +68,9 @@ export default function EmailOutreachPage() {
   const [generateProgress, setGenerateProgress] = useState<{ done: number; total: number; label: string } | null>(null)
   const [sendResults, setSendResults] = useState<{ sent: number; failed: number } | null>(null)
 
+  // Scraper Job lead counts
+  const [jobLeadsCounts, setJobLeadsCounts] = useState<Record<string, number>>({})
+
   // Draft Preview / Edit Modal
   const [viewingLead, setViewingLead] = useState<Lead | null>(null)
   const [draftViewMode, setDraftViewMode] = useState<DraftViewMode>('preview')
@@ -94,6 +97,18 @@ export default function EmailOutreachPage() {
     } catch (err) {
       console.error('Error fetching jobs:', err)
       toast.error('Failed to load scraper jobs')
+    }
+  }
+
+  const fetchJobCounts = async () => {
+    try {
+      const res = await fetch('/api/leads/job-counts')
+      const data = await res.json()
+      if (res.ok && data.counts) {
+        setJobLeadsCounts(data.counts)
+      }
+    } catch (err) {
+      console.error('Error fetching job counts:', err)
     }
   }
 
@@ -138,6 +153,7 @@ export default function EmailOutreachPage() {
   useEffect(() => {
     fetchJobs()
     fetchSmtpSettings()
+    fetchJobCounts()
   }, [])
 
   useEffect(() => {
@@ -246,6 +262,7 @@ export default function EmailOutreachPage() {
     const batchSize = 3
     let generatedCount = 0
     let failedCount = 0
+    let lastErrorMessage = ''
 
     try {
       for (let i = 0; i < selectedLeadIds.length; i += batchSize) {
@@ -264,8 +281,15 @@ export default function EmailOutreachPage() {
         if (res.ok && data.success !== false) {
           generatedCount += data.generated || batch.length
           failedCount    += data.failed   || 0
+          if (data.results) {
+            const fails = data.results.filter((r: any) => !r.success)
+            if (fails.length > 0) {
+              lastErrorMessage = fails[0].error || 'Generation failed for some leads'
+            }
+          }
         } else {
           failedCount += batch.length
+          lastErrorMessage = data.error || 'Server error during generation'
         }
         setGenerateProgress({
           done: generatedCount + failedCount,
@@ -273,7 +297,12 @@ export default function EmailOutreachPage() {
           label: `${generatedCount} drafted ✓, ${failedCount} failed`
         })
       }
-      toast.success(`🎉 Done! Generated ${generatedCount} drafts${failedCount > 0 ? `, ${failedCount} failed` : ''}`, { id: toastId })
+      
+      if (failedCount > 0) {
+        toast.error(`Drafting finished with issues: Generated ${generatedCount}, Failed ${failedCount}.\nReason: ${lastErrorMessage}`, { id: toastId, duration: 6000 })
+      } else {
+        toast.success(`🎉 Done! Generated ${generatedCount} drafts`, { id: toastId })
+      }
       // Refresh leads to show new drafts
       await fetchLeads()
     } catch (err: unknown) {
@@ -551,6 +580,7 @@ export default function EmailOutreachPage() {
               ) : (
                 jobs.map(job => {
                   const isSelected = selectedJobIds.includes(job.id)
+                  const leadCount  = jobLeadsCounts[job.id] || 0
                   return (
                     <div
                       key={job.id}
@@ -567,15 +597,18 @@ export default function EmailOutreachPage() {
                         readOnly
                         className="mt-0.5 accent-[#E3B859] cursor-pointer"
                       />
-                      <div className="space-y-0.5 min-w-0">
+                      <div className="space-y-0.5 min-w-0 font-sans w-full">
                         <div className="text-[11px] font-black uppercase tracking-wide text-slate-800 dark:text-white truncate">
                           {job.keyword}
                         </div>
                         <div className="text-[9px] text-slate-500 dark:text-gray-500 font-bold uppercase tracking-widest flex items-center gap-1">
                           <MapPin className="w-2.5 h-2.5 text-[#E3B859]" /> {job.city}
                         </div>
-                        <div className="text-[9px] text-slate-400 dark:text-gray-600 font-mono">
-                          {new Date(job.created_at).toLocaleDateString()}
+                        <div className="text-[9px] text-slate-400 dark:text-gray-600 font-mono flex justify-between items-center w-full">
+                          <span>{new Date(job.created_at).toLocaleDateString()}</span>
+                          <span className="bg-purple-100 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/30 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 rounded text-[8px] font-black">
+                            {leadCount} leads
+                          </span>
                         </div>
                       </div>
                     </div>
