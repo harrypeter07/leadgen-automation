@@ -11,12 +11,15 @@ export async function generateWithGemini(
   payload: GeminiPayload,
   apiKey: string
 ): Promise<{ text: string; model: string }> {
-  // Try models in sequence from newest/premium down to standard fallbacks
+  // Try models in sequence, prioritizing fast non-reasoning models for instant replies
   const models = [
-    'gemini-2.5-flash',
     'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
     'gemini-2.0-flash-lite',
+    'gemini-1.5-pro',
+    'gemini-2.5-pro',
   ]
 
   // Hydrate rotation keys and primary GEMINI_API_KEY from meta_config table

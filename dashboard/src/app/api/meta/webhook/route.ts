@@ -110,20 +110,18 @@ async function handleAutoReply(
     if (!replied && chatbotEnabled) {
       console.log(`[AutoReply] Generating AI response for "${messageText}"...`)
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
-      if (apiKey) {
-        const { generateWithGemini } = await import('@/lib/gemini')
-        const { text: aiReply } = await generateWithGemini(
-          {
-            system_instruction: { parts: [{ text: chatbotPersona }] },
-            contents: [{ role: 'user', parts: [{ text: messageText }] }],
-            generationConfig: { maxOutputTokens: 150, temperature: 0.7 },
-          },
-          apiKey
-        )
-        if (aiReply.trim()) {
-          replyContent = aiReply.trim()
-          replied = true
-        }
+      const { generateWithGemini } = await import('@/lib/gemini')
+      const { text: aiReply } = await generateWithGemini(
+        {
+          system_instruction: { parts: [{ text: chatbotPersona }] },
+          contents: [{ role: 'user', parts: [{ text: messageText }] }],
+          generationConfig: { maxOutputTokens: 1000, temperature: 0.7 },
+        },
+        apiKey
+      )
+      if (aiReply.trim()) {
+        replyContent = aiReply.trim()
+        replied = true
       }
     }
 

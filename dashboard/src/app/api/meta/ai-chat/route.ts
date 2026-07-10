@@ -35,7 +35,7 @@ Never use generic filler phrases. Sound human and genuine.`
         system_instruction: { parts: [{ text: systemPersona }] },
         contents,
         generationConfig: {
-          maxOutputTokens: 200,
+          maxOutputTokens: 1000,
           temperature: 0.75,
           topP: 0.9,
         },

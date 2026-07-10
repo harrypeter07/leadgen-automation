@@ -17,9 +17,6 @@ export async function POST(req: NextRequest) {
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
-    if (!apiKey) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 503 })
-    }
 
     // Fetch lead details from Supabase
     const { data: leads, error: fetchErr } = await supabaseAdmin
@@ -57,7 +54,7 @@ Format: SUBJECT|||BODY`
         const { text: raw } = await generateWithGemini(
           {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens: 400, temperature: 0.7 },
+            generationConfig: { maxOutputTokens: 1500, temperature: 0.7 },
           },
           apiKey
         )
