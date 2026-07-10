@@ -19,24 +19,35 @@ export async function generateWithGemini(
     'gemini-2.0-flash-lite',
   ]
 
-  // Hydrate rotation keys from meta_config table
+  // Hydrate rotation keys and primary GEMINI_API_KEY from meta_config table
   let rotationKeys: string[] = []
+  let dbGeminiApiKey: string = ''
   try {
-    const { data } = await supabaseAdmin
+    const { data: rotationData } = await supabaseAdmin
       .from('meta_config')
       .select('value')
       .eq('key', 'SAVED_GEMINI_API_KEYS')
       .single()
-    if (data?.value) {
-      rotationKeys = JSON.parse(data.value)
+    if (rotationData?.value) {
+      rotationKeys = JSON.parse(rotationData.value)
+    }
+
+    const { data: primaryData } = await supabaseAdmin
+      .from('meta_config')
+      .select('value')
+      .eq('key', 'GEMINI_API_KEY')
+      .single()
+    if (primaryData?.value) {
+      dbGeminiApiKey = primaryData.value
     }
   } catch (dbErr: any) {
-    console.warn('[Gemini SDK] Failed to load rotation keys from DB:', dbErr.message)
+    console.warn('[Gemini SDK] Failed to load Gemini keys from DB:', dbErr.message)
   }
 
   // Deduplicate and filter out empty keys
   const keysToTry = Array.from(new Set([
     apiKey,
+    dbGeminiApiKey,
     ...rotationKeys,
     process.env.GEMINI_API_KEY,
     process.env.GOOGLE_AI_KEY
