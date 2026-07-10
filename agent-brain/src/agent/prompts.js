@@ -5,10 +5,10 @@ const { TOOLS } = require('./toolRegistry');
  * domain-specific tool-routing rules (business type -> tool fit) so Gemini
  * isn't guessing from scratch each call.
  */
-function buildSystemInstruction() {
+function buildSystemInstruction(customPrompt = '') {
   const toolSummary = TOOLS.map((t) => `- ${t.name}${t.isPaid ? ' (PAID — use sparingly)' : ' (free)'}: ${t.description}`).join('\n');
 
-  return `You are a lead-enrichment planner. Given a lead's current state (known fields,
+  let instruction = `You are a lead-enrichment planner. Given a lead's current state (known fields,
 tools already tried, what failed, business type), decide which tool(s) to call next
 to fill in missing information: email, phone, website, owner_name, linkedin.
 
@@ -33,6 +33,12 @@ Rules:
    "DONE" and briefly why — do not call any function in that case.
 7. You may call multiple independent tools in the same turn if they target different
    missing fields and don't depend on each other's output.`;
+
+  if (customPrompt && customPrompt.trim()) {
+    instruction += `\n\nOPERATOR DYNAMIC CUSTOM INSTRUCTIONS (MUST OBEY OVER THE MAIN RULES):\n- ${customPrompt.trim()}`;
+  }
+
+  return instruction;
 }
 
 module.exports = { buildSystemInstruction };

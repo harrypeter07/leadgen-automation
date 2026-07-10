@@ -42,7 +42,14 @@ async function handleAutoReply(
     const { data: configRows } = await supabaseAdmin
       .from('meta_config')
       .select('key, value')
-      .in('key', ['AUTO_REPLY_RULES', 'AI_CHATBOT_ENABLED', 'AI_CHATBOT_PERSONA'])
+      .in('key', [
+        'AUTO_REPLY_RULES',
+        'AI_CHATBOT_ENABLED',
+        'AI_CHATBOT_PERSONA',
+        'THREAD_AUTOPILOT_OVERRIDES',
+        'AI_FIRST_REPLY_DELAY',
+        'AI_CONVERSATION_DELAY'
+      ])
 
     const settings: Record<string, string> = {}
     for (const r of configRows || []) {
@@ -50,23 +57,31 @@ async function handleAutoReply(
     }
 
     const rules = settings.AUTO_REPLY_RULES ? JSON.parse(settings.AUTO_REPLY_RULES) : []
-    const chatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
+    const globalChatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
     const chatbotPersona = settings.AI_CHATBOT_PERSONA || 'You are a helpful, professional business assistant.'
+    const firstReplyDelay = settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 5
+    const conversationDelay = settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 2
+
+    // Thread-level autopilot override checking
+    let overrides: Record<string, boolean> = {}
+    try {
+      overrides = settings.THREAD_AUTOPILOT_OVERRIDES ? JSON.parse(settings.THREAD_AUTOPILOT_OVERRIDES) : {}
+    } catch {}
+
+    // Override global config with thread-specific toggle if defined
+    const chatbotEnabled = overrides[senderId] !== undefined ? overrides[senderId] : globalChatbotEnabled
 
     const textLower = messageText.toLowerCase()
     let replied = false
+    let replyContent = ''
 
     // 1. Keyword check
     for (const rule of rules) {
       const keywords = Array.isArray(rule.keywords) ? rule.keywords : String(rule.keywords || '').split(',')
       const matched = keywords.some((kw: string) => textLower.includes(kw.trim().toLowerCase()))
       if (matched && rule.reply) {
-        console.log(`[AutoReply] Keyword match for "${messageText}". Replying...`)
-        if (platform === 'instagram') {
-          await InstagramService.sendDM(senderId, rule.reply)
-        } else {
-          await FacebookService.sendMessage(senderId, rule.reply)
-        }
+        console.log(`[AutoReply] Keyword match for "${messageText}".`)
+        replyContent = rule.reply
         replied = true
         break
       }
@@ -77,29 +92,76 @@ async function handleAutoReply(
       console.log(`[AutoReply] Generating AI response for "${messageText}"...`)
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
       if (apiKey) {
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        const { generateWithGemini } = await import('@/lib/gemini')
+        const { text: aiReply } = await generateWithGemini(
           {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: chatbotPersona }] },
-              contents: [{ role: 'user', parts: [{ text: messageText }] }],
-              generationConfig: { maxOutputTokens: 150, temperature: 0.7 },
-            }),
-          }
+            system_instruction: { parts: [{ text: chatbotPersona }] },
+            contents: [{ role: 'user', parts: [{ text: messageText }] }],
+            generationConfig: { maxOutputTokens: 150, temperature: 0.7 },
+          },
+          apiKey
         )
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json()
-          const aiReply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || ''
-          if (aiReply.trim()) {
-            if (platform === 'instagram') {
-              await InstagramService.sendDM(senderId, aiReply.trim())
-            } else {
-              await FacebookService.sendMessage(senderId, aiReply.trim())
+        if (aiReply.trim()) {
+          replyContent = aiReply.trim()
+          replied = true
+        }
+      }
+    }
+
+    // Apply sleep delay and send reply if matched
+    if (replied && replyContent) {
+      // Determine if first reply by looking at messages history
+      let isFirstReply = true
+      try {
+        if (platform === 'instagram') {
+          const convsRes = await InstagramService.getMessages(10)
+          if (convsRes.success && convsRes.data?.data) {
+            const convs = convsRes.data.data as any[]
+            const myConv = convs.find(c =>
+              c.participants?.data?.some((p: any) => p.id === senderId)
+            )
+            if (myConv) {
+              const msgsRes = await InstagramService.getConversationMessages(myConv.id, 10)
+              if (msgsRes.success && msgsRes.data?.data) {
+                const msgs = msgsRes.data.data as any[]
+                // If there are messages from ourselves, it's not the first reply
+                const hasRepliedBefore = msgs.some(m => m.from?.id === igId)
+                isFirstReply = !hasRepliedBefore
+              }
+            }
+          }
+        } else {
+          const convsRes = await FacebookService.getMessages(10)
+          if (convsRes.success && convsRes.data?.data) {
+            const convs = convsRes.data.data as any[]
+            const myConv = convs.find(c =>
+              c.participants?.data?.some((p: any) => p.id === senderId)
+            )
+            if (myConv) {
+              const msgsRes = await FacebookService.getConversationMessages(myConv.id, 10)
+              if (msgsRes.success && msgsRes.data?.data) {
+                const msgs = msgsRes.data.data as any[]
+                const hasRepliedBefore = msgs.some(m => m.from?.id === pageId)
+                isFirstReply = !hasRepliedBefore
+              }
             }
           }
         }
+      } catch (historyErr: any) {
+        console.error('[AutoReply] History retrieval failed, defaulting to firstReplyDelay:', historyErr.message)
+      }
+
+      const delaySec = isFirstReply ? firstReplyDelay : conversationDelay
+      if (delaySec > 0) {
+        console.log(`[AutoReply] Sleeping for ${delaySec} seconds before dispatching reply...`)
+        await new Promise(resolve => setTimeout(resolve, delaySec * 1000))
+      }
+
+      console.log(`[AutoReply] Sending reply: "${replyContent.slice(0, 60)}..."`)
+      if (platform === 'instagram') {
+        await InstagramService.sendDM(senderId, replyContent)
+      } else {
+        await FacebookService.sendMessage(senderId, replyContent)
       }
     }
   } catch (err: any) {

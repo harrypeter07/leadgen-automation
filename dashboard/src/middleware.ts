@@ -18,6 +18,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api/scraper') ||
     pathname.startsWith('/api/instagram-audit') ||
     pathname.startsWith('/api/instagram-logs') ||
+    pathname.startsWith('/api/agent-brain') ||
     pathname.startsWith('/automation') ||
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/fonts') ||

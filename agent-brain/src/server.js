@@ -17,6 +17,17 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
+app.get('/debug', (req, res) => {
+  res.json({
+    gemini_model: process.env.GEMINI_MODEL || '(not set - defaults to gemini-2.0-flash)',
+    gemini_key_set: !!process.env.GEMINI_API_KEY,
+    max_concurrent: process.env.MAX_CONCURRENT_LEADS || '(not set - defaults to 2)',
+    max_attempts: process.env.MAX_ATTEMPTS_PER_LEAD || '(not set)',
+    node_env: process.env.NODE_ENV,
+    uptime: process.uptime(),
+  });
+});
+
 app.use('/api', tasksRouter);
 
 // Catch-all for unmatched routes

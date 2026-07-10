@@ -122,6 +122,15 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       )
     },
     {
+      name: 'Agentic Brain',
+      href: '/automation/agent-brain',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      )
+    },
+    {
       name: 'Social Automation',
       href: '/automation',
       icon: (
@@ -331,7 +340,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
 
   return (
     <div className={`min-h-screen flex flex-col md:flex-row font-sans transition-colors duration-300 ${
-      isDark ? 'bg-[#141416] text-white' : 'bg-[#F4F4F6] text-gray-900'
+      isDark ? 'dark bg-[#141416] text-white' : 'bg-[#F4F4F6] text-gray-900'
     }`}>
       <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: isDark ? '#1c1c1e' : '#ffffff', color: isDark ? '#f3f4f6' : '#1c1c1e', border: isDark ? '1px solid #2d2d30' : '1px solid #e5e5eb' } }} />
 

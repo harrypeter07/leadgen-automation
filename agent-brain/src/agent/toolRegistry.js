@@ -111,6 +111,33 @@ const TOOLS = [
     isPaid: false,
     dispatch: async (args) => callBackend('/api/enrich/email-verify', { email: args.email }),
   },
+  {
+    name: 'google_maps_scrape',
+    description: 'Run Google Maps scraping to discover local business leads for a given keyword and location/city. Use when you need to find new leads from scratch.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        keyword: { type: 'STRING', description: 'Business category or keyword, e.g. clothing shop' },
+        city: { type: 'STRING', description: 'City name, e.g. Nagpur' },
+        area: { type: 'STRING', description: 'Optional area or neighborhood, e.g. Sitaburdi' },
+        limit: { type: 'NUMBER', description: 'Optional maximum leads to scrape, default is 5' },
+      },
+      required: ['keyword', 'city'],
+    },
+    isPaid: false,
+    dispatch: async (args) => callBackend('/api/jobs/start', { keyword: args.keyword, city: args.city, area: args.area, maxLeads: args.limit || 5 }),
+  },
+  {
+    name: 'instagram_profile_scrape',
+    description: 'Scrapes an Instagram business page using Playwright to extract profile information, website, email, and phone. Use this when you have an Instagram username.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { username: { type: 'STRING', description: 'Instagram handle / username' } },
+      required: ['username'],
+    },
+    isPaid: false,
+    dispatch: async (args) => callBackend('/api/test/instagram', { username: args.username }),
+  },
 ];
 
 async function callBackend(path, body) {
@@ -133,20 +160,40 @@ async function callBackend(path, body) {
 }
 
 async function callTinyFish(path, body) {
-  const apiKey = process.env.TINYFISH_API_KEY;
+  const apiKey = process.env.TINYFISH_API_KEY || 'sk-tinyfish-0YxHuvbi-dw9Hfh7ynR7mRI9HixoEoQS';
   if (!apiKey) {
     return { error: 'TINYFISH_API_KEY not configured', skip: true };
   }
   try {
-    const res = await fetchWithRetry(
-      `${TINYFISH_URL}${path}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify(body),
-      },
-      { timeoutMs: TOOL_TIMEOUT_MS, retries: 1 }
-    );
+    let url = '';
+    let method = 'POST';
+    const requestOptions = {
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json'
+      }
+    };
+
+    if (path === '/search') {
+      const queryStr = new URLSearchParams({
+        query: body.query || '',
+        language: body.language || 'en',
+        page: body.page || '0'
+      }).toString();
+      url = `https://api.search.tinyfish.ai?${queryStr}`;
+      method = 'GET';
+    } else if (path === '/fetch') {
+      url = 'https://api.fetch.tinyfish.ai';
+      const targetUrl = body.url || body.website || '';
+      requestOptions.body = JSON.stringify({ urls: [targetUrl] });
+    } else {
+      url = `${TINYFISH_URL}${path}`;
+      requestOptions.body = JSON.stringify(body);
+    }
+
+    requestOptions.method = method;
+
+    const res = await fetchWithRetry(url, requestOptions, { timeoutMs: TOOL_TIMEOUT_MS, retries: 1 });
     const { ok, data, error } = await safeJson(res);
     if (!ok) return { error, skip: false };
     return data;

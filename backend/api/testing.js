@@ -83,4 +83,69 @@ router.post('/instagram', async (req, res, next) => {
   }
 });
 
+/**
+ * Run Playwright bot scanner for Instagram followers.
+ */
+router.post('/instagram/bot-scan', async (req, res, next) => {
+  const { username, limit } = req.body || {};
+  const cleanUsername = (username || '').trim().replace(/^@/, '');
+  if (!cleanUsername) return res.status(400).json({ success: false, error: 'username is required' });
+
+  logger.info(`[API Testing] Playwright Follower Bot Scan request: @${cleanUsername} (Limit: ${limit || 30})`);
+  
+  const botScanner = require('../providers/instagram/botScanner');
+  let contextId = null;
+  let pageId = null;
+  try {
+    const contextObj = await browserManager.newContext();
+    contextId = contextObj.contextId;
+    const pageObj = await browserManager.newPage(contextId, contextObj.context);
+    pageId = pageObj.pageId;
+
+    const result = await botScanner.scanFollowers(pageObj.page, cleanUsername, limit || 30);
+    
+    if (result.success === false) {
+      const sessionErrors = ['session_expired', 'auth_required', 'profile_fetch_failed'];
+      const statusCode = sessionErrors.includes(result.error) ? 401 : 500;
+      res.status(statusCode).json(result);
+    } else {
+      formatResponse(res, req, result);
+    }
+  } catch (err) {
+    next(err);
+  } finally {
+    if (pageId) await browserManager.releasePage(pageId);
+    if (contextId) await browserManager.releaseContext(contextId);
+  }
+});
+
+/**
+ * Get stored bot audit results for a user.
+ */
+router.get('/instagram/bot-scan/:username', async (req, res, next) => {
+  const username = req.params.username.trim().replace(/^@/, '');
+  const db = require('../database/db');
+  try {
+    const queryRes = await db.query(
+      `SELECT * FROM instagram_bot_audit WHERE target_username = $1 ORDER BY bot_score DESC`,
+      [username],
+      'Database',
+      'get_bot_scan_results'
+    );
+    
+    const results = queryRes.rows || [];
+    const summary = {
+      total: results.length,
+      likely_bot: results.filter(r => r.verdict === 'likely_bot').length,
+      suspicious: results.filter(r => r.verdict === 'suspicious').length,
+      probably_real: results.filter(r => r.verdict === 'probably_real').length,
+      real: results.filter(r => r.verdict === 'real').length,
+    };
+    
+    formatResponse(res, req, { results, summary });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

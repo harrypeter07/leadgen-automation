@@ -18,41 +18,65 @@ const CALL_TIMEOUT_MS = Number(process.env.GEMINI_CALL_TIMEOUT_MS || 25000);
  *   raw: <original response>,
  * }
  */
-async function callGeminiWithTools({ systemInstruction, userContent, toolDeclarations, retries = 2 }) {
-  const model = genAI.getGenerativeModel({
-    model: MODEL_NAME,
-    systemInstruction,
-    tools: toolDeclarations.length ? [{ functionDeclarations: toolDeclarations }] : undefined,
-  });
+const MODELS_TO_TRY = [
+  process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash-lite'
+];
 
+/**
+ * Calls Gemini with function-calling enabled and returns a normalized result.
+ * Retries across a list of models sequentially if it hits rate limits (429) or model issues.
+ */
+async function callGeminiWithTools({ systemInstruction, userContent, toolDeclarations, retries = 2 }) {
   let lastError;
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const result = await withTimeout(
-        model.generateContent(userContent),
-        CALL_TIMEOUT_MS,
-        'Gemini call timed out'
-      );
+  for (const modelName of MODELS_TO_TRY) {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction,
+      tools: toolDeclarations.length ? [{ functionDeclarations: toolDeclarations }] : undefined,
+    });
 
-      return normalizeGeminiResponse(result);
-    } catch (err) {
-      lastError = err;
-      const retryable = isRetryableGeminiError(err);
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const result = await withTimeout(
+          model.generateContent(userContent),
+          CALL_TIMEOUT_MS,
+          'Gemini call timed out'
+        );
 
-      if (retryable && attempt < retries) {
-        const delay = 500 * 2 ** attempt + Math.random() * 300;
-        logger.warn({ attempt, delay, error: err.message }, 'Retrying Gemini call after transient failure');
-        await sleep(delay);
-        continue;
+        return normalizeGeminiResponse(result);
+      } catch (err) {
+        lastError = err;
+        const retryable = isRetryableGeminiError(err);
+
+        // Fail-over immediately to next model if quota exceeded (429) or model not supported (404)
+        const isQuotaOrNotFound = 
+          err.message.includes('429') || 
+          err.message.includes('quota') || 
+          err.message.includes('404') || 
+          err.message.includes('not found') ||
+          err.message.includes('unsupported');
+
+        if (isQuotaOrNotFound) {
+          logger.warn({ model: modelName, error: err.message }, 'Gemini model hit limit or unsupported, trying fallback model');
+          break; // Break inner loop, fallback to next modelName
+        }
+
+        if (retryable && attempt < retries) {
+          const delay = 500 * 2 ** attempt + Math.random() * 300;
+          logger.warn({ model: modelName, attempt, delay, error: err.message }, 'Retrying Gemini call after transient failure');
+          await sleep(delay);
+          continue;
+        }
+        break;
       }
-      break;
     }
   }
 
-  // Exhausted retries on a genuine failure — caller must handle this by
-  // marking the lead as exhausted/errored for this attempt, NOT crash the batch.
-  logger.error({ error: lastError?.message }, 'Gemini call failed after retries');
+  // Exhausted all models and retries
+  logger.error({ error: lastError?.message }, 'Gemini call failed after trying all fallback models');
   throw new Error(`Gemini call failed: ${lastError?.message || 'unknown error'}`);
 }
 

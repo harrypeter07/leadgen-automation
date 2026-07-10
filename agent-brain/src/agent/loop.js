@@ -8,6 +8,8 @@ const MAX_PAID_CALLS = Number(process.env.MAX_PAID_TOOL_CALLS_PER_LEAD || 2);
 
 const TARGET_FIELDS = ['email', 'phone', 'website', 'owner_name', 'linkedin'];
 
+const toolCache = new Map();
+
 /**
  * Enriches a single lead. This function is designed to NEVER throw — any
  * unexpected failure results in the lead being marked 'exhausted' with the
@@ -19,7 +21,7 @@ const TARGET_FIELDS = ['email', 'phone', 'website', 'owner_name', 'linkedin'];
  *   tools_failed, enrichment_scratchpad, attempts)
  * @returns {object} updated lead state, ready to persist
  */
-async function enrichLead(lead) {
+async function enrichLead(lead, customPrompt = '') {
   let state = normalizeIncomingState(lead);
   let paidCallsUsed = 0;
 
@@ -33,7 +35,7 @@ async function enrichLead(lead) {
       let decision;
       try {
         decision = await callGeminiWithTools({
-          systemInstruction: buildSystemInstruction(),
+          systemInstruction: buildSystemInstruction(customPrompt),
           userContent: JSON.stringify(summarizeStateForModel(state)),
           toolDeclarations: getFunctionDeclarations(),
         });
@@ -164,8 +166,17 @@ function isCallWorthRunning(call, state, paidCallsUsed) {
 
 async function runToolSafely(call) {
   const tool = getToolByName(call.name);
+  const cacheKey = `${call.name}:${JSON.stringify(call.args || {})}`;
+  if (toolCache.has(cacheKey)) {
+    logger.info({ tool: call.name, args: call.args }, 'Returning cached tool result to speed up loop');
+    return toolCache.get(cacheKey);
+  }
+
   try {
     const result = await tool.dispatch(call.args);
+    if (result && !result.error) {
+      toolCache.set(cacheKey, result);
+    }
     return result;
   } catch (err) {
     // dispatch functions already catch internally and return {error}, but this
