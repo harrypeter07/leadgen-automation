@@ -46,13 +46,7 @@ class GeminiClient {
    * @returns {Promise<string>} Model response text
    */
   async generateContent(prompt, jsonMode = false, options = {}) {
-    const apiKey = (process.env.GEMINI_API_KEY || '').trim();
-    if (!apiKey) {
-      logger.warn('[Gemini Client] GEMINI_API_KEY is not set. Falling back to mock responses.');
-      return jsonMode ? '{"status": "mock", "message": "API key not configured"}' : 'Mock response from Gemini provider client.';
-    }
-
-    // 1. Check in-memory cache
+    // 1. Check in-memory cache first to avoid API overhead
     const cacheKey = crypto.createHash('sha256').update(`${prompt}_json=${jsonMode}`).digest('hex');
     const cachedResponse = cache.get(cacheKey);
     if (cachedResponse) {
@@ -60,75 +54,138 @@ class GeminiClient {
       return cachedResponse;
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.modelName}:generateContent?key=${apiKey}`;
-    const requestBody = {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {}
-    };
+    // 2. Hydrate rotation keys and primary GEMINI_API_KEY from Supabase
+    let dbApiKey = '';
+    let dbRotationKeys = [];
+    try {
+      const supabase = require('../../database/connection');
+      if (supabase) {
+        const { data: primaryData } = await supabase
+          .from('meta_config')
+          .select('value')
+          .eq('key', 'GEMINI_API_KEY')
+          .single();
+        if (primaryData?.value) {
+          dbApiKey = primaryData.value.trim();
+        }
 
-    if (jsonMode) {
-      requestBody.generationConfig.responseMimeType = 'application/json';
+        const { data: rotationData } = await supabase
+          .from('meta_config')
+          .select('value')
+          .eq('key', 'SAVED_GEMINI_API_KEYS')
+          .single();
+        if (rotationData?.value) {
+          dbRotationKeys = JSON.parse(rotationData.value);
+        }
+      }
+    } catch (dbErr) {
+      logger.warn('[Gemini Client] Failed to query dynamic API key from Supabase: ' + dbErr.message);
     }
+
+    // Deduplicate and filter out empty keys
+    const keysToTry = Array.from(new Set([
+      dbApiKey,
+      ...dbRotationKeys,
+      (process.env.GEMINI_API_KEY || '').trim(),
+      (process.env.GOOGLE_AI_KEY || '').trim()
+    ])).filter(Boolean);
+
+    if (keysToTry.length === 0) {
+      logger.warn('[Gemini Client] No Gemini API keys found. Falling back to mock responses.');
+      return jsonMode ? '{"status": "mock", "message": "API key not configured"}' : 'Mock response from Gemini provider client.';
+    }
+
+    const models = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-2.0-flash-lite'
+    ];
 
     const timeout = options.timeout || 10000;
     const retries = options.retries !== undefined ? options.retries : 3;
     const startTime = Date.now();
+    let lastError = new Error('Verification failed: No keys or models succeeded');
 
-    // 2. Call with retry logic and timeout
-    try {
-      const responseText = await this._callWithRetryAndTimeout(async () => {
-        const response = await axios.post(endpoint, requestBody, {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: timeout
-        });
-
-        const candidate = response.data?.candidates?.[0];
-        const textResult = candidate?.content?.parts?.[0]?.text;
-
-        if (!textResult) {
-          throw new Error('Invalid or empty content structure returned from Gemini API.');
+    // Loop through keys and fallback models
+    for (const activeKey of keysToTry) {
+      const keyAbbr = activeKey.slice(0, 8) + '...';
+      
+      for (const modelName of models) {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${activeKey}`;
+        const requestBody = {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {}
+        };
+        if (jsonMode) {
+          requestBody.generationConfig.responseMimeType = 'application/json';
         }
 
-        return textResult.trim();
-      }, retries);
+        try {
+          const responseText = await this._callWithRetryAndTimeout(async () => {
+            const response = await axios.post(endpoint, requestBody, {
+              headers: { 'Content-Type': 'application/json' },
+              timeout: timeout
+            });
 
-      const duration = Date.now() - startTime;
-      const inputTokens = this.estimateTokens(prompt);
-      const outputTokens = this.estimateTokens(responseText);
-      const cost = this.calculateCost(inputTokens, outputTokens);
+            const candidate = response.data?.candidates?.[0];
+            const textResult = candidate?.content?.parts?.[0]?.text;
 
-      // Record metric if tracker supports it
-      if (metrics.recordAICall) {
-        metrics.recordAICall(this.modelName, duration, inputTokens, outputTokens, cost);
-      } else {
-        // Fallback execution logging in metrics
-        if (!metrics.aiCost) metrics.aiCost = 0;
-        metrics.aiCost += cost;
+            if (!textResult) {
+              throw new Error('Invalid or empty content structure returned from Gemini API.');
+            }
+
+            return textResult.trim();
+          }, retries);
+
+          const duration = Date.now() - startTime;
+          const inputTokens = this.estimateTokens(prompt);
+          const outputTokens = this.estimateTokens(responseText);
+          const cost = this.calculateCost(inputTokens, outputTokens);
+
+          // Record metric if tracker supports it
+          if (metrics.recordAICall) {
+            metrics.recordAICall(modelName, duration, inputTokens, outputTokens, cost);
+          } else {
+            if (!metrics.aiCost) metrics.aiCost = 0;
+            metrics.aiCost += cost;
+          }
+
+          logger.info({
+            model: modelName,
+            latencyMs: duration,
+            inputTokens,
+            outputTokens,
+            estimatedCostUsd: cost,
+            cacheHit: false
+          }, `[Gemini Client] API call succeeded using ${modelName} with key ${keyAbbr} in ${duration}ms (Cost: $${cost.toFixed(6)})`);
+
+          // Store in cache
+          cache.set(cacheKey, responseText);
+
+          return responseText;
+        } catch (err) {
+          const status = err.response?.status;
+          logger.warn(`[Gemini Client Warning] Key ${keyAbbr} failed for model ${modelName} (status ${status || 'unknown'}): ${err.message}`);
+          lastError = err;
+
+          // If the key has invalid credentials (400/401), rotate to the next key immediately
+          if (status === 400 || status === 401) {
+            logger.warn(`[Gemini Client] Key ${keyAbbr} invalid or unauthorized. Rotating key...`);
+            break; // Break model loop to try the next key
+          }
+        }
       }
-
-      logger.info({
-        model: this.modelName,
-        latencyMs: duration,
-        inputTokens,
-        outputTokens,
-        estimatedCostUsd: cost,
-        cacheHit: false
-      }, `[Gemini Client] API call succeeded in ${duration}ms (Cost: $${cost.toFixed(6)})`);
-
-      // Store in cache
-      cache.set(cacheKey, responseText);
-
-      return responseText;
-    } catch (err) {
-      const duration = Date.now() - startTime;
-      logger.error({
-        model: this.modelName,
-        latencyMs: duration,
-        error: err.message,
-        stack: err.stack
-      }, `[Gemini Client Error] API call failed after ${duration}ms: ${err.message}`);
-      throw err;
     }
+
+    const duration = Date.now() - startTime;
+    logger.error({
+      latencyMs: duration,
+      error: lastError.message,
+      stack: lastError.stack
+    }, `[Gemini Client Error] All keys/models failed after ${duration}ms: ${lastError.message}`);
+
+    throw lastError;
   }
 
   /**

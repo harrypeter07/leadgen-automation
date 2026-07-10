@@ -14,9 +14,6 @@ export async function POST(req: NextRequest) {
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
-    if (!apiKey) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 503 })
-    }
 
     const systemPersona = persona || `You are a professional business assistant responding to customer messages on social media.
 Be helpful, friendly, concise (2-4 sentences max), and professional.
