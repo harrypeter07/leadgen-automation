@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { Loader2, Check, X } from 'lucide-react'
 
 interface Rule {
   keywords: string
@@ -29,6 +30,11 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  // Gemini API Key State
+  const [geminiKey, setGeminiKey] = useState('')
+  const [testingKey, setTestingKey] = useState(false)
+  const [keyStatus, setKeyStatus] = useState<{ status: 'active' | 'invalid' | 'limit_reached' | 'idle'; message?: string }>({ status: 'idle' })
+
   // Custom persona creator inputs
   const [newPersonaName, setNewPersonaName] = useState('')
   const [newPersonaInst, setNewPersonaInst] = useState('')
@@ -48,6 +54,36 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
       document.body.style.overflow = originalStyle
     }
   }, [])
+
+  // Test Gemini Key
+  const handleTestKey = async () => {
+    if (!geminiKey.trim()) return
+    setTestingKey(true)
+    setKeyStatus({ status: 'idle' })
+    const toastId = toast.loading('Testing Gemini API key...')
+    try {
+      const res = await fetch('/api/meta/gemini-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: geminiKey.trim() })
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setKeyStatus({ status: 'active', message: `Active! Models: ${data.models?.join(', ') || 'None'}` })
+        toast.success('Gemini key is active and working!', { id: toastId })
+      } else {
+        const status = data.status || 'invalid'
+        const errorMsg = data.error || 'Failed to verify key'
+        setKeyStatus({ status, message: errorMsg })
+        toast.error(`Key verification failed: ${errorMsg}`, { id: toastId })
+      }
+    } catch (err: any) {
+      setKeyStatus({ status: 'invalid', message: err.message })
+      toast.error(`Error: ${err.message}`, { id: toastId })
+    } finally {
+      setTestingKey(false)
+    }
+  }
 
   // Load settings on mount
   useEffect(() => {
@@ -82,6 +118,17 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             if (cfg.firstReplyDelay !== undefined) initialFirstReplyDelay = Number(cfg.firstReplyDelay)
             if (cfg.conversationDelay !== undefined) initialConversationDelay = Number(cfg.conversationDelay)
           }
+        }
+
+        // Fetch global SMTP/Gemini config settings
+        try {
+          const settingsRes = await fetch('/api/meta/settings')
+          const settingsData = await settingsRes.json()
+          if (settingsRes.ok && settingsData.settings) {
+            setGeminiKey(settingsData.settings.GEMINI_API_KEY || '')
+          }
+        } catch (err) {
+          console.warn('Failed to load global config:', err)
         }
 
         setRules(initialRules)
@@ -141,6 +188,20 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
     setSaving(true)
     const toastId = toast.loading('Saving settings…')
     try {
+      // Save global Gemini key first
+      const saveSettingsRes = await fetch('/api/meta/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: {
+            GEMINI_API_KEY: geminiKey.trim()
+          }
+        })
+      })
+      if (!saveSettingsRes.ok) {
+        throw new Error('Failed to save Gemini API key')
+      }
+
       let res
       if (threadId) {
         res = await fetch('/api/meta/instagram/thread-config', {
@@ -206,6 +267,57 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
           <div className="py-8 text-center text-slate-400 dark:text-gray-500 animate-pulse text-xs">Loading configuration…</div>
         ) : (
           <form onSubmit={handleSave} className="space-y-5">
+            {/* Gemini API Key Section */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416] space-y-3">
+              <div>
+                <h3 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  🔑 Gemini API Key Settings
+                </h3>
+                <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">
+                  Verify and save your Google Gemini API Key used for outreach drafts and automated autopilot replies.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={geminiKey}
+                  onChange={e => setGeminiKey(e.target.value)}
+                  placeholder="Enter Gemini API Key..."
+                  className="flex-1 bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3.5 py-2 text-xs text-slate-850 dark:text-white placeholder-gray-405 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={handleTestKey}
+                  disabled={testingKey || !geminiKey.trim()}
+                  className="px-4 py-2 rounded-xl bg-purple-100 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/30 text-purple-700 dark:text-purple-300 text-xs font-bold hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors disabled:opacity-40 flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  {testingKey ? (
+                    <><Loader2 className="w-3 h-3 animate-spin" /> Testing…</>
+                  ) : (
+                    'Test Key'
+                  )}
+                </button>
+              </div>
+
+              {keyStatus.status !== 'idle' && (
+                <div className={`text-[10px] font-bold p-2.5 rounded-lg border flex items-center gap-1.5 ${
+                  keyStatus.status === 'active'
+                    ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900/30 text-green-700 dark:text-green-400'
+                    : keyStatus.status === 'limit_reached'
+                    ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/30 text-amber-700 dark:text-amber-400'
+                    : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-400'
+                }`}>
+                  {keyStatus.status === 'active' ? (
+                    <Check className="w-3.5 h-3.5" />
+                  ) : (
+                    <X className="w-3.5 h-3.5" />
+                  )}
+                  <span>{keyStatus.message}</span>
+                </div>
+              )}
+            </div>
+
             {/* AI Chatbot Section */}
             <div className="p-4 rounded-xl border border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416] space-y-3">
               <div className="flex items-center justify-between">
