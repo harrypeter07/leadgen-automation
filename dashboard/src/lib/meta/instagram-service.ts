@@ -15,8 +15,15 @@ async function getIgBizId() {
 
 async function getIgToken() {
   await ensureMetaConfig()
-  // Prefer dedicated Instagram token (IGAAo...) over page access token
+  // For graph.instagram.com endpoints (profile, media read) use Instagram user token
   return process.env.INSTAGRAM_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''
+}
+
+// Publishing to /{igId}/media on graph.facebook.com REQUIRES a Page Access Token (EAA...)
+// NOT the Instagram user token (IGAAo...) — that causes "Cannot parse access token"
+async function getPageToken() {
+  await ensureMetaConfig()
+  return process.env.META_PAGE_ACCESS_TOKEN || process.env.INSTAGRAM_ACCESS_TOKEN || ''
 }
 
 async function igGet<T>(path: string): Promise<{ success: boolean; data?: T; error?: MetaApiResponse['error']; statusCode: number; duration: number }> {
@@ -71,7 +78,8 @@ export const InstagramService = {
     if (!igId) {
       return { success: false, error: { message: 'INSTAGRAM_BUSINESS_ID is not configured in settings', type: 'OAuthException', code: 0 }, statusCode: 400, duration: 0, endpoint: '', requestId: '' }
     }
-    const token = await getIgToken()
+    // MUST use Page Access Token (EAA...) for graph.facebook.com publish endpoints
+    const token = await getPageToken()
     // Step 1: Create media container via Facebook Graph API
     const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, { image_url: imageUrl, caption }, { accessToken: token, source: SOURCE })
     if (!container.success || !container.data?.id) return container
@@ -83,7 +91,8 @@ export const InstagramService = {
     if (!igId) {
       return { success: false, error: { message: 'INSTAGRAM_BUSINESS_ID is not configured in settings', type: 'OAuthException', code: 0 }, statusCode: 400, duration: 0, endpoint: '', requestId: '' }
     }
-    const token = await getIgToken()
+    // MUST use Page Access Token (EAA...) for graph.facebook.com publish endpoints
+    const token = await getPageToken()
     // Step 1: Create video/reel container via Facebook Graph API
     const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, { video_url: videoUrl, caption, media_type: 'REELS' }, { accessToken: token, source: SOURCE })
     if (!container.success || !container.data?.id) return container
