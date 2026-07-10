@@ -415,7 +415,10 @@ export default function SocialInboxPage() {
       const data = await res.json()
 
       if (!res.ok || !data.success) {
-        if (!silent) setMessages([])
+        console.warn('[Inbox] Failed to load messages:', data.error || 'API Error')
+        if (!silent) {
+          toast.error('Meta API rate limit reached. Retrying in a few seconds...', { id: 'inbox-rate-limit' })
+        }
         if (!silent) setLoadingMsgs(false)
         return
       }
@@ -456,21 +459,41 @@ export default function SocialInboxPage() {
     if (pollingRef.current) clearInterval(pollingRef.current)
 
     if (selectedThread) {
-      pollingRef.current = setInterval(() => {
-        if (selectedThreadRef.current) {
-          fetchMessages(selectedThreadRef.current, true)
-        }
-      }, 4000)
-    }
+      let isVisible = true
 
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current)
+      const handleVisibilityChange = () => {
+        isVisible = !document.hidden
+        if (!isVisible && pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        } else if (isVisible && !pollingRef.current && selectedThreadRef.current) {
+          startPolling()
+        }
+      }
+
+      const startPolling = () => {
+        if (pollingRef.current) clearInterval(pollingRef.current)
+        pollingRef.current = setInterval(() => {
+          if (selectedThreadRef.current && isVisible) {
+            fetchMessages(selectedThreadRef.current, true)
+          }
+        }, 8000) // Safer 8-second interval against Meta Rate Limits
+      }
+
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+      startPolling()
+
+      return () => {
+        if (pollingRef.current) clearInterval(pollingRef.current)
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+      }
     }
   }, [selectedThread, fetchMessages])
 
   async function openThread(thread: Thread) {
     if (pollingRef.current) clearInterval(pollingRef.current)
     setSelectedThread(thread)
+    // Clear display state cleanly before non-silent load
     setMessages([])
     await fetchMessages(thread)
     setTimeout(() => textareaRef.current?.focus(), 100)
