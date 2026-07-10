@@ -28,7 +28,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.BACKEND_AUTOMATED_URL}}/api/jobs/start-batch",
+        "url": "={{ $env.BACKEND_AUTOMATED_URL || 'https://leadgen-automation-production-12c6.up.railway.app' }}/api/jobs/start-batch",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [{ "name": "Content-Type", "value": "application/json" }]
@@ -58,7 +58,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.BACKEND_AUTOMATED_URL}}/api/jobs/start",
+        "url": "={{ $env.BACKEND_AUTOMATED_URL || 'https://leadgen-automation-production-12c6.up.railway.app' }}/api/jobs/start",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [{ "name": "Content-Type", "value": "application/json" }]

@@ -32,6 +32,96 @@ export default function InstagramAnalyzerPage() {
   const [timeframe, setTimeframe] = useState<'all' | '1m' | '3m' | '6m' | '1y'>('all')
   const [scrapeHistory, setScrapeHistory] = useState(true)
   const [scrapeReels, setScrapeReels] = useState(true)
+
+  // Follower Bot Scan States
+  const [activeTab, setActiveTab] = useState<'engagement' | 'audience'>('engagement')
+  const [scanningBots, setScanningBots] = useState(false)
+  const [botResults, setBotResults] = useState<any[]>([])
+  const [botSummary, setBotSummary] = useState<any>(null)
+  const [botFilter, setBotFilter] = useState<'all' | 'likely_bot' | 'suspicious' | 'real'>('all')
+  const [botSearch, setBotSearch] = useState('')
+  const [botScanLimit, setBotScanLimit] = useState(30)
+  const [expandedUser, setExpandedUser] = useState<string | null>(null)
+  const [sessionError, setSessionError] = useState<string | null>(null)
+
+  async function loadExistingBotScan(user: string) {
+    try {
+      const res = await fetch(`/api/instagram-bot-scan/${user}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) {
+          setBotResults(data.results || [])
+          setBotSummary(data.summary || null)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load existing bot scan:', e)
+    }
+  }
+
+  async function handleBotScan() {
+    if (!username.trim()) return
+    const cleanUser = username.trim().replace(/^@/, '')
+
+    setScanningBots(true)
+    setSessionError(null)
+    setLogs(['[System] Initializing Playwright browser instance for bot follower scan...'])
+    const toastId = toast.loading('Running Playwright follower scan. This takes about 1-2 minutes...')
+
+    // Poll logs
+    let pollCount = 0
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/instagram-logs')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.logs) {
+            const igLogs = data.logs
+              .filter((log: LogEntry) => log.message.includes('[Instagram Analyzer]'))
+              .map((log: LogEntry) => {
+                const time = new Date(log.timestamp).toLocaleTimeString()
+                return `[${time}] ${log.message.replace('[Instagram Analyzer] ', '')}`
+              })
+            if (igLogs.length > 0) setLogs(igLogs)
+          }
+        }
+      } catch (err) {}
+      pollCount++
+      if (pollCount > 120) clearInterval(pollInterval)
+    }, 1000)
+
+    try {
+      const res = await fetch('/api/instagram-bot-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: cleanUser, limit: botScanLimit }),
+      })
+      clearInterval(pollInterval)
+      const data = await res.json()
+
+      if (res.ok && data.success) {
+        setSessionError(null)
+        toast.success(`Successfully audited ${data.count} followers!`, { id: toastId })
+        await loadExistingBotScan(cleanUser)
+      } else {
+        // Check for session-related errors
+        const errorCode = data.error || ''
+        if (errorCode === 'session_expired' || errorCode === 'auth_required' || errorCode === 'profile_fetch_failed') {
+          setSessionError(data.message || 'Instagram session cookie is expired. Please refresh it.')
+          toast.error('Session expired — see refresh guide below', { id: toastId })
+        } else {
+          const errorMsg = data.message || data.error || 'Scan failed'
+          throw new Error(errorMsg)
+        }
+      }
+    } catch (err: any) {
+      clearInterval(pollInterval)
+      toast.error(err.message || 'Error running scan', { id: toastId })
+      setLogs(prev => [...prev, `❌ Error: ${err.message}`])
+    } finally {
+      setScanningBots(false)
+    }
+  }
   
   const logEndRef = useRef<HTMLDivElement | null>(null)
 
@@ -118,6 +208,8 @@ export default function InstagramAnalyzerPage() {
 
       if (res.ok && data.report) {
         setReport(data.report)
+        // Load bot scan in background
+        loadExistingBotScan(username.trim().replace(/^@/, ''))
         // Fetch logs one final time to capture completeness
         const logsRes = await fetch('/api/instagram-logs')
         if (logsRes.ok) {
@@ -159,7 +251,7 @@ export default function InstagramAnalyzerPage() {
     <div className="space-y-8 text-[#2D2D2D] select-none">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-black text-[#1C1C1E] tracking-tight">Instagram Engagement Profiler</h1>
+        <h1 className="text-3xl font-black text-slate-800 tracking-tight">Instagram Engagement Profiler</h1>
         <p className="mt-1 text-sm text-gray-500 font-medium">Audit profile stats, consistency parameters, engagement ratios, and opportunity signals.</p>
       </div>
 
@@ -178,7 +270,7 @@ export default function InstagramAnalyzerPage() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white px-6 py-3 transition-colors flex items-center gap-2"
+            className="rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white px-6 py-3 transition-colors flex items-center gap-2 shadow-sm"
           >
             {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             {loading ? 'Analyzing...' : 'Run Audit'}
@@ -211,7 +303,7 @@ export default function InstagramAnalyzerPage() {
               onClick={() => setScrapeHistory(!scrapeHistory)}
               className={`w-full rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all border text-center ${
                 scrapeHistory
-                  ? 'bg-[#1C1C1E] border-[#1C1C1E] text-white shadow-sm'
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
                   : 'bg-[#F4F3EF] border-[#E4E3DD] text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -227,7 +319,7 @@ export default function InstagramAnalyzerPage() {
               onClick={() => setScrapeReels(!scrapeReels)}
               className={`w-full rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all border text-center ${
                 scrapeReels
-                  ? 'bg-[#1C1C1E] border-[#1C1C1E] text-white shadow-sm'
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
                   : 'bg-[#F4F3EF] border-[#E4E3DD] text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -251,16 +343,40 @@ export default function InstagramAnalyzerPage() {
           <div className="flex-1 p-4 font-mono text-[10px] text-gray-600 overflow-y-auto space-y-1.5 bg-[#F4F3EF]/30">
             {logs.map((log, index) => (
               <div key={index} className="leading-relaxed break-all">
-                <span className={log.startsWith('❌') ? 'text-red-650 font-bold' : 'text-gray-655'}>{log}</span>
+                <span className={log.startsWith('❌') ? 'text-red-600 font-bold' : 'text-gray-650'}>{log}</span>
               </div>
             ))}
             <div ref={logEndRef} />
           </div>
         </div>
       )}
+      {report && (
+        <div className="flex gap-6 border-b border-[#E4E3DD] pb-px">
+          <button
+            onClick={() => setActiveTab('engagement')}
+            className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${
+              activeTab === 'engagement'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            📈 Profile Engagement
+          </button>
+          <button
+            onClick={() => setActiveTab('audience')}
+            className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${
+              activeTab === 'audience'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            🛡️ Follower Bot Scanner (Playwright)
+          </button>
+        </div>
+      )}
 
       {/* Report results */}
-      {report && analytics && (
+      {report && analytics && activeTab === 'engagement' && (
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left panel: Info & Metrics */}
           <div className="lg:col-span-1 space-y-6">
@@ -269,7 +385,7 @@ export default function InstagramAnalyzerPage() {
                 <div className="w-16 h-16 rounded-full bg-[#ECEAE4] flex items-center justify-center font-black text-xl text-gray-600 border border-[#E4E3DD]">
                   {report.username.substring(0, 2).toUpperCase()}
                 </div>
-                <h3 className="text-xl font-black text-[#1C1C1E] mt-3 flex items-center justify-center gap-1.5">
+                <h3 className="text-xl font-black text-slate-800 mt-3 flex items-center justify-center gap-1.5">
                   @{report.username}
                   {report.verified && (
                     <span className="text-blue-500 font-normal text-sm" title="Verified Account">
@@ -483,6 +599,319 @@ export default function InstagramAnalyzerPage() {
                     ))}
                   </div>
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bot scan results */}
+      {report && activeTab === 'audience' && (
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Left Panel: Summary & Scan Trigger */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Run scanner controls */}
+            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+              <h3 className="text-sm font-black text-slate-800">Follower Quality Audit</h3>
+              <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+                Uses Playwright with your Instagram session cookie to scan followers and score each using 10 advanced bot detection rules.
+              </p>
+
+              <div className="space-y-3 pt-2">
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Scan Limit</label>
+                  <select
+                    value={botScanLimit}
+                    onChange={(e) => setBotScanLimit(parseInt(e.target.value))}
+                    disabled={scanningBots}
+                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                  >
+                    <option value={20}>20 Followers (Fast Scan)</option>
+                    <option value={30}>30 Followers (Recommended)</option>
+                    <option value={50}>50 Followers (Medium Scan)</option>
+                    <option value={100}>100 Followers (Deep Scan)</option>
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleBotScan}
+                  disabled={scanningBots || loading}
+                  className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-45 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white py-3.5 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                >
+                  {scanningBots && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  {scanningBots ? 'Scanning Followers...' : '🚀 Run Playwright Scan'}
+                </button>
+              </div>
+            </div>
+
+            {/* Session Expired Guide */}
+            {sessionError && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-red-600 text-lg">⚠️</span>
+                  <div>
+                    <h4 className="text-sm font-black text-red-700">Session Cookie Expired</h4>
+                    <p className="text-[11px] text-red-600 leading-relaxed mt-1">{sessionError}</p>
+                  </div>
+                </div>
+                <div className="border-t border-red-200 pt-3 space-y-2">
+                  <p className="text-[10px] font-bold text-red-700 uppercase tracking-wider">How to Refresh:</p>
+                  <ol className="space-y-1.5 text-[11px] text-red-700 leading-relaxed">
+                    <li className="flex gap-2"><span className="font-black shrink-0">1.</span> Open <strong>Instagram.com</strong> in Chrome and log in as <strong>smritifyp</strong></li>
+                    <li className="flex gap-2"><span className="font-black shrink-0">2.</span> Press <strong>F12</strong> → Application → Cookies → instagram.com</li>
+                    <li className="flex gap-2"><span className="font-black shrink-0">3.</span> Find the <code className="bg-red-100 px-1 rounded">sessionid</code> cookie and copy its <strong>Value</strong></li>
+                    <li className="flex gap-2"><span className="font-black shrink-0">4.</span> Go to <strong>Settings → Meta Config</strong> and paste the new value for <code className="bg-red-100 px-1 rounded">INSTAGRAM_SESSION_ID</code></li>
+                    <li className="flex gap-2"><span className="font-black shrink-0">5.</span> Come back and run the scan again</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+
+            {/* Quality index display */}
+            {botResults.length > 0 && (
+              <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-4 text-center shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+                <h4 className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Audience Quality Score</h4>
+                
+                {(() => {
+                  const score = Math.round(
+                    ((botSummary?.real || 0) + (botSummary?.probably_real || 0)) / Math.max(botSummary?.total || 1, 1) * 100
+                  )
+                  let scoreColor = 'text-red-650 bg-red-50 border-red-200'
+                  if (score >= 80) scoreColor = 'text-[#3B4D3C] bg-[#D4E0CD] border-[#B8C8B0]'
+                  else if (score >= 50) scoreColor = 'text-[#5C451F] bg-[#F9D99A] border-[#E8C584]'
+
+                  return (
+                    <div className="flex flex-col items-center space-y-3.5">
+                      <div className={`w-28 h-28 rounded-full border-4 flex flex-col items-center justify-center font-black ${scoreColor}`}>
+                        <span className="text-3xl font-mono">{score}%</span>
+                        <span className="text-[9px] uppercase tracking-wider font-bold opacity-85 mt-0.5">Quality</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 leading-normal font-medium px-2">
+                        {score >= 80 ? 'Excellent! Very low bot counts detected. Your followers are highly authentic.' : 
+                         score >= 50 ? 'Moderate audience quality. A visible portion of followers look suspicious or inactive.' : 
+                         'Low audience quality. Your profile shows a high density of potential bot or ghost followers.'}
+                      </p>
+                    </div>
+                  )
+                })()}
+
+                {/* Breakdown list */}
+                <div className="pt-4 border-t border-[#E4E3DD]/60 text-xs space-y-2 text-left font-bold text-gray-600">
+                  <div className="flex justify-between">
+                    <span>Likely Bots:</span>
+                    <span className="text-red-600">{botSummary?.likely_bot || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Suspicious:</span>
+                    <span className="text-amber-600">{botSummary?.suspicious || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Probably Real:</span>
+                    <span className="text-yellow-700">{botSummary?.probably_real || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Authentic Real:</span>
+                    <span className="text-green-700">{botSummary?.real || 0}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Panel: Audit records list */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] flex flex-col min-h-[450px]">
+              
+              {/* Header and filters */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E4E3DD] pb-4">
+                <h3 className="font-bold text-slate-850 text-sm">Audited Followers ({botResults.length})</h3>
+                
+                {/* Search input */}
+                <input
+                  type="text"
+                  placeholder="Search audited followers..."
+                  value={botSearch}
+                  onChange={(e) => setBotSearch(e.target.value)}
+                  className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500 placeholder-gray-400 min-w-[200px]"
+                />
+              </div>
+
+              {botResults.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-3.5 bg-gray-50/50 rounded-2xl border border-[#E4E3DD]/40 border-dashed">
+                  <span className="text-3xl">🛡️</span>
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-slate-700 text-xs">No audited records found</h4>
+                    <p className="text-[11px] text-gray-500 max-w-sm">
+                      Followers scan has not been executed for @{username || report.username} yet. Click &quot;Run Playwright Scan&quot; to begin auditing followers.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Category filters */}
+                  <div className="flex flex-wrap gap-1.5 text-[10px]">
+                    <button
+                      onClick={() => setBotFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg border font-bold uppercase tracking-wider transition-colors ${
+                        botFilter === 'all'
+                          ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm'
+                          : 'bg-[#F4F3EF] border-[#E4E3DD] text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      All ({botResults.length})
+                    </button>
+                    <button
+                      onClick={() => setBotFilter('likely_bot')}
+                      className={`px-3 py-1.5 rounded-lg border font-bold uppercase tracking-wider transition-colors ${
+                        botFilter === 'likely_bot'
+                          ? 'bg-red-600 border-red-600 text-white'
+                          : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+                      }`}
+                    >
+                      Bots ({botSummary?.likely_bot || 0})
+                    </button>
+                    <button
+                      onClick={() => setBotFilter('suspicious')}
+                      className={`px-3 py-1.5 rounded-lg border font-bold uppercase tracking-wider transition-colors ${
+                        botFilter === 'suspicious'
+                          ? 'bg-amber-600 border-amber-600 text-white'
+                          : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+                      }`}
+                    >
+                      Suspicious ({botSummary?.suspicious || 0})
+                    </button>
+                    <button
+                      onClick={() => setBotFilter('real')}
+                      className={`px-3 py-1.5 rounded-lg border font-bold uppercase tracking-wider transition-colors ${
+                        botFilter === 'real'
+                          ? 'bg-green-700 border-green-700 text-white'
+                          : 'bg-green-50 border-green-200 text-green-800 hover:bg-green-100'
+                      }`}
+                    >
+                      Authentic ({ (botSummary?.real || 0) + (botSummary?.probably_real || 0) })
+                    </button>
+                  </div>
+
+                  {/* List Container */}
+                  <div className="space-y-3.5 max-h-[500px] overflow-y-auto pr-1">
+                    {botResults
+                      .filter(r => {
+                        const matchesSearch = r.follower_username.toLowerCase().includes(botSearch.toLowerCase()) || 
+                                             (r.display_name && r.display_name.toLowerCase().includes(botSearch.toLowerCase()));
+                        
+                        if (botFilter === 'all') return matchesSearch;
+                        if (botFilter === 'likely_bot') return r.verdict === 'likely_bot' && matchesSearch;
+                        if (botFilter === 'suspicious') return r.verdict === 'suspicious' && matchesSearch;
+                        if (botFilter === 'real') return (r.verdict === 'real' || r.verdict === 'probably_real') && matchesSearch;
+                        return matchesSearch;
+                      })
+                      .map((follower) => {
+                        const verdictColors: Record<string, string> = {
+                          likely_bot: 'text-red-700 bg-red-50 border-red-200',
+                          suspicious: 'text-amber-700 bg-amber-50 border-amber-200',
+                          probably_real: 'text-yellow-700 bg-yellow-50 border-yellow-200',
+                          real: 'text-[#3B4D3C] bg-[#D4E0CD] border-[#B8C8B0]',
+                        }
+                        
+                        const isExpanded = expandedUser === follower.follower_username;
+                        const signals = typeof follower.signals === 'string' ? JSON.parse(follower.signals) : (follower.signals || []);
+
+                        return (
+                          <div key={follower.follower_username} className="rounded-xl border border-[#E4E3DD] bg-white overflow-hidden shadow-sm transition-all hover:border-gray-300">
+                            {/* Profile details line */}
+                            <div className="p-4 flex items-center justify-between gap-4 text-xs font-bold">
+                              <div className="flex items-center gap-3">
+                                {follower.profile_pic ? (
+                                  <img
+                                    src={follower.profile_pic}
+                                    alt={follower.follower_username}
+                                    className="w-10 h-10 rounded-full object-cover border border-[#E4E3DD]"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-gray-100 border border-[#E4E3DD] flex items-center justify-center text-gray-400 font-black text-sm uppercase">
+                                    {follower.follower_username.substring(0, 2)}
+                                  </div>
+                                )}
+                                <div>
+                                  <a
+                                    href={`https://www.instagram.com/${follower.follower_username}/`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-gray-800 hover:text-black hover:underline"
+                                  >
+                                    @{follower.follower_username}
+                                  </a>
+                                  <div className="text-[10px] text-gray-400 font-medium">{follower.display_name || follower.follower_username}</div>
+                                  <div className="text-[9px] text-gray-400 font-medium mt-1">
+                                    👥 {follower.followers_count.toLocaleString()} followers · {follower.following_count.toLocaleString()} following · 📸 {follower.posts_count} posts
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                <span className={`px-2.5 py-1 rounded-lg border text-[9px] uppercase tracking-wider font-black ${verdictColors[follower.verdict] || 'bg-gray-50 text-gray-600'}`}>
+                                  {follower.verdict.replace('_', ' ')}
+                                </span>
+                                
+                                <div className="text-right">
+                                  <span className="text-sm font-black font-mono text-gray-700">{follower.bot_score}%</span>
+                                  <div className="text-[8px] text-gray-400 uppercase tracking-wider">Bot Score</div>
+                                </div>
+
+                                <button
+                                  onClick={() => setExpandedUser(isExpanded ? null : follower.follower_username)}
+                                  className="p-1 rounded-lg border border-[#E4E3DD] hover:bg-gray-50 text-gray-500 font-normal transition-colors"
+                                  title="View audit details"
+                                >
+                                  {isExpanded ? '▲' : '▼'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Bio & Audit description */}
+                            {follower.bio && (
+                              <div className="px-4 pb-3 text-[10px] text-gray-500 leading-normal border-t border-gray-50 pt-2 font-medium">
+                                <span className="font-bold text-gray-400">Bio:</span> &quot;{follower.bio}&quot;
+                              </div>
+                            )}
+
+                            {/* Detailed signals expanded panel */}
+                            {isExpanded && (
+                              <div className="bg-gray-50 p-4 border-t border-[#E4E3DD] space-y-3 text-[10px]">
+                                <h5 className="font-black text-gray-500 uppercase text-[9px] tracking-wider">Bot Signals Triggered ({signals.length})</h5>
+                                
+                                {signals.length === 0 ? (
+                                  <p className="text-gray-450 italic font-medium">No negative bot signatures triggered. Fully authentic follower behavior.</p>
+                                ) : (
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    {signals.map((sig: any, sIdx: number) => {
+                                      const sevColors: Record<string, string> = {
+                                        high: 'text-red-700 bg-red-50 border-red-200',
+                                        medium: 'text-amber-700 bg-amber-50 border-amber-200',
+                                        low: 'text-gray-700 bg-gray-100 border-gray-200',
+                                      }
+                                      return (
+                                        <div key={sIdx} className="p-2.5 rounded-lg border border-gray-200/80 bg-white space-y-1.5 shadow-sm">
+                                          <div className="flex justify-between items-center">
+                                            <span className="font-black font-mono text-gray-750">{sig.rule.toUpperCase().replace(/_/g, ' ')}</span>
+                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border ${sevColors[sig.severity]}`}>
+                                              +{sig.score}
+                                            </span>
+                                          </div>
+                                          <p className="text-[9px] text-gray-500 leading-normal font-medium">{sig.description}</p>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                  </div>
+                </>
               )}
             </div>
           </div>

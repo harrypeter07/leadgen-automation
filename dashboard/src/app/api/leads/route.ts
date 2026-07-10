@@ -18,28 +18,57 @@ function getSupabase() {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const page    = parseInt(searchParams.get('page')     || '1')
-  const perPage = parseInt(searchParams.get('perPage')  || '25')
-  const search  = searchParams.get('search')  || ''
-  const status  = searchParams.get('status')  || ''
-  const city    = searchParams.get('city')    || ''
-  const category = searchParams.get('category') || ''
-  const job_id  = searchParams.get('job_id')  || ''
-  const offset  = (page - 1) * perPage
+  const page      = parseInt(searchParams.get('page')     || '1')
+  const perPage   = parseInt(searchParams.get('perPage')  || '25')
+  const search    = searchParams.get('search')   || ''
+  const status    = searchParams.get('status')   || ''
+  const city      = searchParams.get('city')     || ''
+  const category  = searchParams.get('category') || ''
+
+  // Single job_id (legacy support) OR multi job_ids (comma-separated)
+  const job_id    = searchParams.get('job_id')   || ''
+  const job_ids   = searchParams.get('job_ids')  || ''
+
+  // Email outreach filters
+  const has_email = searchParams.get('has_email') === 'true'
+  const limitOverride = parseInt(searchParams.get('limit') || '0') // 0 means use perPage
+
+  const effectiveLimit = limitOverride > 0 ? limitOverride : perPage
+  const offset = (page - 1) * effectiveLimit
 
   try {
     const supabase = getSupabase()
     let query = supabase
       .from('leads')
-      .select('*', { count: 'exact' })
+      .select(
+        'id,name,email,phone,website,category,city,rating,review_count,status,notes,job_id,created_at,enrichment_status,enrichment_fields,ai_message_email_subject,ai_message_email_body',
+        { count: 'exact' }
+      )
       .order('created_at', { ascending: false })
-      .range(offset, offset + perPage - 1)
+      .range(offset, offset + effectiveLimit - 1)
 
+    // Filters
     if (status)   query = query.eq('status', status)
     if (city)     query = query.ilike('city', `%${city}%`)
     if (category) query = query.eq('category', category)
-    if (job_id)   query = query.eq('job_id', job_id)
     if (search)   query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
+
+    // Job ID filter — prefer multi job_ids over single job_id
+    if (job_ids) {
+      const ids = job_ids.split(',').map(id => id.trim()).filter(Boolean)
+      if (ids.length === 1) {
+        query = query.eq('job_id', ids[0])
+      } else if (ids.length > 1) {
+        query = query.in('job_id', ids)
+      }
+    } else if (job_id) {
+      query = query.eq('job_id', job_id)
+    }
+
+    // Email presence filter — only include leads with a non-null, non-empty email
+    if (has_email) {
+      query = query.not('email', 'is', null).neq('email', '')
+    }
 
     const { data, count, error } = await query
     if (error) {
