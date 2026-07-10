@@ -111,6 +111,33 @@ const TOOLS = [
     isPaid: false,
     dispatch: async (args) => callBackend('/api/enrich/email-verify', { email: args.email }),
   },
+  {
+    name: 'google_maps_scrape',
+    description: 'Run Google Maps scraping to discover local business leads for a given keyword and location/city. Use when you need to find new leads from scratch.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        keyword: { type: 'STRING', description: 'Business category or keyword, e.g. clothing shop' },
+        city: { type: 'STRING', description: 'City name, e.g. Nagpur' },
+        area: { type: 'STRING', description: 'Optional area or neighborhood, e.g. Sitaburdi' },
+        limit: { type: 'NUMBER', description: 'Optional maximum leads to scrape, default is 5' },
+      },
+      required: ['keyword', 'city'],
+    },
+    isPaid: false,
+    dispatch: async (args) => callBackend('/api/jobs/start', { keyword: args.keyword, city: args.city, area: args.area, maxLeads: args.limit || 5 }),
+  },
+  {
+    name: 'instagram_profile_scrape',
+    description: 'Scrapes an Instagram business page using Playwright to extract profile information, website, email, and phone. Use this when you have an Instagram username.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { username: { type: 'STRING', description: 'Instagram handle / username' } },
+      required: ['username'],
+    },
+    isPaid: false,
+    dispatch: async (args) => callBackend('/api/test/instagram', { username: args.username }),
+  },
 ];
 
 async function callBackend(path, body) {
