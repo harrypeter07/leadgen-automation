@@ -2,6 +2,26 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import toast from 'react-hot-toast'
+import {
+  Settings,
+  Search,
+  Users,
+  FileText,
+  CheckCircle,
+  Sparkles,
+  Mail,
+  Inbox,
+  MapPin,
+  Globe,
+  Loader2,
+  Check,
+  X,
+  ChevronUp,
+  ChevronDown,
+  Info,
+  Phone,
+  ArrowRightLeft
+} from 'lucide-react'
 
 interface ScraperJob {
   id: string
@@ -48,6 +68,9 @@ export default function EmailOutreachPage() {
   const [generateProgress, setGenerateProgress] = useState<{ done: number; total: number; label: string } | null>(null)
   const [sendResults, setSendResults] = useState<{ sent: number; failed: number } | null>(null)
 
+  // Scraper Job lead counts
+  const [jobLeadsCounts, setJobLeadsCounts] = useState<Record<string, number>>({})
+
   // Draft Preview / Edit Modal
   const [viewingLead, setViewingLead] = useState<Lead | null>(null)
   const [draftViewMode, setDraftViewMode] = useState<DraftViewMode>('preview')
@@ -74,6 +97,18 @@ export default function EmailOutreachPage() {
     } catch (err) {
       console.error('Error fetching jobs:', err)
       toast.error('Failed to load scraper jobs')
+    }
+  }
+
+  const fetchJobCounts = async () => {
+    try {
+      const res = await fetch('/api/leads/job-counts')
+      const data = await res.json()
+      if (res.ok && data.counts) {
+        setJobLeadsCounts(data.counts)
+      }
+    } catch (err) {
+      console.error('Error fetching job counts:', err)
     }
   }
 
@@ -118,6 +153,7 @@ export default function EmailOutreachPage() {
   useEffect(() => {
     fetchJobs()
     fetchSmtpSettings()
+    fetchJobCounts()
   }, [])
 
   useEffect(() => {
@@ -226,6 +262,7 @@ export default function EmailOutreachPage() {
     const batchSize = 3
     let generatedCount = 0
     let failedCount = 0
+    let lastErrorMessage = ''
 
     try {
       for (let i = 0; i < selectedLeadIds.length; i += batchSize) {
@@ -244,8 +281,15 @@ export default function EmailOutreachPage() {
         if (res.ok && data.success !== false) {
           generatedCount += data.generated || batch.length
           failedCount    += data.failed   || 0
+          if (data.results) {
+            const fails = data.results.filter((r: any) => !r.success)
+            if (fails.length > 0) {
+              lastErrorMessage = fails[0].error || 'Generation failed for some leads'
+            }
+          }
         } else {
           failedCount += batch.length
+          lastErrorMessage = data.error || 'Server error during generation'
         }
         setGenerateProgress({
           done: generatedCount + failedCount,
@@ -253,7 +297,12 @@ export default function EmailOutreachPage() {
           label: `${generatedCount} drafted ✓, ${failedCount} failed`
         })
       }
-      toast.success(`🎉 Done! Generated ${generatedCount} drafts${failedCount > 0 ? `, ${failedCount} failed` : ''}`, { id: toastId })
+      
+      if (failedCount > 0) {
+        toast.error(`Drafting finished with issues: Generated ${generatedCount}, Failed ${failedCount}.\nReason: ${lastErrorMessage}`, { id: toastId, duration: 6000 })
+      } else {
+        toast.success(`🎉 Done! Generated ${generatedCount} drafts`, { id: toastId })
+      }
       // Refresh leads to show new drafts
       await fetchLeads()
     } catch (err: unknown) {
@@ -373,19 +422,22 @@ export default function EmailOutreachPage() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-4 lg:p-6 space-y-5 min-h-screen" style={{ background: 'transparent' }}>
+    <div className="p-4 lg:p-6 space-y-5 min-h-screen text-slate-800 dark:text-white" style={{ background: 'transparent' }}>
 
       {/* Progress Banner */}
       {generateProgress && (
-        <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-5 space-y-3 shadow-lg">
+        <div className="rounded-2xl border border-gray-300 dark:border-[#2D2D30] bg-white dark:bg-[#141416] p-5 space-y-3 shadow-lg">
           <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-[#E3B859]">
-            <span>⏳ {generateProgress.label}</span>
-            <span className="font-mono text-white">
+            <span className="flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#E3B859]" />
+              {generateProgress.label}
+            </span>
+            <span className="font-mono text-slate-800 dark:text-white">
               {generateProgress.done} / {generateProgress.total} &nbsp;
               ({Math.round((generateProgress.done / generateProgress.total) * 100)}%)
             </span>
           </div>
-          <div className="w-full bg-[#18181A] h-2.5 rounded-full overflow-hidden border border-[#2D2D30]">
+          <div className="w-full bg-gray-100 dark:bg-[#18181A] h-2.5 rounded-full overflow-hidden border border-gray-200 dark:border-[#2D2D30]">
             <div
               className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-[#E3B859] transition-all duration-500"
               style={{ width: `${(generateProgress.done / generateProgress.total) * 100}%` }}
@@ -396,24 +448,25 @@ export default function EmailOutreachPage() {
 
       {/* Send Results Banner */}
       {sendResults && !generateProgress && (
-        <div className="rounded-2xl border border-green-800/40 bg-green-950/20 p-4 flex items-center justify-between">
-          <div className="text-xs text-green-300 font-bold">
-            ✉️ Last send: <span className="text-white">{sendResults.sent} dispatched</span>
-            {sendResults.failed > 0 && <span className="text-red-400 ml-2">· {sendResults.failed} failed</span>}
+        <div className="rounded-2xl border border-green-200 dark:border-green-800/40 bg-green-50 dark:bg-green-950/20 p-4 flex items-center justify-between shadow-sm">
+          <div className="text-xs text-green-800 dark:text-green-300 font-bold flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+            Last send: <span className="text-green-950 dark:text-white">{sendResults.sent} dispatched</span>
+            {sendResults.failed > 0 && <span className="text-red-600 dark:text-red-400 ml-2">· {sendResults.failed} failed</span>}
           </div>
-          <button onClick={() => setSendResults(null)} className="text-gray-500 hover:text-white text-xs">✕</button>
+          <button onClick={() => setSendResults(null)} className="text-slate-400 hover:text-slate-800 dark:text-gray-500 dark:hover:text-white text-xs">✕</button>
         </div>
       )}
 
       {/* Header Banner */}
-      <div className="relative rounded-2xl overflow-hidden border border-[#2D2D30] bg-gradient-to-r from-[#1A1A1E] to-[#141416] p-6 shadow-xl">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(227,184,89,0.07),transparent)] pointer-events-none" />
+      <div className="relative rounded-2xl overflow-hidden border border-gray-300 dark:border-[#2D2D30] bg-white dark:bg-[#18181A] p-6 shadow-sm">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(227,184,89,0.05),transparent)] pointer-events-none" />
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
           <div className="space-y-1.5">
-            <h1 className="text-xl font-black uppercase tracking-wider text-white flex items-center gap-2.5">
-              <span className="text-2xl">📧</span> AI Email Outreach Portal
+            <h1 className="text-xl font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2.5">
+              <Mail className="w-5 h-5 text-purple-600 dark:text-purple-400" /> AI Email Outreach Portal
             </h1>
-            <p className="text-[11px] text-gray-400 max-w-lg leading-relaxed">
+            <p className="text-[11px] text-slate-500 dark:text-gray-400 max-w-lg leading-relaxed">
               Select leads from scraper batches, generate personalized AI cold email drafts, preview and edit them, then send seamlessly.
             </p>
           </div>
@@ -421,20 +474,24 @@ export default function EmailOutreachPage() {
             <button
               onClick={handleGenerateOutreach}
               disabled={isGenerating || isSending || selectedLeadIds.length === 0}
-              className="bg-gradient-to-r from-[#E3B859] to-[#C9A045] hover:from-[#F0C973] hover:to-[#D9B255] disabled:opacity-40 disabled:cursor-not-allowed text-[#141416] px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-300 shadow-lg flex items-center gap-2"
+              className="bg-[#E3B859] hover:bg-[#d4ac50] disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-300 shadow-md flex items-center gap-2"
             >
-              {isGenerating
-                ? <><span className="w-3 h-3 border-2 border-[#141416]/40 border-t-[#141416] rounded-full animate-spin" />Drafting…</>
-                : '⚡ Generate AI Drafts'}
+              {isGenerating ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" />Drafting…</>
+              ) : (
+                <><Sparkles className="w-3.5 h-3.5" /> Generate AI Drafts</>
+              )}
             </button>
             <button
               onClick={handleSendEmails}
               disabled={isGenerating || isSending || selectedLeadIds.length === 0}
-              className="bg-[#252528] hover:bg-[#303035] disabled:opacity-40 disabled:cursor-not-allowed border border-[#3A3A3D] text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-300 shadow-md flex items-center gap-2"
+              className="bg-white dark:bg-[#252528] hover:bg-slate-50 dark:hover:bg-[#303035] disabled:opacity-40 disabled:cursor-not-allowed border border-gray-300 dark:border-[#3A3A3D] text-slate-800 dark:text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-300 shadow-md flex items-center gap-2"
             >
-              {isSending
-                ? <><span className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" />Sending…</>
-                : '✉️ Send Emails'}
+              {isSending ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" />Sending…</>
+              ) : (
+                <><Mail className="w-3.5 h-3.5" /> Send Emails</>
+              )}
             </button>
           </div>
         </div>
@@ -447,58 +504,58 @@ export default function EmailOutreachPage() {
         <div className="lg:col-span-1 space-y-4">
 
           {/* SMTP Config */}
-          <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A]/70 backdrop-blur-md p-4 shadow-lg space-y-3">
+          <div className="rounded-2xl border border-gray-300 dark:border-[#2D2D30] bg-white dark:bg-[#18181A] p-4 shadow-sm space-y-3">
             <button
               type="button"
               onClick={() => setShowConfig(!showConfig)}
               className="w-full flex justify-between items-center select-none group"
             >
               <h2 className="text-[10px] font-black uppercase tracking-widest text-[#E3B859] flex items-center gap-2">
-                <span>⚙️</span> SMTP Configuration
+                <Settings className="w-3.5 h-3.5 text-[#E3B859]" /> SMTP Configuration
               </h2>
-              <span className="text-gray-500 group-hover:text-white transition-colors text-[10px]">
-                {showConfig ? '▲' : '▼'}
+              <span className="text-slate-400 dark:text-gray-500 group-hover:text-slate-800 dark:group-hover:text-white transition-colors text-[10px]">
+                {showConfig ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               </span>
             </button>
 
             {showConfig && (
-              <form onSubmit={handleSaveSmtpSettings} className="space-y-3 pt-1 border-t border-[#2D2D30]">
+              <form onSubmit={handleSaveSmtpSettings} className="space-y-3 pt-2.5 border-t border-gray-200 dark:border-[#2D2D30] ">
                 <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-gray-500">Sender Email</label>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-500">Sender Email</label>
                   <input
                     type="email"
                     value={smtpUser}
                     onChange={(e) => setSmtpUser(e.target.value)}
                     required
                     placeholder="you@gmail.com"
-                    className="w-full bg-[#101012] border border-[#2D2D30] rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#E3B859] transition-colors"
+                    className="w-full bg-slate-50 dark:bg-[#101012] border border-gray-200 dark:border-[#2D2D30] rounded-lg px-3 py-2 text-xs text-slate-850 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-[#E3B859] transition-colors"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-gray-500">Gmail App Password</label>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-500">Gmail App Password</label>
                   <input
                     type="password"
                     value={smtpPass}
                     onChange={(e) => setSmtpPass(e.target.value)}
                     required
                     placeholder="••••••••••••••••"
-                    className="w-full bg-[#101012] border border-[#2D2D30] rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#E3B859] transition-colors"
+                    className="w-full bg-slate-50 dark:bg-[#101012] border border-gray-200 dark:border-[#2D2D30] rounded-lg px-3 py-2 text-xs text-slate-850 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-[#E3B859] transition-colors"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-gray-500">Display Name</label>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-gray-500">Display Name</label>
                   <input
                     type="text"
                     value={smtpFromName}
                     onChange={(e) => setSmtpFromName(e.target.value)}
                     placeholder="Your Name"
-                    className="w-full bg-[#101012] border border-[#2D2D30] rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#E3B859] transition-colors"
+                    className="w-full bg-slate-50 dark:bg-[#101012] border border-gray-200 dark:border-[#2D2D30] rounded-lg px-3 py-2 text-xs text-slate-850 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-[#E3B859] transition-colors"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isSavingSettings}
-                  className="w-full bg-[#E3B859] hover:bg-[#F0C973] disabled:opacity-40 text-[#141416] py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                  className="w-full bg-[#E3B859] hover:bg-[#d4ac50] disabled:opacity-40 text-slate-950 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
                 >
                   {isSavingSettings ? 'Saving…' : 'Save Settings'}
                 </button>
@@ -507,30 +564,31 @@ export default function EmailOutreachPage() {
           </div>
 
           {/* Scraper Batches */}
-          <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A]/70 backdrop-blur-md p-4 shadow-lg space-y-3 flex flex-col">
-            <div className="border-b border-[#2D2D30] pb-3">
+          <div className="rounded-2xl border border-gray-300 dark:border-[#2D2D30] bg-white dark:bg-[#18181A] p-4 shadow-sm space-y-3 flex flex-col">
+            <div className="border-b border-gray-200 dark:border-[#2D2D30] pb-3">
               <h2 className="text-[10px] font-black uppercase tracking-widest text-[#E3B859] flex items-center gap-2">
-                <span>🔍</span> Scraper Batches
+                <Search className="w-3.5 h-3.5 text-[#E3B859]" /> Scraper Batches
               </h2>
-              <p className="text-[9px] text-gray-500 mt-1">Select one or more jobs to load leads.</p>
+              <p className="text-[9px] text-slate-500 dark:text-gray-500 mt-1">Select one or more jobs to load leads.</p>
             </div>
 
             <div className="space-y-2 overflow-y-auto max-h-[480px] flex-1 pr-0.5">
               {jobs.length === 0 ? (
-                <div className="text-center py-8 text-[10px] text-gray-600 font-bold uppercase tracking-wider">
+                <div className="text-center py-8 text-[10px] text-slate-400 dark:text-gray-650 font-bold uppercase tracking-wider">
                   No Completed Jobs Found
                 </div>
               ) : (
                 jobs.map(job => {
                   const isSelected = selectedJobIds.includes(job.id)
+                  const leadCount  = jobLeadsCounts[job.id] || 0
                   return (
                     <div
                       key={job.id}
                       onClick={() => toggleJobSelection(job.id)}
                       className={`p-3 rounded-xl border transition-all duration-200 cursor-pointer flex items-start gap-2.5 select-none ${
                         isSelected
-                          ? 'bg-[#222225] border-[#E3B859]/70 shadow-[0_0_10px_rgba(227,184,89,0.08)]'
-                          : 'bg-[#141416]/50 border-[#2D2D30] hover:border-[#4D4D50]'
+                          ? 'bg-purple-50 dark:bg-[#222225] border-purple-300 dark:border-[#E3B859]/70 shadow-sm'
+                          : 'bg-slate-50 dark:bg-[#141416]/50 border-gray-200 dark:border-[#2D2D30] hover:border-gray-400 dark:hover:border-[#4D4D50]'
                       }`}
                     >
                       <input
@@ -539,15 +597,18 @@ export default function EmailOutreachPage() {
                         readOnly
                         className="mt-0.5 accent-[#E3B859] cursor-pointer"
                       />
-                      <div className="space-y-0.5 min-w-0">
-                        <div className="text-[11px] font-black uppercase tracking-wide text-white truncate">
+                      <div className="space-y-0.5 min-w-0 font-sans w-full">
+                        <div className="text-[11px] font-black uppercase tracking-wide text-slate-800 dark:text-white truncate">
                           {job.keyword}
                         </div>
-                        <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">
-                          📍 {job.city}
+                        <div className="text-[9px] text-slate-500 dark:text-gray-500 font-bold uppercase tracking-widest flex items-center gap-1">
+                          <MapPin className="w-2.5 h-2.5 text-[#E3B859]" /> {job.city}
                         </div>
-                        <div className="text-[9px] text-gray-600 font-mono">
-                          {new Date(job.created_at).toLocaleDateString()}
+                        <div className="text-[9px] text-slate-400 dark:text-gray-600 font-mono flex justify-between items-center w-full">
+                          <span>{new Date(job.created_at).toLocaleDateString()}</span>
+                          <span className="bg-purple-100 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/30 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 rounded text-[8px] font-black">
+                            {leadCount} leads
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -559,17 +620,17 @@ export default function EmailOutreachPage() {
         </div>
 
         {/* RIGHT — Leads Panel */}
-        <div className="lg:col-span-3 rounded-2xl border border-[#2D2D30] bg-[#18181A]/70 backdrop-blur-md shadow-lg flex flex-col overflow-hidden">
+        <div className="lg:col-span-3 rounded-2xl border border-gray-300 dark:border-[#2D2D30] bg-white dark:bg-[#18181A] shadow-sm flex flex-col overflow-hidden">
 
           {/* Panel Header */}
-          <div className="p-4 border-b border-[#2D2D30] space-y-3">
+          <div className="p-4 border-b border-gray-200 dark:border-[#2D2D30] space-y-3">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
                 <h2 className="text-[10px] font-black uppercase tracking-widest text-[#E3B859] flex items-center gap-2">
-                  <span>👥</span> Scraped Leads
-                  {leads.length > 0 && <span className="text-white">({filteredLeads.length})</span>}
+                  <Users className="w-3.5 h-3.5 text-[#E3B859]" /> Scraped Leads
+                  {leads.length > 0 && <span className="text-slate-800 dark:text-white">({filteredLeads.length})</span>}
                 </h2>
-                <p className="text-[9px] text-gray-500 mt-0.5">Only leads with verified emails shown. Draft-ready leads appear first.</p>
+                <p className="text-[9px] text-slate-500 dark:text-gray-500 mt-0.5">Only leads with verified emails shown. Draft-ready leads appear first.</p>
               </div>
 
               <div className="relative w-full sm:max-w-[240px]">
@@ -578,9 +639,9 @@ export default function EmailOutreachPage() {
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search by name or category…"
-                  className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-4 py-2 text-xs text-[#E4E3DD] placeholder-gray-600 focus:outline-none focus:border-[#E3B859] pl-8 transition-colors"
+                  className="w-full bg-slate-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-4 py-2 text-xs text-slate-800 dark:text-[#E4E3DD] placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-[#E3B859] pl-8 transition-colors"
                 />
-                <span className="absolute left-3 top-2.5 text-[10px] text-gray-500">🔍</span>
+                <span className="absolute left-3 top-2.5"><Search className="w-3.5 h-3.5 text-slate-400" /></span>
               </div>
             </div>
 
@@ -588,14 +649,14 @@ export default function EmailOutreachPage() {
             {leads.length > 0 && (
               <div className="grid grid-cols-4 gap-2">
                 {[
-                  { label: 'Total',   value: stats.total,     color: 'text-gray-300',  icon: '👥' },
-                  { label: 'Drafted', value: stats.withDraft, color: 'text-amber-300', icon: '📝' },
-                  { label: 'Sent',    value: stats.sent,      color: 'text-green-300', icon: '✅' },
-                  { label: 'Enriched',value: stats.enriched,  color: 'text-blue-300',  icon: '🧠' },
+                  { label: 'Total',   value: stats.total,     color: 'text-slate-800 dark:text-gray-300',  icon: <Users className="w-3 h-3 text-slate-500" /> },
+                  { label: 'Drafted', value: stats.withDraft, color: 'text-amber-600 dark:text-amber-300', icon: <FileText className="w-3 h-3 text-amber-500" /> },
+                  { label: 'Sent',    value: stats.sent,      color: 'text-green-600 dark:text-green-300', icon: <CheckCircle className="w-3 h-3 text-green-500" /> },
+                  { label: 'Enriched',value: stats.enriched,  color: 'text-blue-600 dark:text-blue-300',  icon: <Sparkles className="w-3 h-3 text-blue-500" /> },
                 ].map(s => (
-                  <div key={s.label} className="bg-[#141416] border border-[#2D2D30] rounded-xl p-2.5 text-center">
+                  <div key={s.label} className="bg-slate-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-xl p-2.5 text-center">
                     <div className={`text-base font-black ${s.color}`}>{s.value}</div>
-                    <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{s.icon} {s.label}</div>
+                    <div className="text-[8px] text-slate-500 dark:text-gray-500 font-bold uppercase tracking-widest mt-0.5 flex items-center justify-center gap-1">{s.icon} {s.label}</div>
                   </div>
                 ))}
               </div>
@@ -603,8 +664,8 @@ export default function EmailOutreachPage() {
 
             {/* Selection Controls */}
             {filteredLeads.length > 0 && (
-              <div className="flex items-center justify-between text-[10px] text-gray-500">
-                <label className="flex items-center gap-2 cursor-pointer select-none hover:text-white transition-colors">
+              <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-gray-500">
+                <label className="flex items-center gap-2 cursor-pointer select-none hover:text-slate-800 dark:hover:text-white transition-colors">
                   <input
                     type="checkbox"
                     checked={selectedLeadIds.length === filteredLeads.length && filteredLeads.length > 0}
@@ -620,9 +681,9 @@ export default function EmailOutreachPage() {
                 {selectedLeadIds.length > 0 && (
                   <button
                     onClick={() => setSelectedLeadIds([])}
-                    className="text-gray-500 hover:text-white font-bold uppercase tracking-widest transition-colors"
+                    className="text-slate-450 dark:text-gray-500 hover:text-slate-800 dark:hover:text-white font-bold uppercase tracking-widest transition-colors"
                   >
-                    Clear
+                    Clear Selection
                   </button>
                 )}
               </div>
@@ -633,26 +694,26 @@ export default function EmailOutreachPage() {
           <div className="flex-1 overflow-y-auto" style={{ maxHeight: '60vh' }}>
             {loadingLeads ? (
               <div className="flex flex-col items-center justify-center h-56 gap-3">
-                <div className="w-7 h-7 rounded-full border-2 border-t-[#E3B859] border-r-transparent border-b-[#E3B859] border-l-transparent animate-spin" />
-                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-black">Loading leads…</span>
+                <Loader2 className="w-7 h-7 text-[#E3B859] animate-spin" />
+                <span className="text-[10px] text-slate-450 dark:text-gray-500 uppercase tracking-widest font-black animate-pulse">Loading leads…</span>
               </div>
             ) : selectedJobIds.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-56 text-center gap-3">
-                <span className="text-4xl opacity-40">👈</span>
-                <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Select a scraper batch to load leads</div>
+              <div className="flex flex-col items-center justify-center h-56 text-center gap-2 text-slate-400 dark:text-gray-500">
+                <Inbox className="w-8 h-8 opacity-45" />
+                <div className="text-[10px] font-black uppercase tracking-widest">Select a scraper batch from the sidebar</div>
               </div>
             ) : filteredLeads.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-56 text-center gap-3">
-                <span className="text-3xl opacity-30">📭</span>
-                <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">No leads with emails found</div>
-                <p className="text-[9px] text-gray-600 max-w-xs">
-                  Leads without an email address are excluded. Run the enrichment scraper to find emails.
+              <div className="flex flex-col items-center justify-center h-56 text-center gap-2.5 text-slate-400 dark:text-gray-500">
+                <Inbox className="w-8 h-8 opacity-35" />
+                <div className="text-[10px] font-black uppercase tracking-widest">No leads with emails found</div>
+                <p className="text-[9px] text-slate-500 dark:text-gray-600 max-w-xs leading-relaxed">
+                  Leads without an email address are filtered. Run the enrichment scraper to find emails.
                 </p>
               </div>
             ) : (
               <table className="w-full text-left text-[11px] border-collapse">
-                <thead className="sticky top-0 z-10 bg-[#141416]">
-                  <tr className="border-b border-[#2D2D30] text-gray-500 font-bold uppercase tracking-wider text-[9px]">
+                <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-[#141416]">
+                  <tr className="border-b border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-500 font-bold uppercase tracking-wider text-[9px]">
                     <th className="py-3 px-4 w-8" />
                     <th className="py-3 px-4">Lead</th>
                     <th className="py-3 px-4">Category</th>
@@ -661,7 +722,7 @@ export default function EmailOutreachPage() {
                     <th className="py-3 px-4">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#1E1E20]">
+                <tbody className="divide-y divide-gray-200 dark:divide-[#1E1E20]">
                   {filteredLeads.map(lead => {
                     const isSelected  = selectedLeadIds.includes(lead.id)
                     const hasDraft    = !!(lead.ai_message_email_subject && lead.ai_message_email_body)
@@ -672,8 +733,10 @@ export default function EmailOutreachPage() {
                       <tr
                         key={lead.id}
                         className={`transition-colors ${
-                          isSelected ? 'bg-[#1E1E22]' : 'hover:bg-[#1A1A1D]/60'
-                        } ${hasDraft ? 'border-l-2 border-l-amber-600/40' : ''}`}
+                          isSelected 
+                            ? 'bg-purple-50/30 dark:bg-[#1E1E22]' 
+                            : 'hover:bg-slate-50/70 dark:hover:bg-[#1A1A1D]/60'
+                        } ${hasDraft ? 'border-l-2 border-l-amber-500/80' : ''}`}
                       >
                         {/* Checkbox */}
                         <td className="py-3 px-4">
@@ -687,8 +750,8 @@ export default function EmailOutreachPage() {
 
                         {/* Lead Name + Website */}
                         <td className="py-3 px-4">
-                          <div className="font-black text-white leading-tight">
-                            {hasDraft && <span className="text-amber-400 mr-1 text-[9px]">●</span>}
+                          <div className="font-black text-slate-900 dark:text-white leading-tight">
+                            {hasDraft && <span className="text-amber-500 mr-1.5 text-[9px]">●</span>}
                             {lead.name}
                           </div>
                           {lead.website && (
@@ -696,23 +759,26 @@ export default function EmailOutreachPage() {
                               href={lead.website}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-[9px] text-gray-500 hover:text-[#E3B859] flex items-center gap-0.5 mt-0.5 font-normal"
+                              className="text-[9px] text-slate-500 hover:text-[#E3B859] dark:text-gray-500 dark:hover:text-[#E3B859] flex items-center gap-1 mt-1 font-normal"
                             >
-                              🔗 {lead.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                              <Globe className="w-2.5 h-2.5 text-slate-400" />
+                              {lead.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
                             </a>
                           )}
                         </td>
 
                         {/* Category */}
-                        <td className="py-3 px-4 text-gray-400 font-bold uppercase tracking-widest text-[9px]">
+                        <td className="py-3 px-4 text-slate-500 dark:text-gray-500 font-bold uppercase tracking-widest text-[9px]">
                           {lead.category || '—'}
                         </td>
 
                         {/* Email */}
                         <td className="py-3 px-4">
-                          <div className="font-mono text-gray-300 text-[10px] leading-tight">{lead.email}</div>
+                          <div className="font-mono text-slate-800 dark:text-gray-300 text-[10px] leading-tight">{lead.email}</div>
                           {lead.phone && (
-                            <div className="text-[9px] text-gray-600 font-mono mt-0.5">{lead.phone}</div>
+                            <div className="text-[9px] text-slate-500 dark:text-gray-650 font-mono mt-1 flex items-center gap-1">
+                              <Phone className="w-2.5 h-2.5 text-slate-400" /> {lead.phone}
+                            </div>
                           )}
                         </td>
 
@@ -721,35 +787,37 @@ export default function EmailOutreachPage() {
                           {hasDraft ? (
                             <button
                               onClick={() => openDraftModal(lead)}
-                              className="group flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-bold text-[10px] transition-colors"
+                              className="group flex items-center gap-1 text-amber-600 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300 font-bold text-[10px] transition-colors"
                             >
-                              <span className="text-[13px] group-hover:scale-110 transition-transform">📝</span>
+                              <FileText className="w-3.5 h-3.5 text-amber-500 group-hover:scale-105 transition-transform" />
                               <span className="underline underline-offset-2">View Draft</span>
                             </button>
                           ) : (
-                            <span className="text-gray-600 italic text-[10px]">No draft yet</span>
+                            <span className="text-slate-400 dark:text-gray-600 italic text-[10px]">No draft yet</span>
                           )}
                           {hasEnrichment && !hasDraft && (
-                            <div className="text-[8px] text-blue-400 font-bold uppercase tracking-wider mt-1">🧠 Enriched</div>
+                            <div className="text-[8px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mt-1 flex items-center gap-0.5">
+                              <Sparkles className="w-2 h-2 text-blue-500 animate-pulse" /> Enriched
+                            </div>
                           )}
                         </td>
 
                         {/* Status Badge */}
                         <td className="py-3 px-4">
                           {isSent ? (
-                            <span className="bg-green-950/50 border border-green-800/40 text-green-300 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">
+                            <span className="bg-green-100 dark:bg-green-950/50 border border-green-200 dark:border-green-800/40 text-green-850 dark:text-green-300 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">
                               ✓ Sent
                             </span>
                           ) : hasDraft ? (
-                            <span className="bg-amber-950/50 border border-amber-700/40 text-amber-300 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">
+                            <span className="bg-amber-100 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-700/40 text-amber-850 dark:text-amber-300 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">
                               Draft Ready
                             </span>
                           ) : hasEnrichment ? (
-                            <span className="bg-blue-950/50 border border-blue-800/40 text-blue-300 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">
+                            <span className="bg-blue-100 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/40 text-blue-850 dark:text-blue-300 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">
                               Enriched
                             </span>
                           ) : (
-                            <span className="bg-[#222225]/60 border border-[#3A3A3D]/40 text-gray-400 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">
+                            <span className="bg-slate-100 dark:bg-[#222225]/60 border border-gray-200 dark:border-[#3A3A3D]/40 text-slate-600 dark:text-gray-450 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">
                               Qualified
                             </span>
                           )}
@@ -766,57 +834,59 @@ export default function EmailOutreachPage() {
 
       {/* ─── Draft Preview / Edit Modal ───────────────────────────────────── */}
       {viewingLead && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeDraftModal}>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeDraftModal}>
           <div
-            className="bg-[#1A1A1E] border border-[#2D2D30] rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden"
+            className="bg-white dark:bg-[#1A1A1E] border border-gray-300 dark:border-[#2D2D30] rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex justify-between items-center px-6 py-4 border-b border-[#2D2D30] bg-[#141416]">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-[#2D2D30] bg-slate-50 dark:bg-[#141416]">
               <div>
-                <h3 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
-                  📧 Outreach Draft
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-purple-600 dark:text-purple-400" /> Outreach Draft
                 </h3>
-                <p className="text-[9px] text-gray-500 mt-0.5">
-                  {viewingLead.name} · <span className="text-[#E3B859]">{viewingLead.email}</span>
+                <p className="text-[9px] text-slate-500 dark:text-gray-500 mt-0.5">
+                  {viewingLead.name} · <span className="text-[#E3B859] font-bold">{viewingLead.email}</span>
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 {/* Mode toggle */}
-                <div className="flex bg-[#222225] border border-[#3A3A3D] rounded-lg overflow-hidden text-[9px] font-black uppercase tracking-widest">
+                <div className="flex bg-slate-100 dark:bg-[#222225] border border-gray-200 dark:border-[#3A3A3D] rounded-lg overflow-hidden text-[9px] font-black uppercase tracking-widest">
                   <button
                     onClick={() => setDraftViewMode('preview')}
-                    className={`px-3 py-1.5 transition-colors ${draftViewMode === 'preview' ? 'bg-[#E3B859] text-[#141416]' : 'text-gray-400 hover:text-white'}`}
+                    className={`px-3 py-1.5 transition-colors ${draftViewMode === 'preview' ? 'bg-[#E3B859] text-slate-950' : 'text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white'}`}
                   >
                     Preview
                   </button>
                   <button
                     onClick={() => setDraftViewMode('edit')}
-                    className={`px-3 py-1.5 transition-colors ${draftViewMode === 'edit' ? 'bg-[#E3B859] text-[#141416]' : 'text-gray-400 hover:text-white'}`}
+                    className={`px-3 py-1.5 transition-colors ${draftViewMode === 'edit' ? 'bg-[#E3B859] text-slate-950' : 'text-slate-500 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white'}`}
                   >
                     Edit
                   </button>
                 </div>
                 <button
                   onClick={closeDraftModal}
-                  className="text-gray-500 hover:text-white transition-colors text-lg leading-none"
+                  className="text-slate-450 hover:text-slate-900 dark:text-gray-550 dark:hover:text-white transition-colors"
                 >
-                  ✕
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
             {/* Enrichment Context */}
             {viewingLead.enrichment_fields?.business_description && (
-              <div className="mx-6 mt-4 bg-[#141416]/60 border border-[#2D2D30] rounded-xl p-3 space-y-1.5">
-                <div className="text-[8px] font-black uppercase tracking-widest text-[#E3B859]">🧠 Business Intelligence</div>
-                <p className="text-[10px] text-gray-400 italic leading-relaxed">
+              <div className="mx-6 mt-4 bg-purple-50/30 dark:bg-[#141416]/60 border border-purple-100 dark:border-[#2D2D30] rounded-xl p-3 space-y-1.5">
+                <div className="text-[8px] font-black uppercase tracking-widest text-[#E3B859] flex items-center gap-1">
+                  <Sparkles className="w-2.5 h-2.5 text-[#E3B859]" /> Business Intelligence
+                </div>
+                <p className="text-[10px] text-slate-600 dark:text-gray-400 italic leading-relaxed">
                   &ldquo;{viewingLead.enrichment_fields.business_description}&rdquo;
                 </p>
                 {viewingLead.enrichment_fields.key_offerings && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {viewingLead.enrichment_fields.key_offerings.map(off => (
-                      <span key={off} className="bg-[#222225] border border-[#3A3A3D]/50 px-2 py-0.5 rounded text-[8px] text-gray-300">
+                      <span key={off} className="bg-slate-100 dark:bg-[#222225] border border-gray-200 dark:border-[#3A3A3D]/50 px-2 py-0.5 rounded text-[8px] text-slate-600 dark:text-gray-300">
                         {off}
                       </span>
                     ))}
@@ -830,13 +900,13 @@ export default function EmailOutreachPage() {
               {draftViewMode === 'preview' ? (
                 /* Preview Mode */
                 <div className="space-y-3">
-                  <div className="bg-[#141416] border border-[#2D2D30] rounded-xl p-4">
-                    <div className="text-[8px] font-black uppercase tracking-widest text-gray-500 mb-1.5">Subject</div>
-                    <div className="text-sm font-bold text-white">{editSubject || '—'}</div>
+                  <div className="bg-slate-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-xl p-4">
+                    <div className="text-[8px] font-black uppercase tracking-widest text-slate-550 dark:text-gray-500 mb-1.5">Subject</div>
+                    <div className="text-xs font-bold text-slate-900 dark:text-white leading-relaxed">{editSubject || '—'}</div>
                   </div>
-                  <div className="bg-[#141416] border border-[#2D2D30] rounded-xl p-4">
-                    <div className="text-[8px] font-black uppercase tracking-widest text-gray-500 mb-2">Email Body</div>
-                    <div className="text-[12px] text-gray-300 leading-relaxed whitespace-pre-wrap font-sans">
+                  <div className="bg-slate-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-xl p-4">
+                    <div className="text-[8px] font-black uppercase tracking-widest text-slate-550 dark:text-gray-500 mb-2">Email Body</div>
+                    <div className="text-[11px] text-slate-800 dark:text-gray-300 leading-relaxed whitespace-pre-wrap font-sans">
                       {editBody || '—'}
                     </div>
                   </div>
@@ -845,21 +915,21 @@ export default function EmailOutreachPage() {
                 /* Edit Mode */
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black uppercase tracking-widest text-gray-500">Subject</label>
+                    <label className="text-[8px] font-black uppercase tracking-widest text-slate-550 dark:text-gray-500">Subject</label>
                     <input
                       type="text"
                       value={editSubject}
                       onChange={e => setEditSubject(e.target.value)}
-                      className="w-full bg-[#141416] border border-[#2D2D30] focus:border-[#E3B859] rounded-xl px-4 py-2.5 text-xs text-[#E4E3DD] focus:outline-none transition-colors"
+                      className="w-full bg-slate-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] focus:border-[#E3B859] rounded-xl px-4 py-2.5 text-xs text-slate-850 dark:text-[#E4E3DD] focus:outline-none transition-colors"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black uppercase tracking-widest text-gray-500">Email Body</label>
+                    <label className="text-[8px] font-black uppercase tracking-widest text-slate-550 dark:text-gray-500">Email Body</label>
                     <textarea
                       value={editBody}
                       onChange={e => setEditBody(e.target.value)}
                       rows={9}
-                      className="w-full bg-[#141416] border border-[#2D2D30] focus:border-[#E3B859] rounded-xl px-4 py-3 text-[11px] text-[#E4E3DD] focus:outline-none font-mono leading-relaxed transition-colors resize-none"
+                      className="w-full bg-slate-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] focus:border-[#E3B859] rounded-xl px-4 py-3 text-[11px] text-slate-850 dark:text-[#E4E3DD] focus:outline-none font-mono leading-relaxed transition-colors resize-none"
                     />
                   </div>
                 </div>
@@ -870,7 +940,7 @@ export default function EmailOutreachPage() {
             <div className="flex justify-end gap-2.5 px-6 pb-5">
               <button
                 onClick={closeDraftModal}
-                className="bg-[#222225] hover:bg-[#2D2D30] text-gray-300 hover:text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors"
+                className="bg-slate-100 dark:bg-[#222225] hover:bg-slate-200 dark:hover:bg-[#2D2D30] text-slate-650 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors"
               >
                 Close
               </button>
@@ -878,7 +948,7 @@ export default function EmailOutreachPage() {
                 <button
                   onClick={handleSaveDraft}
                   disabled={isSavingDraft}
-                  className="bg-gradient-to-r from-[#E3B859] to-[#C9A045] hover:from-[#F0C973] hover:to-[#D9B255] disabled:opacity-40 text-[#141416] px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md"
+                  className="bg-[#E3B859] hover:bg-[#d4ac50] disabled:opacity-40 text-slate-950 px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md"
                 >
                   {isSavingDraft ? 'Saving…' : 'Save Draft'}
                 </button>

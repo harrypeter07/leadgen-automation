@@ -44,11 +44,6 @@ function decrypt(value: string): string {
  * Thread-safe: concurrent calls wait for a single hydration pass.
  */
 export async function ensureMetaConfig(): Promise<void> {
-  // Fast path: already set in env (must have both FB page token AND IG token)
-  if (process.env.META_PAGE_ACCESS_TOKEN && process.env.META_APP_ID && process.env.INSTAGRAM_ACCESS_TOKEN) {
-    return
-  }
-
   // Already hydrated from DB
   if (hydrated) return
 
@@ -71,12 +66,9 @@ export async function ensureMetaConfig(): Promise<void> {
     let loaded = 0
     for (const row of data || []) {
       if (!row.key || !row.value) continue
-      // Only set if not already in env
-      if (!process.env[row.key]) {
-        const val = ENCRYPTED_KEYS.has(row.key) ? decrypt(row.value) : row.value
-        process.env[row.key] = val
-        loaded++
-      }
+      const val = ENCRYPTED_KEYS.has(row.key) ? decrypt(row.value) : row.value
+      process.env[row.key] = val
+      loaded++
     }
 
     console.log(`[RuntimeConfig] Loaded ${loaded} credentials from Supabase meta_config into process.env`)
