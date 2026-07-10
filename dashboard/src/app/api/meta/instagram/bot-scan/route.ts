@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(req.nextUrl.searchParams.get('limit') || '50')
 
     // ── Step 1: Collect known accounts from DMs ──────────────────────────────
-    const knownAccounts: Map<string, { username: string; source: BotScoreResult['source']; interactions: string[] }> = new Map()
+    const knownAccounts: Record<string, { username: string; source: BotScoreResult['source']; interactions: string[] }> = {}
 
     // From DMs
     const convData = await igGet(`/me/conversations?fields=id,participants{id,username,name},messages{message,from}&limit=${Math.min(limit, 100)}`, token)
@@ -155,11 +155,11 @@ export async function GET(req: NextRequest) {
         const msgs: Array<{ message?: string; from?: { id: string; username?: string } }> = conv.messages?.data || []
         for (const participant of conv.participants?.data || []) {
           if (participant.id === MY_IG_ID || participant.username === 'smritifyp') continue
-          const existing = knownAccounts.get(participant.id) || { username: participant.username || '', source: 'dm' as const, interactions: [] }
+          const existing = knownAccounts[participant.id] || { username: participant.username || '', source: 'dm' as const, interactions: [] as string[] }
           // Collect their messages
           const theirMsgs = msgs.filter(m => m.from?.id === participant.id).map(m => m.message || '').filter(Boolean)
           existing.interactions.push(...theirMsgs)
-          knownAccounts.set(participant.id, existing)
+          knownAccounts[participant.id] = existing
         }
       }
     }
@@ -170,9 +170,9 @@ export async function GET(req: NextRequest) {
       for (const post of mediaData.data) {
         for (const comment of post.comments?.data || []) {
           if (!comment.from?.id || comment.from.id === MY_IG_ID) continue
-          const existing = knownAccounts.get(comment.from.id) || { username: comment.from.username || '', source: 'comment' as const, interactions: [] }
+          const existing = knownAccounts[comment.from.id] || { username: comment.from.username || '', source: 'comment' as const, interactions: [] as string[] }
           if (comment.text) existing.interactions.push(comment.text)
-          knownAccounts.set(comment.from.id, existing)
+          knownAccounts[comment.from.id] = existing
         }
       }
     }
@@ -180,7 +180,9 @@ export async function GET(req: NextRequest) {
     // ── Step 2: Fetch profile data for each known account ────────────────────
     const results: BotScoreResult[] = []
 
-    for (const [userId, info] of knownAccounts.entries()) {
+    const userIds = Object.keys(knownAccounts)
+    for (const userId of userIds) {
+      const info = knownAccounts[userId]
       // Try fetching their profile
       let profileData: Record<string, unknown> = { id: userId, username: info.username }
 
