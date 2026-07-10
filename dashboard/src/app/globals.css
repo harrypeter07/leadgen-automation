@@ -128,6 +128,25 @@ body {
 }
 
 /* Map hardcoded dark theme sub-page elements to light theme when NOT in dark mode */
+:not(.dark) .bg-\[\#0A0A0C\] {
+  background-color: #f9f9fb !important;
+  color: #1f2937 !important;
+}
+
+:not(.dark) .bg-\[\#0E0E10\] {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+}
+
+:not(.dark) .bg-\[\#1E1E22\] {
+  background-color: #f3f4f6 !important;
+  color: #1f2937 !important;
+}
+
+:not(.dark) .border-\[\#1A1A1C\] {
+  border-color: #e5e7eb !important;
+}
+
 :not(.dark) .bg-\[\#18181A\] {
   background-color: #ffffff !important;
   color: #1f2937 !important;
