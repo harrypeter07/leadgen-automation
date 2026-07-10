@@ -19,7 +19,7 @@ const TARGET_FIELDS = ['email', 'phone', 'website', 'owner_name', 'linkedin'];
  *   tools_failed, enrichment_scratchpad, attempts)
  * @returns {object} updated lead state, ready to persist
  */
-async function enrichLead(lead) {
+async function enrichLead(lead, customPrompt = '') {
   let state = normalizeIncomingState(lead);
   let paidCallsUsed = 0;
 
@@ -33,7 +33,7 @@ async function enrichLead(lead) {
       let decision;
       try {
         decision = await callGeminiWithTools({
-          systemInstruction: buildSystemInstruction(),
+          systemInstruction: buildSystemInstruction(customPrompt),
           userContent: JSON.stringify(summarizeStateForModel(state)),
           toolDeclarations: getFunctionDeclarations(),
         });

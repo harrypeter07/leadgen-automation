@@ -25,10 +25,11 @@ function safeHandler(fn) {
  */
 router.post('/tasks/enrich', safeHandler(async (req, res) => {
   const limit = Number(req.body?.limit) || 20;
-  if (limit < 1 || limit > 200) {
-    return res.status(400).json({ error: 'limit must be between 1 and 200' });
+  const customPrompt = req.body?.customPrompt || '';
+  if (limit < 1 || limit > 1000) {
+    return res.status(400).json({ error: 'limit must be between 1 and 1000' });
   }
-  const result = await enrichBatch(limit);
+  const result = await enrichBatch(limit, customPrompt);
   res.json(result);
 }));
 

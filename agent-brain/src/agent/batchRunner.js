@@ -33,7 +33,7 @@ async function runWithConcurrencyLimit(items, limit, worker) {
   return results;
 }
 
-async function enrichBatch(limit = 20) {
+async function enrichBatch(limit = 20, customPrompt = '') {
   let leads;
   try {
     leads = await getPendingEnrichmentBatch(limit);
@@ -46,10 +46,10 @@ async function enrichBatch(limit = 20) {
     return { processed: 0, message: 'No pending leads to enrich' };
   }
 
-  logger.info({ count: leads.length }, 'Starting enrichment batch');
+  logger.info({ count: leads.length, customPrompt }, 'Starting enrichment batch');
 
   const finalStates = await runWithConcurrencyLimit(leads, MAX_CONCURRENT, async (lead) => {
-    const state = await enrichLead(lead);
+    const state = await enrichLead(lead, customPrompt);
     const saved = await saveLeadState(state);
     return { leadId: state.id, status: state.enrichment_status, saved };
   });
