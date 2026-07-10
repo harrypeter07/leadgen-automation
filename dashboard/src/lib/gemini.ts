@@ -10,12 +10,13 @@ export async function generateWithGemini(
   payload: GeminiPayload,
   apiKey: string
 ): Promise<{ text: string; model: string }> {
-  // Try models in sequence from newest/premium down to standard/pro fallbacks
+  // Try models in sequence from newest/premium down to standard fallbacks
+  // NOTE: gemini-1.5-* models are deprecated and return 404 on v1beta API
   const models = [
     'gemini-2.5-flash',
     'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
+    'gemini-2.5-flash-lite',
+    'gemini-2.0-flash-lite',
   ]
 
   let lastError = 'Unknown error'
