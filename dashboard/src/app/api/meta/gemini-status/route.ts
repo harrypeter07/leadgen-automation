@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // POST /api/meta/gemini-status
-// Checks the status and quota limits of a Gemini API key by calling the listModels endpoint
+// Checks the status, validity, and active quota of a Gemini API key by performing a test generation call
 export async function POST(req: NextRequest) {
   try {
     const { apiKey } = await req.json()
@@ -9,13 +9,60 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'API key is required' }, { status: 400 })
     }
 
-    console.log('[GeminiStatus] Testing API key:', apiKey.slice(0, 8) + '...')
+    const keyAbbr = apiKey.slice(0, 8) + '...'
+    console.log('[GeminiStatus] Actively testing API key:', keyAbbr)
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, {
+    // Step 1: Active generation check to verify remaining quota (not just key validity)
+    const testGenUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
+    let isQuotaExhausted = false
+    let isInvalidKey = false
+    let testErrorMsg = ''
+
+    try {
+      const genRes = await fetch(testGenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'OK' }] }]
+        })
+      })
+
+      if (!genRes.ok) {
+        const genData = await genRes.json()
+        const genErr = genData.error || {}
+        testErrorMsg = genErr.message || 'Verification call failed'
+        
+        if (genRes.status === 429 || genErr.status === 'RESOURCE_EXHAUSTED') {
+          isQuotaExhausted = true
+        } else if (genRes.status === 400 || genRes.status === 401 || genErr.status === 'INVALID_ARGUMENT') {
+          isInvalidKey = true
+        }
+      }
+    } catch (err: any) {
+      console.warn('[GeminiStatus] Pre-flight generation call errored:', err.message)
+    }
+
+    if (isInvalidKey) {
+      return NextResponse.json({
+        success: false,
+        status: 'invalid_key',
+        error: 'Invalid/Expired API Key'
+      })
+    }
+
+    if (isQuotaExhausted) {
+      return NextResponse.json({
+        success: false,
+        status: 'limit_reached',
+        error: 'Quota Exceeded / Limit Reached (429)'
+      })
+    }
+
+    // Step 2: Fetch available models since quota test passed
+    const listModelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+    const res = await fetch(listModelsUrl, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
     })
 
     const data = await res.json()
@@ -25,21 +72,11 @@ export async function POST(req: NextRequest) {
       const errorMsg = data.error?.message || 'Unknown API error'
       const errorStatus = data.error?.status || 'UNKNOWN'
 
-      console.warn(`[GeminiStatus] API key verification failed (${statusCode}):`, errorMsg)
-
       if (statusCode === 429 || errorStatus === 'RESOURCE_EXHAUSTED') {
         return NextResponse.json({
           success: false,
           status: 'limit_reached',
           error: 'Quota Exceeded / Limit Reached'
-        })
-      }
-
-      if (statusCode === 400 || statusCode === 401 || errorStatus === 'INVALID_ARGUMENT') {
-        return NextResponse.json({
-          success: false,
-          status: 'invalid_key',
-          error: 'Invalid/Expired API Key'
         })
       }
 
@@ -50,7 +87,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Key is active! Parse available models
+    // Key is active and has remaining quota!
     const models: any[] = data.models || []
     const availableModels = models
       .map((m: any) => m.name?.replace('models/', ''))
