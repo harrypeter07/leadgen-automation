@@ -21,8 +21,7 @@ const CALL_TIMEOUT_MS = Number(process.env.GEMINI_CALL_TIMEOUT_MS || 25000);
 const MODELS_TO_TRY = [
   process.env.GEMINI_MODEL || 'gemini-2.0-flash',
   'gemini-2.5-flash',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro-latest'
+  'gemini-1.5-flash'
 ];
 
 /**

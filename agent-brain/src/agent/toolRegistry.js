@@ -184,7 +184,8 @@ async function callTinyFish(path, body) {
       method = 'GET';
     } else if (path === '/fetch') {
       url = 'https://api.fetch.tinyfish.ai';
-      requestOptions.body = JSON.stringify({ urls: [body.url] });
+      const targetUrl = body.url || body.website || '';
+      requestOptions.body = JSON.stringify({ urls: [targetUrl] });
     } else {
       url = `${TINYFISH_URL}${path}`;
       requestOptions.body = JSON.stringify(body);
