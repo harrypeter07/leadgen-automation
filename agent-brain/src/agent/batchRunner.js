@@ -2,7 +2,7 @@ const { enrichLead } = require('./loop');
 const { getPendingEnrichmentBatch, saveLeadState } = require('../db/queries');
 const logger = require('../utils/logger');
 
-const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT_LEADS || 8);
+const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT_LEADS || 2);
 
 /**
  * Runs enrichment across a batch of leads with bounded concurrency.
@@ -48,7 +48,13 @@ async function enrichBatch(limit = 20, customPrompt = '') {
 
   logger.info({ count: leads.length, customPrompt }, 'Starting enrichment batch');
 
+  // Helper index to stagger start times
+  let workerIdx = 0;
+
   const finalStates = await runWithConcurrencyLimit(leads, MAX_CONCURRENT, async (lead) => {
+    const currentIdx = workerIdx++;
+    // Stagger starts by 3.5 seconds per lead to pace requests under free-tier 15 RPM
+    await new Promise((resolve) => setTimeout(resolve, currentIdx * 3500));
     const state = await enrichLead(lead, customPrompt);
     const saved = await saveLeadState(state);
     return { leadId: state.id, status: state.enrichment_status, saved };
