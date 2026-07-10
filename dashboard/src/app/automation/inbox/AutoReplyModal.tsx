@@ -28,8 +28,11 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   const [firstReplyDelay, setFirstReplyDelay] = useState(5)
   const [conversationDelay, setConversationDelay] = useState(2)
   const [staticReply, setStaticReply] = useState('')
+  const [staticReplyEnabled, setStaticReplyEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [modelTestStatus, setModelTestStatus] = useState<Record<string, 'testing' | 'active' | 'limit_reached' | 'invalid' | 'idle'>>({})
 
   // Gemini API Key State
   const [geminiKey, setGeminiKey] = useState('')
@@ -39,6 +42,29 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   // Custom persona creator inputs
   const [newPersonaName, setNewPersonaName] = useState('')
   const [newPersonaInst, setNewPersonaInst] = useState('')
+
+  // Auto Reply Webhook Execution Logs State
+  const [logs, setLogs] = useState<any[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
+
+  const fetchLogs = async () => {
+    setLoadingLogs(true)
+    try {
+      const res = await fetch('/api/meta/instagram/auto-reply-logs')
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setLogs(data.logs || [])
+      }
+    } catch (err) {
+      console.error('Failed to load auto-reply logs:', err)
+    } finally {
+      setLoadingLogs(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchLogs()
+  }, [])
 
   // Seeded default personas if none exist
   const DEFAULT_PERSONAS: Persona[] = [
@@ -61,6 +87,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
     if (!geminiKey.trim()) return
     setTestingKey(true)
     setKeyStatus({ status: 'idle' })
+    setAvailableModels([])
+    setModelTestStatus({})
     const toastId = toast.loading('Testing Gemini API key...')
     try {
       const res = await fetch('/api/meta/gemini-status', {
@@ -70,7 +98,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
       })
       const data = await res.json()
       if (res.ok && data.success) {
-        setKeyStatus({ status: 'active', message: `Active! Models: ${data.models?.join(', ') || 'None'}` })
+        setKeyStatus({ status: 'active', message: 'Gemini key is active and working!' })
+        setAvailableModels(data.models || [])
         toast.success('Gemini key is active and working!', { id: toastId })
       } else {
         const status = data.status || 'invalid'
@@ -83,6 +112,31 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
       toast.error(`Error: ${err.message}`, { id: toastId })
     } finally {
       setTestingKey(false)
+    }
+  }
+
+  // Test Individual Model
+  const handleTestModel = async (modelName: string) => {
+    if (!geminiKey.trim()) return
+    setModelTestStatus(prev => ({ ...prev, [modelName]: 'testing' }))
+    try {
+      const res = await fetch('/api/meta/gemini-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: geminiKey.trim(), model: modelName })
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setModelTestStatus(prev => ({ ...prev, [modelName]: 'active' }))
+        toast.success(`${modelName} verification succeeded!`)
+      } else {
+        const status = data.status === 'limit_reached' ? 'limit_reached' : 'invalid'
+        setModelTestStatus(prev => ({ ...prev, [modelName]: status }))
+        toast.error(`${modelName} failed: ${data.error || 'Verification failed'}`)
+      }
+    } catch (err: any) {
+      setModelTestStatus(prev => ({ ...prev, [modelName]: 'invalid' }))
+      toast.error(`Error verifying ${modelName}: ${err.message}`)
     }
   }
 
@@ -100,6 +154,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
         let initialFirstReplyDelay = 5
         let initialConversationDelay = 2
         let initialStaticReply = ''
+        let initialStaticReplyEnabled = false
 
         if (globalRes.ok) {
           initialRules = globalData.rules || []
@@ -109,6 +164,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
           initialFirstReplyDelay = globalData.firstReplyDelay !== undefined ? Number(globalData.firstReplyDelay) : 5
           initialConversationDelay = globalData.conversationDelay !== undefined ? Number(globalData.conversationDelay) : 2
           initialStaticReply = globalData.staticReply || ''
+          initialStaticReplyEnabled = globalData.staticReplyEnabled || false
         }
 
         if (threadId) {
@@ -121,6 +177,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             if (cfg.firstReplyDelay !== undefined) initialFirstReplyDelay = Number(cfg.firstReplyDelay)
             if (cfg.conversationDelay !== undefined) initialConversationDelay = Number(cfg.conversationDelay)
             if (cfg.staticReply !== undefined) initialStaticReply = cfg.staticReply
+            if (cfg.staticReplyEnabled !== undefined) initialStaticReplyEnabled = cfg.staticReplyEnabled
           }
         }
 
@@ -142,6 +199,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
         setFirstReplyDelay(initialFirstReplyDelay)
         setConversationDelay(initialConversationDelay)
         setStaticReply(initialStaticReply)
+        setStaticReplyEnabled(initialStaticReplyEnabled)
       } catch (err) {
         console.error('Failed to load settings:', err)
         toast.error('Failed to load settings')
@@ -219,6 +277,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             conversationDelay,
             persona: chatbotPersona.trim(),
             staticReply: staticReply.trim(),
+            staticReplyEnabled,
           }),
         })
       } else {
@@ -233,6 +292,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             firstReplyDelay,
             conversationDelay,
             staticReply: staticReply.trim(),
+            staticReplyEnabled,
           }),
         })
       }
@@ -323,28 +383,85 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
                   <span>{keyStatus.message}</span>
                 </div>
               )}
+
+              {keyStatus.status === 'active' && availableModels.length > 0 && (
+                <div className="pt-3 border-t border-gray-250 dark:border-[#2D2D30]/40 space-y-2.5">
+                  <span className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">📋 Available Models (Click to test generation):</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableModels.map(m => {
+                      const isWorking = m === 'gemini-3.1-flash-lite' || m === 'gemma-4-31b-it';
+                      const status = modelTestStatus[m] || 'idle';
+                      
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => handleTestModel(m)}
+                          disabled={status === 'testing'}
+                          className={`text-[9px] font-semibold px-2 py-1 rounded-lg border transition-all flex items-center gap-1.5 focus:outline-none active:scale-95 ${
+                            status === 'testing'
+                              ? 'bg-purple-50 dark:bg-purple-950/20 border-purple-250 text-purple-600 animate-pulse'
+                              : status === 'active'
+                              ? 'bg-green-50 dark:bg-green-950/20 border-green-200 text-green-700 font-bold'
+                              : status === 'limit_reached'
+                              ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-250 text-amber-700'
+                              : status === 'invalid'
+                              ? 'bg-red-50 dark:bg-red-950/20 border-red-250 text-red-700'
+                              : isWorking
+                              ? 'bg-purple-100 dark:bg-purple-900/40 border-purple-200 text-purple-700 font-bold hover:bg-purple-200'
+                              : 'bg-white dark:bg-[#0E0E10] border-gray-200 dark:border-[#2D2D30] text-slate-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#1a1a1c]'
+                          }`}
+                        >
+                          <span>{m}</span>
+                          {status === 'testing' && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+                          {status === 'active' && <Check className="w-2.5 h-2.5" />}
+                          {status === 'limit_reached' && <span className="text-[7px] uppercase font-bold text-amber-500">(429)</span>}
+                          {status === 'invalid' && <span className="text-[7px] uppercase font-bold text-red-500">(Error)</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Static Test Reply Override Section */}
             <div className="p-4 rounded-xl border border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416] space-y-3">
-              <div>
-                <h3 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                  ⚡ Instant Response Override (Test Mode)
-                </h3>
-                <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">
-                  If set, this exact text will be sent immediately in response to ANY incoming text. Use this to verify that the auto-reply webhook fires instantly. Leave empty to use keyword rules and Gemini AI.
-                </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                    ⚡ Instant Response Override (Test Mode)
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">
+                    If enabled, this exact text will be sent immediately in response to ANY incoming message.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={staticReplyEnabled}
+                    onChange={e => {
+                      const val = e.target.checked
+                      setStaticReplyEnabled(val)
+                      if (val) setChatbotEnabled(false)
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-300 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
               </div>
 
-              <div className="space-y-1">
-                <input
-                  type="text"
-                  value={staticReply}
-                  onChange={e => setStaticReply(e.target.value)}
-                  placeholder="e.g. System is active! Replying instantly."
-                  className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3.5 py-2 text-xs text-slate-850 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
-                />
-              </div>
+              {staticReplyEnabled && (
+                <div className="space-y-1 pt-2 border-t border-gray-200 dark:border-[#2D2D30]/40">
+                  <input
+                    type="text"
+                    value={staticReply}
+                    onChange={e => setStaticReply(e.target.value)}
+                    placeholder="e.g. System is active! Replying instantly."
+                    className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3.5 py-2 text-xs text-slate-850 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+                  />
+                </div>
+              )}
             </div>
 
             {/* AI Chatbot Section */}
@@ -364,7 +481,11 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
                   <input
                     type="checkbox"
                     checked={chatbotEnabled}
-                    onChange={e => setChatbotEnabled(e.target.checked)}
+                    onChange={e => {
+                      const val = e.target.checked
+                      setChatbotEnabled(val)
+                      if (val) setStaticReplyEnabled(false)
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-9 h-5 bg-slate-300 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
@@ -527,6 +648,69 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
                 )}
               </div>
             )}
+
+            {/* Live Webhook Execution Logs */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416] space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                    📜 Live Auto-Reply Execution Logs
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">
+                    View real-time decision logs showing exactly why the bot replied or skipped a message.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchLogs}
+                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] hover:bg-gray-100 dark:hover:bg-[#1a1a1c] text-[10px] font-bold text-slate-700 dark:text-white transition-all active:scale-95 flex items-center gap-1"
+                >
+                  Refresh Logs
+                </button>
+              </div>
+
+              {loadingLogs ? (
+                <div className="text-center py-4 text-slate-400 text-xs animate-pulse">Loading execution logs...</div>
+              ) : logs.length === 0 ? (
+                <div className="text-center py-4 text-slate-400 text-xs border border-dashed border-gray-200 dark:border-[#2D2D30] rounded-xl">
+                  No auto-reply events logged yet.
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {logs.map((log: any, idx: number) => (
+                    <div key={idx} className="p-2.5 rounded-lg border border-gray-100 dark:border-[#1E1E22] bg-white dark:bg-[#0E0E10] text-[10px] space-y-1 font-mono">
+                      <div className="flex items-center justify-between text-[8px] text-slate-400">
+                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                        <span className={`px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                          log.status === 'sent' ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400' :
+                          log.status === 'skipped' ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' :
+                          'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+                        }`}>
+                          {log.status}
+                        </span>
+                      </div>
+                      <div className="text-slate-700 dark:text-gray-300">
+                        <span className="font-semibold text-purple-600 dark:text-purple-400">User:</span> {log.message}
+                      </div>
+                      <div className="text-slate-700 dark:text-gray-300">
+                        <span className="font-semibold text-[#E3B859]">Match:</span> <span className="underline">{log.matchedType}</span>
+                        {log.modelUsed && <span className="text-[8px] text-slate-400 ml-1.5">({log.modelUsed})</span>}
+                      </div>
+                      {log.replyContent && (
+                        <div className="text-slate-600 dark:text-gray-400 whitespace-pre-line bg-gray-50 dark:bg-[#141416] p-1.5 rounded-md mt-1 border border-gray-100 dark:border-[#1c1c1f]">
+                          <span className="font-semibold text-green-600">Reply:</span> {log.replyContent}
+                        </div>
+                      )}
+                      {log.error && (
+                        <div className="text-red-500 bg-red-50 dark:bg-red-950/20 p-1.5 rounded-md mt-1 border border-red-100">
+                          <span className="font-semibold">Error:</span> {log.error}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Actions */}
             <div className="flex gap-3 pt-3 border-t border-gray-200 dark:border-[#2D2D30]">

@@ -24,6 +24,48 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ error: 'Verification failed.' }, { status: 403 })
 }
 
+// Helper to record auto-reply events
+async function logAutoReplyEvent(event: {
+  timestamp: string
+  platform: string
+  senderId: string
+  message: string
+  matchedType: 'static_override' | 'keyword' | 'gemini_ai' | 'none'
+  replyContent: string
+  status: 'sent' | 'skipped' | 'failed'
+  error?: string
+  modelUsed?: string
+}) {
+  try {
+    const { data } = await supabaseAdmin
+      .from('meta_config')
+      .select('value')
+      .eq('key', 'AUTO_REPLY_LOGS')
+      .single()
+
+    let logs: any[] = []
+    if (data?.value) {
+      try {
+        logs = JSON.parse(data.value)
+      } catch {}
+    }
+
+    logs.unshift(event)
+    logs = logs.slice(0, 50)
+
+    await supabaseAdmin
+      .from('meta_config')
+      .upsert({
+        key: 'AUTO_REPLY_LOGS',
+        value: JSON.stringify(logs),
+        encrypted: false,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' })
+  } catch (err: any) {
+    console.error('[logAutoReplyEvent] Error saving log:', err.message)
+  }
+}
+
 // Helper to check rules and send AI/Keyword replies
 async function handleAutoReply(
   platform: 'instagram' | 'messenger',
@@ -50,7 +92,8 @@ async function handleAutoReply(
         'AI_FIRST_REPLY_DELAY',
         'AI_CONVERSATION_DELAY',
         'THREAD_AI_CONFIGS',
-        'AI_STATIC_REPLY_OVERRIDE'
+        'AI_STATIC_REPLY_OVERRIDE',
+        'AI_STATIC_REPLY_ENABLED'
       ])
 
     const settings: Record<string, string> = {}
@@ -92,6 +135,10 @@ async function handleAutoReply(
       : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 2)
 
     // 4. Static test reply override
+    const staticReplyEnabled = threadConfig.staticReplyEnabled !== undefined
+      ? !!threadConfig.staticReplyEnabled
+      : (settings.AI_STATIC_REPLY_ENABLED === 'true')
+
     const staticReply = threadConfig.staticReply !== undefined
       ? threadConfig.staticReply
       : (settings.AI_STATIC_REPLY_OVERRIDE || '')
@@ -99,12 +146,15 @@ async function handleAutoReply(
     const textLower = messageText.toLowerCase()
     let replied = false
     let replyContent = ''
+    let matchedType: 'static_override' | 'keyword' | 'gemini_ai' | 'none' = 'none'
+    let modelUsed = ''
 
     // 0. Static Reply Override check
-    if (staticReply.trim()) {
+    if (staticReplyEnabled && staticReply.trim()) {
       console.log(`[AutoReply] Static reply override matched: "${staticReply}"`)
       replyContent = staticReply.trim()
       replied = true
+      matchedType = 'static_override'
     }
 
     // 1. Keyword check (only if not already replied by static override)
@@ -116,6 +166,7 @@ async function handleAutoReply(
           console.log(`[AutoReply] Keyword match for "${messageText}".`)
           replyContent = rule.reply
           replied = true
+          matchedType = 'keyword'
           break
         }
       }
@@ -126,7 +177,7 @@ async function handleAutoReply(
       console.log(`[AutoReply] Generating AI response for "${messageText}"...`)
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
       const { generateWithGemini } = await import('@/lib/gemini')
-      const { text: aiReply } = await generateWithGemini(
+      const { text: aiReply, model } = await generateWithGemini(
         {
           system_instruction: { parts: [{ text: chatbotPersona }] },
           contents: [{ role: 'user', parts: [{ text: messageText }] }],
@@ -137,6 +188,8 @@ async function handleAutoReply(
       if (aiReply.trim()) {
         replyContent = aiReply.trim()
         replied = true
+        matchedType = 'gemini_ai'
+        modelUsed = model
       }
     }
 
@@ -195,9 +248,45 @@ async function handleAutoReply(
       } else {
         await FacebookService.sendMessage(senderId, replyContent)
       }
+
+      // Log success
+      await logAutoReplyEvent({
+        timestamp: new Date().toISOString(),
+        platform,
+        senderId,
+        message: messageText,
+        matchedType,
+        replyContent,
+        status: 'sent',
+        modelUsed
+      })
+    } else {
+      // Log skipped
+      await logAutoReplyEvent({
+        timestamp: new Date().toISOString(),
+        platform,
+        senderId,
+        message: messageText,
+        matchedType: 'none',
+        replyContent: '',
+        status: 'skipped'
+      })
     }
   } catch (err: any) {
     console.error('[AutoReply] Processor error:', err.message)
+    // Log failure
+    try {
+      await logAutoReplyEvent({
+        timestamp: new Date().toISOString(),
+        platform,
+        senderId,
+        message: messageText,
+        matchedType: 'none',
+        replyContent: '',
+        status: 'failed',
+        error: err.message
+      })
+    } catch {}
   }
 }
 

@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 // Updates custom configuration for a specific conversation/thread
 export async function POST(req: NextRequest) {
   try {
-    const { senderId, enabled, firstReplyDelay, conversationDelay, persona, staticReply } = await req.json()
+    const { senderId, enabled, firstReplyDelay, conversationDelay, persona, staticReply, staticReplyEnabled } = await req.json()
     if (!senderId) {
       return NextResponse.json({ error: 'senderId is required' }, { status: 400 })
     }
@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       ...(conversationDelay !== undefined ? { conversationDelay } : {}),
       ...(persona !== undefined ? { persona } : {}),
       ...(staticReply !== undefined ? { staticReply } : {}),
+      ...(staticReplyEnabled !== undefined ? { staticReplyEnabled } : {}),
     }
 
     // 3. Save back to meta_config

@@ -67,16 +67,28 @@ export const InstagramService = {
     return igGet<{ data: unknown[] }>(`/me/media?fields=id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count,thumbnail_url&limit=${limit}`)
   },
   async publishPost(imageUrl: string, caption: string) {
-    // Step 1: Create media container
-    const container = await igPost<{ id: string }>('/me/media', { image_url: imageUrl, caption })
+    const igId = await getIgBizId()
+    if (!igId) {
+      return { success: false, error: { message: 'INSTAGRAM_BUSINESS_ID is not configured in settings', type: 'OAuthException', code: 0 }, statusCode: 400, duration: 0, endpoint: '', requestId: '' }
+    }
+    const token = await getIgToken()
+    // Step 1: Create media container via Facebook Graph API
+    const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, { image_url: imageUrl, caption }, { accessToken: token, source: SOURCE })
     if (!container.success || !container.data?.id) return container
     // Step 2: Publish
-    return igPost<{ id: string }>('/me/media_publish', { creation_id: container.data.id })
+    return MetaClient.post<{ id: string }>(`/${igId}/media_publish`, { creation_id: container.data.id }, { accessToken: token, source: SOURCE })
   },
   async publishReel(videoUrl: string, caption: string) {
-    const container = await igPost<{ id: string }>('/me/media', { video_url: videoUrl, caption, media_type: 'REELS' })
+    const igId = await getIgBizId()
+    if (!igId) {
+      return { success: false, error: { message: 'INSTAGRAM_BUSINESS_ID is not configured in settings', type: 'OAuthException', code: 0 }, statusCode: 400, duration: 0, endpoint: '', requestId: '' }
+    }
+    const token = await getIgToken()
+    // Step 1: Create video/reel container via Facebook Graph API
+    const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, { video_url: videoUrl, caption, media_type: 'REELS' }, { accessToken: token, source: SOURCE })
     if (!container.success || !container.data?.id) return container
-    return igPost<{ id: string }>('/me/media_publish', { creation_id: container.data.id })
+    // Step 2: Publish
+    return MetaClient.post<{ id: string }>(`/${igId}/media_publish`, { creation_id: container.data.id }, { accessToken: token, source: SOURCE })
   },
   async getComments(mediaId: string, limit = 25) {
     return igGet<{ data: unknown[] }>(`/${mediaId}/comments?fields=id,text,from,timestamp,like_count,replies{text,from,timestamp}&limit=${limit}`)
