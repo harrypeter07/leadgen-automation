@@ -243,23 +243,44 @@ async function handleAutoReply(
       }
 
       console.log(`[AutoReply] Sending reply: "${replyContent.slice(0, 60)}..."`)
+      let sendSuccess = false
+      let sendError = ''
       if (platform === 'instagram') {
-        await InstagramService.sendDM(senderId, replyContent)
+        const sendRes = await InstagramService.sendDM(senderId, replyContent)
+        sendSuccess = sendRes.success
+        sendError = sendRes.error?.message || ''
       } else {
-        await FacebookService.sendMessage(senderId, replyContent)
+        const sendRes = await FacebookService.sendMessage(senderId, replyContent)
+        sendSuccess = sendRes.success
+        sendError = sendRes.error?.message || ''
       }
 
-      // Log success
-      await logAutoReplyEvent({
-        timestamp: new Date().toISOString(),
-        platform,
-        senderId,
-        message: messageText,
-        matchedType,
-        replyContent,
-        status: 'sent',
-        modelUsed
-      })
+      if (sendSuccess) {
+        // Log success
+        await logAutoReplyEvent({
+          timestamp: new Date().toISOString(),
+          platform,
+          senderId,
+          message: messageText,
+          matchedType,
+          replyContent,
+          status: 'sent',
+          modelUsed
+        })
+      } else {
+        console.error(`[AutoReply] sendDM failed: ${sendError}`)
+        await logAutoReplyEvent({
+          timestamp: new Date().toISOString(),
+          platform,
+          senderId,
+          message: messageText,
+          matchedType,
+          replyContent,
+          status: 'failed',
+          error: sendError,
+          modelUsed
+        })
+      }
     } else {
       // Log skipped
       await logAutoReplyEvent({

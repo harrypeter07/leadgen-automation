@@ -342,6 +342,39 @@ export default function SocialInboxPage() {
     }
   }, [])
 
+  // ── Polling-based auto-reply (fallback when webhooks don't deliver DMs) ──────
+  const [pollStatus, setPollStatus] = useState<{ newMessages: number; repliesSent: number; polledAt: string } | null>(null)
+  const [isPolling, setIsPolling] = useState(false)
+
+  const runPollReplies = useCallback(async (silent = true) => {
+    if (isPolling) return
+    setIsPolling(true)
+    try {
+      const res = await fetch('/api/meta/instagram/poll-replies')
+      const data = await res.json()
+      if (data.success) {
+        setPollStatus({ newMessages: data.newMessages, repliesSent: data.repliesSent, polledAt: data.polledAt })
+        if (!silent && data.newMessages > 0) {
+          toast.success(`Polled: ${data.newMessages} new message(s), ${data.repliesSent} reply(ies) sent`)
+        }
+        // Refresh logs panel if it's open
+        if (showLogsPanel && data.repliesSent > 0) fetchLogs()
+      }
+    } catch (err) {
+      console.error('[PollReplies] Failed:', err)
+    } finally {
+      setIsPolling(false)
+    }
+  }, [isPolling, showLogsPanel, fetchLogs])
+
+  // Auto-poll every 30 seconds
+  useEffect(() => {
+    runPollReplies(true) // immediate first run
+    const interval = setInterval(() => runPollReplies(true), 30_000)
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const senderId = selectedThread?.participantId || selectedThread?.id.replace('ig_', '')
   const threadOverride = senderId ? autopilotOverrides[senderId] : undefined
   const isAutopilotActive = threadOverride !== undefined ? threadOverride : globalAutopilotEnabled
@@ -817,6 +850,18 @@ export default function SocialInboxPage() {
                       title="Toggle Webhook Logs Panel"
                     >
                       📜 Logs {showLogsPanel ? 'ON' : 'OFF'}
+                    </button>
+                    <button
+                      onClick={() => runPollReplies(false)}
+                      disabled={isPolling}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 ${
+                        isPolling
+                          ? 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700/50 text-green-700 dark:text-green-400 animate-pulse'
+                          : 'bg-white dark:bg-[#141416] border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-500 hover:text-green-700 dark:hover:text-green-400 hover:border-green-400 dark:hover:border-green-600'
+                      }`}
+                      title={pollStatus ? `Last poll: ${new Date(pollStatus.polledAt).toLocaleTimeString()} — ${pollStatus.newMessages} new msgs, ${pollStatus.repliesSent} sent` : 'Poll Instagram DMs now'}
+                    >
+                      {isPolling ? '⏳' : '🔄'} {isPolling ? 'Polling…' : 'Poll Now'}
                     </button>
                     <button
                       onClick={() => setShowCompose(true)}
