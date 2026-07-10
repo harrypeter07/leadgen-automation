@@ -49,7 +49,8 @@ async function handleAutoReply(
         'THREAD_AUTOPILOT_OVERRIDES',
         'AI_FIRST_REPLY_DELAY',
         'AI_CONVERSATION_DELAY',
-        'THREAD_AI_CONFIGS'
+        'THREAD_AI_CONFIGS',
+        'AI_STATIC_REPLY_OVERRIDE'
       ])
 
     const settings: Record<string, string> = {}
@@ -90,19 +91,33 @@ async function handleAutoReply(
       ? Number(threadConfig.conversationDelay)
       : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 2)
 
+    // 4. Static test reply override
+    const staticReply = threadConfig.staticReply !== undefined
+      ? threadConfig.staticReply
+      : (settings.AI_STATIC_REPLY_OVERRIDE || '')
+
     const textLower = messageText.toLowerCase()
     let replied = false
     let replyContent = ''
 
-    // 1. Keyword check
-    for (const rule of rules) {
-      const keywords = Array.isArray(rule.keywords) ? rule.keywords : String(rule.keywords || '').split(',')
-      const matched = keywords.some((kw: string) => textLower.includes(kw.trim().toLowerCase()))
-      if (matched && rule.reply) {
-        console.log(`[AutoReply] Keyword match for "${messageText}".`)
-        replyContent = rule.reply
-        replied = true
-        break
+    // 0. Static Reply Override check
+    if (staticReply.trim()) {
+      console.log(`[AutoReply] Static reply override matched: "${staticReply}"`)
+      replyContent = staticReply.trim()
+      replied = true
+    }
+
+    // 1. Keyword check (only if not already replied by static override)
+    if (!replied) {
+      for (const rule of rules) {
+        const keywords = Array.isArray(rule.keywords) ? rule.keywords : String(rule.keywords || '').split(',')
+        const matched = keywords.some((kw: string) => textLower.includes(kw.trim().toLowerCase()))
+        if (matched && rule.reply) {
+          console.log(`[AutoReply] Keyword match for "${messageText}".`)
+          replyContent = rule.reply
+          replied = true
+          break
+        }
       }
     }
 
@@ -217,8 +232,8 @@ export async function POST(req: NextRequest) {
             const senderId = msgEvent.sender?.id
             const text = msgEvent.message?.text
             if (senderId && text) {
-              // Handle in background to keep response under 20s
-              handleAutoReply(platform, senderId, text)
+              // Await execution so Node runtime does not freeze the request context midway
+              await handleAutoReply(platform, senderId, text)
             }
           }
         }

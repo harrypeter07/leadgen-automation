@@ -14,7 +14,8 @@ export async function GET() {
         'AI_CHATBOT_PERSONA',
         'SAVED_CHATBOT_PERSONAS',
         'AI_FIRST_REPLY_DELAY',
-        'AI_CONVERSATION_DELAY'
+        'AI_CONVERSATION_DELAY',
+        'AI_STATIC_REPLY_OVERRIDE'
       ])
 
     if (error) throw error
@@ -42,6 +43,7 @@ export async function GET() {
       personas,
       firstReplyDelay: settings.AI_FIRST_REPLY_DELAY !== undefined ? Number(settings.AI_FIRST_REPLY_DELAY) : 5,
       conversationDelay: settings.AI_CONVERSATION_DELAY !== undefined ? Number(settings.AI_CONVERSATION_DELAY) : 2,
+      staticReply: settings.AI_STATIC_REPLY_OVERRIDE || '',
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -52,7 +54,7 @@ export async function GET() {
 // Saves rules, chatbot status, persona, delays, or saved personas list
 export async function POST(req: NextRequest) {
   try {
-    const { rules, chatbotEnabled, chatbotPersona, personas, firstReplyDelay, conversationDelay } = await req.json()
+    const { rules, chatbotEnabled, chatbotPersona, personas, firstReplyDelay, conversationDelay, staticReply } = await req.json()
 
     const rows = []
 
@@ -105,6 +107,15 @@ export async function POST(req: NextRequest) {
       rows.push({
         key: 'AI_CONVERSATION_DELAY',
         value: String(conversationDelay),
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    if (staticReply !== undefined) {
+      rows.push({
+        key: 'AI_STATIC_REPLY_OVERRIDE',
+        value: staticReply,
         encrypted: false,
         updated_at: new Date().toISOString(),
       })

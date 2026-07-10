@@ -32,11 +32,11 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/meta/instagram/thread-config
-// body: { senderId: string, enabled?: boolean, firstReplyDelay?: number, conversationDelay?: number, persona?: string }
+// body: { senderId: string, enabled?: boolean, firstReplyDelay?: number, conversationDelay?: number, persona?: string, staticReply?: string }
 // Updates custom configuration for a specific conversation/thread
 export async function POST(req: NextRequest) {
   try {
-    const { senderId, enabled, firstReplyDelay, conversationDelay, persona } = await req.json()
+    const { senderId, enabled, firstReplyDelay, conversationDelay, persona, staticReply } = await req.json()
     if (!senderId) {
       return NextResponse.json({ error: 'senderId is required' }, { status: 400 })
     }
@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
       ...(firstReplyDelay !== undefined ? { firstReplyDelay } : {}),
       ...(conversationDelay !== undefined ? { conversationDelay } : {}),
       ...(persona !== undefined ? { persona } : {}),
+      ...(staticReply !== undefined ? { staticReply } : {}),
     }
 
     // 3. Save back to meta_config

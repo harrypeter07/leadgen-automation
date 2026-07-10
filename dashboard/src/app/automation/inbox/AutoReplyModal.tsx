@@ -27,6 +27,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   const [personas, setPersonas] = useState<Persona[]>([])
   const [firstReplyDelay, setFirstReplyDelay] = useState(5)
   const [conversationDelay, setConversationDelay] = useState(2)
+  const [staticReply, setStaticReply] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -98,6 +99,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
         let initialPersonas = DEFAULT_PERSONAS
         let initialFirstReplyDelay = 5
         let initialConversationDelay = 2
+        let initialStaticReply = ''
 
         if (globalRes.ok) {
           initialRules = globalData.rules || []
@@ -106,6 +108,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
           initialPersonas = globalData.personas && globalData.personas.length > 0 ? globalData.personas : DEFAULT_PERSONAS
           initialFirstReplyDelay = globalData.firstReplyDelay !== undefined ? Number(globalData.firstReplyDelay) : 5
           initialConversationDelay = globalData.conversationDelay !== undefined ? Number(globalData.conversationDelay) : 2
+          initialStaticReply = globalData.staticReply || ''
         }
 
         if (threadId) {
@@ -117,6 +120,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             if (cfg.persona !== undefined) initialChatbotPersona = cfg.persona
             if (cfg.firstReplyDelay !== undefined) initialFirstReplyDelay = Number(cfg.firstReplyDelay)
             if (cfg.conversationDelay !== undefined) initialConversationDelay = Number(cfg.conversationDelay)
+            if (cfg.staticReply !== undefined) initialStaticReply = cfg.staticReply
           }
         }
 
@@ -137,6 +141,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
         setPersonas(initialPersonas)
         setFirstReplyDelay(initialFirstReplyDelay)
         setConversationDelay(initialConversationDelay)
+        setStaticReply(initialStaticReply)
       } catch (err) {
         console.error('Failed to load settings:', err)
         toast.error('Failed to load settings')
@@ -213,6 +218,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             firstReplyDelay,
             conversationDelay,
             persona: chatbotPersona.trim(),
+            staticReply: staticReply.trim(),
           }),
         })
       } else {
@@ -226,6 +232,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             personas,
             firstReplyDelay,
             conversationDelay,
+            staticReply: staticReply.trim(),
           }),
         })
       }
@@ -316,6 +323,28 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
                   <span>{keyStatus.message}</span>
                 </div>
               )}
+            </div>
+
+            {/* Static Test Reply Override Section */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416] space-y-3">
+              <div>
+                <h3 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  ⚡ Instant Response Override (Test Mode)
+                </h3>
+                <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">
+                  If set, this exact text will be sent immediately in response to ANY incoming text. Use this to verify that the auto-reply webhook fires instantly. Leave empty to use keyword rules and Gemini AI.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  value={staticReply}
+                  onChange={e => setStaticReply(e.target.value)}
+                  placeholder="e.g. System is active! Replying instantly."
+                  className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3.5 py-2 text-xs text-slate-850 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
             </div>
 
             {/* AI Chatbot Section */}
