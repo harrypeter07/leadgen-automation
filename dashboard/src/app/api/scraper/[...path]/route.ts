@@ -22,6 +22,11 @@ function resolveBackendPath(subPath: string): string {
     return `/api/${subPath}`
   }
 
+  // /api/scraper/enrich/... → /api/enrich/...
+  if (subPath.startsWith('enrich/')) {
+    return `/api/${subPath}`
+  }
+
   // /api/scraper/start|pause|stop|resume|retry → /api/jobs/start etc.
   return `/api/jobs/${subPath}`
 }
