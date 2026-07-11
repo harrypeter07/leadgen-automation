@@ -143,6 +143,10 @@ async function handleAutoReply(
       ? threadConfig.staticReply
       : (settings.AI_STATIC_REPLY_OVERRIDE || '')
 
+    // Response length → token limits
+    const responseLength: 'short' | 'medium' | 'long' = threadConfig.responseLength || 'medium'
+    const maxTokensMap = { short: 60, medium: 150, long: 350 }
+
     const textLower = messageText.toLowerCase()
     let replied = false
     let replyContent = ''
@@ -177,18 +181,24 @@ async function handleAutoReply(
       console.log(`[AutoReply] Generating AI response for "${messageText}"...`)
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
       const { generateWithGemini } = await import('@/lib/gemini')
+      const lengthInstruction = responseLength === 'short'
+        ? 'Reply in MAXIMUM 1 short sentence. Be very concise.'
+        : responseLength === 'long'
+        ? 'Reply in 4-5 sentences. Be expressive and detailed.'
+        : 'Reply in 2-3 sentences. Be natural and conversational.'
       const systemPrompt = `${chatbotPersona}
 
-IMPORTANT RULES:
-- You are replying to an Instagram DM. Keep replies SHORT (1-3 sentences max).
-- Stay strictly in character with the persona above.
-- Never mention you are an AI.
-- Respond naturally and conversationally.`
+CRITICAL RULES (never break these):
+- ${lengthInstruction}
+- You are replying to an Instagram DM.
+- NEVER admit you are an AI, bot, language model, ChatGPT, Gemini, or any AI system. If asked, deflect in character (e.g. "Haha, why would you think that? 😄").
+- Stay strictly in character as described above at ALL times.
+- Respond naturally. No markdown, no asterisks, no bullet points — plain conversational text only.`
       const { text: aiReply, model } = await generateWithGemini(
         {
           system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: 'user', parts: [{ text: messageText }] }],
-          generationConfig: { maxOutputTokens: 300, temperature: 0.5 },
+          generationConfig: { maxOutputTokens: maxTokensMap[responseLength], temperature: 0.75 },
         },
         apiKey
       )
@@ -244,6 +254,12 @@ IMPORTANT RULES:
       }
 
       const delaySec = isFirstReply ? firstReplyDelay : conversationDelay
+
+      // Show typing indicator to recipient (gives real-time "typing..." bubble)
+      if (platform === 'instagram') {
+        await InstagramService.sendTypingIndicator(senderId, 'typing_on').catch(() => {})
+      }
+
       if (delaySec > 0) {
         console.log(`[AutoReply] Sleeping for ${delaySec} seconds before dispatching reply...`)
         await new Promise(resolve => setTimeout(resolve, delaySec * 1000))

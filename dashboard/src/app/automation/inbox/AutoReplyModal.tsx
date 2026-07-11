@@ -29,6 +29,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   const [conversationDelay, setConversationDelay] = useState(2)
   const [staticReply, setStaticReply] = useState('')
   const [staticReplyEnabled, setStaticReplyEnabled] = useState(false)
+  const [responseLength, setResponseLength] = useState<'short' | 'medium' | 'long'>('medium')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [availableModels, setAvailableModels] = useState<string[]>([])
@@ -178,6 +179,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             if (cfg.conversationDelay !== undefined) initialConversationDelay = Number(cfg.conversationDelay)
             if (cfg.staticReply !== undefined) initialStaticReply = cfg.staticReply
             if (cfg.staticReplyEnabled !== undefined) initialStaticReplyEnabled = cfg.staticReplyEnabled
+            if (cfg.responseLength !== undefined) setResponseLength(cfg.responseLength)
           }
         }
 
@@ -278,6 +280,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             persona: chatbotPersona.trim(),
             staticReply: staticReply.trim(),
             staticReplyEnabled,
+            responseLength,
           }),
         })
       } else {
@@ -520,6 +523,30 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
                       />
                       <p className="text-[8px] text-slate-400 dark:text-gray-500">Delay for subsequent messages after the first reply</p>
                     </div>
+                  </div>
+
+                  {/* Response Length */}
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">📏 Response Length</label>
+                    <div className="flex gap-2">
+                      {(['short', 'medium', 'long'] as const).map(len => (
+                        <button
+                          key={len}
+                          type="button"
+                          onClick={() => setResponseLength(len)}
+                          className={`flex-1 py-1.5 rounded-lg border text-[9px] font-bold uppercase tracking-wider transition-all ${
+                            responseLength === len
+                              ? 'bg-purple-100 dark:bg-purple-950/50 border-purple-400 dark:border-purple-600 text-purple-700 dark:text-purple-300'
+                              : 'bg-white dark:bg-[#0E0E10] border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-500 hover:border-purple-300 hover:text-purple-600'
+                          }`}
+                        >
+                          {len === 'short' ? '⚡ Short' : len === 'medium' ? '💬 Medium' : '📝 Long'}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[8px] text-slate-400 dark:text-gray-500">
+                      {responseLength === 'short' ? '1 sentence max — very quick, punchy reply' : responseLength === 'medium' ? '2-3 sentences — balanced and natural' : '4-5 sentences — detailed and expressive'}
+                    </p>
                   </div>
 
                   {/* Select Predefined Persona */}

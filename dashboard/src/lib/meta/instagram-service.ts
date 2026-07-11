@@ -124,6 +124,13 @@ export const InstagramService = {
       message: { text }
     })
   },
+  async sendTypingIndicator(recipientId: string, action: 'typing_on' | 'typing_off' = 'typing_on') {
+    // Shows typing bubble to the recipient before sending the actual reply
+    return igPost<{ recipient_id: string }>('/me/messages', {
+      recipient: { id: recipientId },
+      sender_action: action
+    })
+  },
   async getInsights(metric = 'reach,profile_views,follower_count', period = 'day') {
     const igId = await getIgBizId()
     // Insights requires the numeric IG business account ID via the graph.facebook.com endpoint with PAGE token
