@@ -31,6 +31,13 @@ export default function SettingsPage() {
   const [savingSettings, setSavingSettings] = useState(false)
   const [loadingSettings, setLoadingSettings] = useState(true)
 
+  // Cloudinary Settings states
+  const [cloudinaryCloudName, setCloudinaryCloudName] = useState('')
+  const [cloudinaryApiKey, setCloudinaryApiKey] = useState('')
+  const [cloudinaryApiSecret, setCloudinaryApiSecret] = useState('')
+  const [cloudinaryUrl, setCloudinaryUrl] = useState('')
+  const [savingCloudinary, setSavingCloudinary] = useState(false)
+
   // 1. Fetch DB stats
   async function fetchDbStats() {
     try {
@@ -115,10 +122,58 @@ export default function SettingsPage() {
     }
   }
 
+  async function fetchCloudinarySettings() {
+    try {
+      const res = await fetch('/api/meta/settings')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.settings) {
+          setCloudinaryCloudName(data.settings.CLOUDINARY_CLOUD_NAME || '')
+          setCloudinaryApiKey(data.settings.CLOUDINARY_API_KEY || '')
+          setCloudinaryApiSecret(data.settings.CLOUDINARY_API_SECRET || '')
+          setCloudinaryUrl(data.settings.CLOUDINARY_URL || '')
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load Cloudinary settings:', err)
+    }
+  }
+
+  async function handleSaveCloudinarySettings(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingCloudinary(true)
+    const toastId = toast.loading('Saving Cloudinary configuration...')
+    try {
+      const res = await fetch('/api/meta/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: {
+            CLOUDINARY_CLOUD_NAME: cloudinaryCloudName.trim(),
+            CLOUDINARY_API_KEY: cloudinaryApiKey.trim(),
+            CLOUDINARY_API_SECRET: cloudinaryApiSecret.trim(),
+            CLOUDINARY_URL: cloudinaryUrl.trim()
+          }
+        })
+      })
+      if (res.ok) {
+        toast.success('Cloudinary credentials updated!', { id: toastId })
+        fetchCloudinarySettings()
+      } else {
+        throw new Error('Save failed')
+      }
+    } catch {
+      toast.error('Failed to save Cloudinary configuration.', { id: toastId })
+    } finally {
+      setSavingCloudinary(false)
+    }
+  }
+
   useEffect(() => {
     fetchDbStats()
     fetchConfigStatus()
     fetchOutreachSettings()
+    fetchCloudinarySettings()
   }, [])
 
   // 2. Connection testers
@@ -465,6 +520,68 @@ RESEND_API_KEY=re_your_key`
             </div>
           </form>
         )}
+      </div>
+
+      {/* Section 2.7 - Cloudinary CDN Integration */}
+      <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
+        <div>
+          <h3 className="font-bold text-[#1C1C1E] text-md uppercase tracking-wider text-gray-500">☁️ Cloudinary CDN Integration</h3>
+          <p className="text-xs text-gray-400 mt-1 font-medium font-bold uppercase tracking-wider">Configure your Cloudinary CDN settings to upload and distribute campaign visual media and video reels.</p>
+        </div>
+
+        <form onSubmit={handleSaveCloudinarySettings} className="space-y-4">
+          <div className="grid gap-6 md:grid-cols-3">
+            <div>
+              <label className="block text-gray-600 text-[10px] font-bold uppercase tracking-wider mb-2">Cloudinary Cloud Name</label>
+              <input
+                type="text"
+                value={cloudinaryCloudName}
+                onChange={(e) => setCloudinaryCloudName(e.target.value)}
+                className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors"
+                placeholder="e.g. qiqvymm6"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-[10px] font-bold uppercase tracking-wider mb-2">Cloudinary API Key</label>
+              <input
+                type="text"
+                value={cloudinaryApiKey}
+                onChange={(e) => setCloudinaryApiKey(e.target.value)}
+                className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors"
+                placeholder="e.g. 259211276218819"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-600 text-[10px] font-bold uppercase tracking-wider mb-2">Cloudinary API Secret</label>
+              <input
+                type="password"
+                value={cloudinaryApiSecret}
+                onChange={(e) => setCloudinaryApiSecret(e.target.value)}
+                className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors font-mono"
+                placeholder="••••••••••••••••"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-gray-600 text-[10px] font-bold uppercase tracking-wider mb-2">Cloudinary Connection URL</label>
+            <input
+              type="text"
+              value={cloudinaryUrl}
+              onChange={(e) => setCloudinaryUrl(e.target.value)}
+              className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors font-mono"
+              placeholder="cloudinary://key:secret@cloudname"
+            />
+          </div>
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              disabled={savingCloudinary}
+              className="rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] text-[#141416] text-xs font-bold uppercase tracking-wider px-6 py-3 transition-colors shadow-md disabled:opacity-50"
+            >
+              {savingCloudinary ? 'Saving...' : 'Save Cloudinary Credentials'}
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* Section 3 - Database Maintenance */}
