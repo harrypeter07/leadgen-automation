@@ -128,11 +128,74 @@ async function proxyRequest(req: NextRequest, params: { path: string[] }, method
 
   // Dual broadcasting mode
   console.log(`[Scraper Proxy] Dual proxy to targets: ${targets.join(', ')}`)
-  const promises = targets.map(target =>
-    proxyToTarget(target, bodyJson)
-      .then(res => ({ success: true, error: null, ...res }))
-      .catch(err => ({ success: false, error: err.message, status: 500, data: null }))
-  )
+  
+  let promises: Promise<any>[] = []
+
+  if (subPath === 'start' && targets.length === 2 && bodyJson) {
+    const keyword = bodyJson.keyword || ''
+    const city = bodyJson.city || ''
+    
+    let finalCity = city
+    if (city.startsWith('Country: ')) {
+      finalCity = city
+    }
+
+    let targetCities: string[] = []
+    if (finalCity === 'Global') {
+      targetCities = ['New York', 'London', 'Sydney', 'Mumbai', 'Toronto', 'Berlin', 'Tokyo', 'Singapore']
+    } else if (finalCity.startsWith('Country: ')) {
+      const countryName = finalCity.replace('Country: ', '').trim()
+      const countryMap: Record<string, string[]> = {
+        'sweden': ['Stockholm', 'Gothenburg', 'Malmo', 'Uppsala'],
+        'india': ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai'],
+        'usa': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix'],
+        'united states': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix'],
+        'uk': ['London', 'Birmingham', 'Leeds', 'Glasgow', 'Manchester'],
+        'united kingdom': ['London', 'Birmingham', 'Leeds', 'Glasgow', 'Manchester'],
+        'canada': ['Toronto', 'Montreal', 'Vancouver', 'Calgary'],
+        'australia': ['Sydney', 'Melbourne', 'Brisbane', 'Perth'],
+        'germany': ['Berlin', 'Hamburg', 'Munich', 'Cologne'],
+        'france': ['Paris', 'Marseille', 'Lyon', 'Toulouse'],
+        'uae': ['Dubai', 'Abu Dhabi', 'Sharjah'],
+        'united arab emirates': ['Dubai', 'Abu Dhabi', 'Sharjah']
+      }
+      targetCities = countryMap[countryName.toLowerCase()] || []
+    }
+
+    if (targetCities.length > 0) {
+      const mid = Math.ceil(targetCities.length / 2)
+      const citiesA = targetCities.slice(0, mid)
+      const citiesB = targetCities.slice(mid)
+      const batchId = `batch_${finalCity.replace(/\s+/g, '_')}_${Date.now()}`
+
+      const bodyA = { ...bodyJson, cities: citiesA, batch_id: batchId }
+      const bodyB = { ...bodyJson, cities: citiesB, batch_id: batchId }
+
+      console.log(`[Scraper Proxy] Splitting batch job: enqueuing ${citiesA.join(', ')} on Target A and ${citiesB.join(', ')} on Target B with batch_id: ${batchId}`)
+
+      promises = [
+        proxyToTarget(targets[0], bodyA)
+          .then(res => ({ success: true, error: null, ...res }))
+          .catch(err => ({ success: false, error: err.message, status: 500, data: null })),
+        proxyToTarget(targets[1], bodyB)
+          .then(res => ({ success: true, error: null, ...res }))
+          .catch(err => ({ success: false, error: err.message, status: 500, data: null }))
+      ]
+    } else {
+      console.log(`[Scraper Proxy] Single city search: running on Target A (${targets[0]}) only to prevent duplicates.`)
+      promises = [
+        proxyToTarget(targets[0], bodyJson)
+          .then(res => ({ success: true, error: null, ...res }))
+          .catch(err => ({ success: false, error: err.message, status: 500, data: null }))
+      ]
+    }
+  } else {
+    promises = targets.map(target =>
+      proxyToTarget(target, bodyJson)
+        .then(res => ({ success: true, error: null, ...res }))
+        .catch(err => ({ success: false, error: err.message, status: 500, data: null }))
+    )
+  }
 
   const results = await Promise.all(promises)
   const successes = results.filter(r => r.success)
