@@ -1,9 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { MetaSettingsService } from '@/lib/meta/meta-settings-service'
+import nodemailer from 'nodemailer'
+
+const ALLOWED_TEST_EMAILS = [
+  'hassanmansuri570@gmail.com',
+  'hmansuri882@gmail.com',
+  'mansurihh@rknec.edu',
+  'hassanmansuri379@gmail.com',
+  'fgdgb62@gmail.com',
+  'forhassan57@gmail.com',
+  'sheikhafsana710@gmail.com',
+  'whsofttech2026@gmail.com',
+  'ayanmansuri0404@gmail.com'
+]
 
 // POST /api/automation/outreach/email/send
 // body: { leadIds: string[] }
-// Sends personalized emails via Resend API for leads that have AI drafts
+// Sends personalized emails via Nodemailer SMTP or Resend API for leads that have AI drafts
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,13 +26,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'leadIds array required' }, { status: 400 })
     }
 
-    const resendApiKey = process.env.RESEND_API_KEY || ''
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
-    const fromName = process.env.SMTP_FROM_NAME || 'WHSoftec'
-
-    if (!resendApiKey) {
-      return NextResponse.json({ error: 'RESEND_API_KEY not configured' }, { status: 503 })
-    }
+    // Load configuration from DB & Env
+    const dbSettings = await MetaSettingsService.getFromDB() as Record<string, string>
+    
+    const smtpUser = dbSettings.SMTP_USER || process.env.NODEMAILER_USER
+    const smtpPass = dbSettings.SMTP_PASS || process.env.NODEMAILER_APP_PASSWORD
+    const smtpFromName = dbSettings.SMTP_FROM_NAME || process.env.NODEMAILER_FROM_NAME || 'Outreach'
+    
+    const resendApiKey = dbSettings.RESEND_API_KEY || process.env.RESEND_API_KEY || ''
+    const fromEmail = dbSettings.RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
 
     // Fetch leads with drafts
     const { data: leads, error: fetchErr } = await supabaseAdmin
@@ -32,6 +48,24 @@ export async function POST(req: NextRequest) {
 
     const results: { id: string; name: string; email: string; success: boolean; error?: string }[] = []
 
+    // Setup Nodemailer Transporter if credentials exist
+    let transport: nodemailer.Transporter | null = null
+    if (smtpUser && smtpPass) {
+      transport = nodemailer.createTransport({
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 50,
+        service: 'gmail',
+        auth: {
+          user: smtpUser.trim(),
+          pass: smtpPass.trim(),
+        },
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: 5000,
+      })
+    }
+
     for (const lead of leads) {
       if (!lead.email) {
         results.push({ id: lead.id, name: lead.name, email: '', success: false, error: 'No email address' })
@@ -42,32 +76,78 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      try {
-        const resendRes = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: `${fromName} <${fromEmail}>`,
-            to: [lead.email],
-            subject: lead.ai_message_email_subject,
-            text: lead.ai_message_email_body,
-            html: `<div style="font-family:sans-serif;max-width:600px;line-height:1.6">${lead.ai_message_email_body.split('\n').map((p: string) => p ? `<p>${p}</p>` : '').join('')}</div>`,
-          }),
-        })
+      // Sandbox Redirection Interceptor
+      let recipientEmail = lead.email
+      const toLower = recipientEmail.toLowerCase().trim()
+      if (!ALLOWED_TEST_EMAILS.map(e => e.toLowerCase()).includes(toLower)) {
+        recipientEmail = ALLOWED_TEST_EMAILS[Math.floor(Math.random() * ALLOWED_TEST_EMAILS.length)]
+        console.log(`[BatchEmailApi] Sandbox Interceptor: Redirected email for ${lead.email} to ${recipientEmail}`)
+      }
 
-        const resendData = await resendRes.json()
-        if (resendRes.ok && resendData.id) {
-          // Mark as sent in Supabase
-          await supabaseAdmin.from('leads').update({ status: 'contacted' }).eq('id', lead.id)
-          results.push({ id: lead.id, name: lead.name, email: lead.email, success: true })
-        } else {
-          results.push({ id: lead.id, name: lead.name, email: lead.email, success: false, error: resendData.message || 'Resend error' })
+      const subject = lead.ai_message_email_subject
+      const textBody = lead.ai_message_email_body
+      const htmlBody = `<div style="font-family:sans-serif;max-width:600px;line-height:1.6">${textBody.split('\n').map((p: string) => p ? `<p>${p}</p>` : '').join('')}</div>`
+
+      let sentSuccess = false
+      let currentError = ''
+
+      // 1. Try Nodemailer Gmail SMTP
+      if (transport && smtpUser) {
+        try {
+          const info = await transport.sendMail({
+            from: `"${smtpFromName}" <${smtpUser.trim()}>`,
+            to: recipientEmail,
+            subject,
+            html: htmlBody,
+            text: textBody,
+          })
+          console.log(`[BatchEmailApi] Sent lead ${lead.id} via SMTP: ${info.messageId}`)
+          sentSuccess = true
+        } catch (err: any) {
+          currentError = `SMTP: ${err.message}`
+          console.warn(`[BatchEmailApi] SMTP failed for lead ${lead.id}: ${err.message}`)
         }
-      } catch (err) {
-        results.push({ id: lead.id, name: lead.name, email: lead.email, success: false, error: err instanceof Error ? err.message : 'Send error' })
+      }
+
+      // 2. Try Resend API Fallback
+      if (!sentSuccess && resendApiKey) {
+        try {
+          const resendRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${resendApiKey.trim()}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: `${smtpFromName} <${fromEmail.trim()}>`,
+              to: [recipientEmail],
+              subject,
+              text: textBody,
+              html: htmlBody,
+            }),
+          })
+
+          const resendData = await resendRes.json()
+          if (resendRes.ok && resendData.id) {
+            console.log(`[BatchEmailApi] Sent lead ${lead.id} via Resend: ${resendData.id}`)
+            sentSuccess = true
+          } else {
+            const resendMsg = resendData.message || 'Resend error'
+            currentError = currentError ? `${currentError} | Resend: ${resendMsg}` : `Resend: ${resendMsg}`
+          }
+        } catch (err: any) {
+          const fetchMsg = err.message || 'Resend fetch failed'
+          currentError = currentError ? `${currentError} | Resend: ${fetchMsg}` : `Resend: ${fetchMsg}`
+        }
+      }
+
+      if (sentSuccess) {
+        // Mark as sent in Supabase
+        await supabaseAdmin.from('leads').update({ status: 'contacted' }).eq('id', lead.id)
+        results.push({ id: lead.id, name: lead.name, email: lead.email, success: true })
+      } else {
+        const finalErr = currentError || 'No email provider configured'
+        results.push({ id: lead.id, name: lead.name, email: lead.email, success: false, error: finalErr })
       }
     }
 

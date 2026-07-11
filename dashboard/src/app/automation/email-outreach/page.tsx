@@ -359,6 +359,7 @@ export default function EmailOutreachPage() {
     const batchSize = 3
     let sentCount   = 0
     let failedCount = 0
+    let lastErrorMessage = ''
 
     try {
       for (let i = 0; i < selectedLeadIds.length; i += batchSize) {
@@ -376,8 +377,15 @@ export default function EmailOutreachPage() {
         if (res.ok) {
           sentCount   += data.sent   || 0
           failedCount += data.failed || 0
+          if (data.results) {
+            const fails = data.results.filter((r: any) => !r.success)
+            if (fails.length > 0) {
+              lastErrorMessage = fails[0].error || 'Send failed for some leads'
+            }
+          }
         } else {
           failedCount += batch.length
+          lastErrorMessage = data.error || 'Server error during send'
         }
         setGenerateProgress({
           done: sentCount + failedCount,
@@ -386,7 +394,12 @@ export default function EmailOutreachPage() {
         })
       }
       setSendResults({ sent: sentCount, failed: failedCount })
-      toast.success(`✉️ Dispatched! Sent: ${sentCount}, Failed: ${failedCount}`, { id: toastId })
+      
+      if (failedCount > 0) {
+        toast.error(`Send completed with issues: Sent ${sentCount}, Failed ${failedCount}.\nReason: ${lastErrorMessage}`, { id: toastId, duration: 6000 })
+      } else {
+        toast.success(`✉️ All emails successfully sent! Total: ${sentCount}`, { id: toastId })
+      }
       setSelectedLeadIds([])
       await fetchLeads()
     } catch (err: unknown) {
