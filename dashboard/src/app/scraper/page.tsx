@@ -967,10 +967,10 @@ export default function ScraperPage() {
             <div className="space-y-2">
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Select Completed Jobs to Scan</label>
               <div className="border border-[#E4E3DD] rounded-xl bg-[#F4F3EF] p-3 max-h-[140px] overflow-y-auto space-y-2 shadow-inner">
-                {jobs.filter(j => j.status === 'completed').length === 0 ? (
-                  <p className="text-[10px] text-gray-400 py-4 text-center font-semibold">No completed scrape jobs found.</p>
+                {jobs.filter(j => ['completed', 'stopped', 'failed'].includes(j.status)).length === 0 ? (
+                  <p className="text-[10px] text-gray-400 py-4 text-center font-semibold">No completed, stopped, or failed scrape jobs found.</p>
                 ) : (
-                  jobs.filter(j => j.status === 'completed').map(job => {
+                  jobs.filter(j => ['completed', 'stopped', 'failed'].includes(j.status)).map(job => {
                     const isChecked = selectedEnrichJobIds.includes(job.id)
                     return (
                       <label key={job.id} className="flex items-start gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white cursor-pointer select-none transition-colors">

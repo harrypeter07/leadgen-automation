@@ -99,7 +99,7 @@ export default function EmailOutreachPage() {
       const res = await fetch('/api/scraper/jobs')
       const data = await res.json()
       if (res.ok && data.jobs) {
-        setJobs(data.jobs.filter((j: ScraperJob) => j.status === 'completed'))
+        setJobs(data.jobs.filter((j: ScraperJob) => ['completed', 'stopped', 'failed'].includes(j.status)))
       }
     } catch (err) {
       console.error('Error fetching jobs:', err)
