@@ -76,12 +76,14 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // Sandbox Redirection Interceptor
+      // Sandbox Redirection Interceptor (Only active if SANDBOX_MODE is explicitly enabled)
       let recipientEmail = lead.email
-      const toLower = recipientEmail.toLowerCase().trim()
-      if (!ALLOWED_TEST_EMAILS.map(e => e.toLowerCase()).includes(toLower)) {
-        recipientEmail = ALLOWED_TEST_EMAILS[Math.floor(Math.random() * ALLOWED_TEST_EMAILS.length)]
-        console.log(`[BatchEmailApi] Sandbox Interceptor: Redirected email for ${lead.email} to ${recipientEmail}`)
+      if (process.env.SANDBOX_MODE === 'true') {
+        const toLower = recipientEmail.toLowerCase().trim()
+        if (!ALLOWED_TEST_EMAILS.map(e => e.toLowerCase()).includes(toLower)) {
+          recipientEmail = ALLOWED_TEST_EMAILS[Math.floor(Math.random() * ALLOWED_TEST_EMAILS.length)]
+          console.log(`[BatchEmailApi] Sandbox Interceptor: Redirected email for ${lead.email} to ${recipientEmail}`)
+        }
       }
 
       const subject = lead.ai_message_email_subject
