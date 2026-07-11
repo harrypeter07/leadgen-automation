@@ -239,8 +239,19 @@ router.post('/start', async (req, res, next) => {
       const createdJobs = [];
       const batchId = batch_id || `batch_${finalCity.replace(/\s+/g, '_')}_${Date.now()}`;
       
-      for (const tCity of targetCities) {
-        const finalKeyword = area && area.trim() ? `${keyword.trim()} [Area: ${area.trim()}]` : keyword.trim();
+      for (const item of targetCities) {
+        let tCity = '';
+        let tArea = '';
+
+        if (item && typeof item === 'object') {
+          tCity = item.city || '';
+          tArea = item.area || '';
+        } else {
+          tCity = String(item);
+          tArea = area || '';
+        }
+
+        const finalKeyword = tArea && tArea.trim() ? `${keyword.trim()} [Area: ${tArea.trim()}]` : keyword.trim();
         const job = await queueManager.enqueue({
           keyword: finalKeyword,
           city: tCity,

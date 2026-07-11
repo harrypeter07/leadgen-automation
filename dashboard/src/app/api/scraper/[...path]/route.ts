@@ -1,5 +1,90 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { MetaSettingsService } from '@/lib/meta/meta-settings-service'
+import { generateWithGemini } from '@/lib/gemini'
+
+async function getGeographicalSubLocations(city: string, area?: string): Promise<Array<string | { city: string, area: string }>> {
+  const cleanCity = city.trim()
+  const cleanArea = area?.trim() || ''
+  
+  const targetName = cleanArea ? `${cleanCity} [Area: ${cleanArea}]` : cleanCity
+
+  const prompt = `
+You are a geographical division engine.
+Your task is to split a target location query into exactly 8 distinct sub-locations (cities, states, districts, neighborhoods, or sectors depending on geographical scale) so that a web scraper can crawl them concurrently to cover the entire target location.
+
+Scale rules:
+1. If the target is "Global", return exactly 8 major countries, prefixed with "Country: " (e.g. ["Country: United States", "Country: United Kingdom", "Country: India", "Country: Canada", "Country: Australia", "Country: Germany", "Country: France", "Country: Sweden"]).
+2. If the target starts with "Country: " (e.g., "Country: India"), return exactly 8 major cities in that country as simple strings (e.g. ["Mumbai", "Delhi", "Bangalore", ...]).
+3. If the target is a State/Province/Region (e.g. "California", "Maharashtra"), return exactly 8 major cities/counties/districts in that state as simple strings (e.g. ["Los Angeles", "San Diego", ...]).
+4. If the target is a City (e.g. "Nagpur", "New York"), return exactly 8 prominent neighborhoods, districts, or areas inside that city as JSON objects.
+   Format: {"city": "CityName", "area": "NeighborhoodName"}
+   Example: [{"city": "Nagpur", "area": "Civil Lines"}, {"city": "Nagpur", "area": "Dharampeth"}, ...]
+5. If the target is a neighborhood or small area (e.g. "Nagpur [Area: Civil Lines]"), return exactly 8 smaller sub-regions, blocks, sectors, or streets in that neighborhood as JSON objects.
+   Format: {"city": "ParentTargetName", "area": "SubAreaName"}
+   Example: [{"city": "Nagpur [Area: Civil Lines]", "area": "Sector 1"}, {"city": "Nagpur [Area: Civil Lines]", "area": "Block A"}, ...]
+
+Target Location: "${targetName}"
+
+Return ONLY a clean JSON array containing exactly 8 elements.
+Do NOT include markdown syntax like \`\`\`json, do NOT include explanations, do NOT return anything other than the JSON array.
+`;
+
+  try {
+    const payload = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+    }
+    
+    const { text } = await generateWithGemini(payload, '')
+    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim()
+    const parsed = JSON.parse(cleanJson)
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed
+    }
+  } catch (err: any) {
+    console.warn(`[Scraper Proxy] Gemini geographical division failed for ${targetName}:`, err.message)
+  }
+
+  // Fallbacks:
+  if (cleanCity === 'Global') {
+    return [
+      'Country: United States', 'Country: United Kingdom', 'Country: India', 'Country: Canada',
+      'Country: Australia', 'Country: Germany', 'Country: France', 'Country: Sweden'
+    ]
+  }
+
+  if (cleanCity.startsWith('Country: ')) {
+    const countryName = cleanCity.replace('Country: ', '').trim().toLowerCase()
+    const countryMap: Record<string, string[]> = {
+      'sweden': ['Stockholm', 'Gothenburg', 'Malmo', 'Uppsala', 'Vasteras', 'Orebro', 'Linkoping', 'Helsingborg'],
+      'india': ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Ahmedabad', 'Pune', 'Kolkata'],
+      'usa': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego'],
+      'united states': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego'],
+      'uk': ['London', 'Birmingham', 'Leeds', 'Glasgow', 'Sheffield', 'Bradford', 'Liverpool', 'Edinburgh'],
+      'united kingdom': ['London', 'Birmingham', 'Leeds', 'Glasgow', 'Sheffield', 'Bradford', 'Liverpool', 'Edinburgh'],
+      'canada': ['Toronto', 'Montreal', 'Vancouver', 'Calgary', 'Edmonton', 'Ottawa', 'Winnipeg', 'Quebec City'],
+      'australia': ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide', 'Gold Coast', 'Canberra', 'Newcastle'],
+      'germany': ['Berlin', 'Hamburg', 'Munich', 'Cologne', 'Frankfurt', 'Stuttgart', 'Dusseldorf', 'Dortmund'],
+      'france': ['Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes', 'Strasbourg', 'Montpellier'],
+      'uae': ['Dubai', 'Abu Dhabi', 'Sharjah', 'Al Ain', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'],
+      'united arab emirates': ['Dubai', 'Abu Dhabi', 'Sharjah', 'Al Ain', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain']
+    }
+    const list = countryMap[countryName]
+    if (list) return list
+  }
+
+  const parentCity = cleanCity
+  const subAreaName = cleanArea || 'Center'
+  return [
+    { city: parentCity, area: `${subAreaName} North` },
+    { city: parentCity, area: `${subAreaName} South` },
+    { city: parentCity, area: `${subAreaName} East` },
+    { city: parentCity, area: `${subAreaName} West` },
+    { city: parentCity, area: `${subAreaName} Central` },
+    { city: parentCity, area: `${subAreaName} Plaza` },
+    { city: parentCity, area: `${subAreaName} Downtown` },
+    { city: parentCity, area: `${subAreaName} Heights` }
+  ]
+}
 
 // Maps frontend scraper sub-paths to the correct backend routes
 function resolveBackendPath(subPath: string): string {
@@ -134,61 +219,30 @@ async function proxyRequest(req: NextRequest, params: { path: string[] }, method
   if (subPath === 'start' && targets.length === 2 && bodyJson) {
     const keyword = bodyJson.keyword || ''
     const city = bodyJson.city || ''
+    const area = bodyJson.area || ''
     
-    let finalCity = city
-    if (city.startsWith('Country: ')) {
-      finalCity = city
-    }
+    console.log(`[Scraper Proxy] Performing dynamic geographical splitting for "${city}" [Area: ${area}] via Gemini/Fallback...`)
+    const targetCities = await getGeographicalSubLocations(city, area)
+    console.log(`[Scraper Proxy] Generated ${targetCities.length} sub-locations:`, JSON.stringify(targetCities))
 
-    let targetCities: string[] = []
-    if (finalCity === 'Global') {
-      targetCities = ['New York', 'London', 'Sydney', 'Mumbai', 'Toronto', 'Berlin', 'Tokyo', 'Singapore']
-    } else if (finalCity.startsWith('Country: ')) {
-      const countryName = finalCity.replace('Country: ', '').trim()
-      const countryMap: Record<string, string[]> = {
-        'sweden': ['Stockholm', 'Gothenburg', 'Malmo', 'Uppsala'],
-        'india': ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai'],
-        'usa': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix'],
-        'united states': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix'],
-        'uk': ['London', 'Birmingham', 'Leeds', 'Glasgow', 'Manchester'],
-        'united kingdom': ['London', 'Birmingham', 'Leeds', 'Glasgow', 'Manchester'],
-        'canada': ['Toronto', 'Montreal', 'Vancouver', 'Calgary'],
-        'australia': ['Sydney', 'Melbourne', 'Brisbane', 'Perth'],
-        'germany': ['Berlin', 'Hamburg', 'Munich', 'Cologne'],
-        'france': ['Paris', 'Marseille', 'Lyon', 'Toulouse'],
-        'uae': ['Dubai', 'Abu Dhabi', 'Sharjah'],
-        'united arab emirates': ['Dubai', 'Abu Dhabi', 'Sharjah']
-      }
-      targetCities = countryMap[countryName.toLowerCase()] || []
-    }
+    const mid = Math.ceil(targetCities.length / 2)
+    const citiesA = targetCities.slice(0, mid)
+    const citiesB = targetCities.slice(mid)
+    const batchId = `batch_${city.replace(/\s+/g, '_')}_${Date.now()}`
 
-    if (targetCities.length > 0) {
-      const mid = Math.ceil(targetCities.length / 2)
-      const citiesA = targetCities.slice(0, mid)
-      const citiesB = targetCities.slice(mid)
-      const batchId = `batch_${finalCity.replace(/\s+/g, '_')}_${Date.now()}`
+    const bodyA = { ...bodyJson, cities: citiesA, batch_id: batchId }
+    const bodyB = { ...bodyJson, cities: citiesB, batch_id: batchId }
 
-      const bodyA = { ...bodyJson, cities: citiesA, batch_id: batchId }
-      const bodyB = { ...bodyJson, cities: citiesB, batch_id: batchId }
+    console.log(`[Scraper Proxy] Splitting batch job: enqueuing ${citiesA.length} locations on Target A and ${citiesB.length} locations on Target B with batch_id: ${batchId}`)
 
-      console.log(`[Scraper Proxy] Splitting batch job: enqueuing ${citiesA.join(', ')} on Target A and ${citiesB.join(', ')} on Target B with batch_id: ${batchId}`)
-
-      promises = [
-        proxyToTarget(targets[0], bodyA)
-          .then(res => ({ success: true, error: null, ...res }))
-          .catch(err => ({ success: false, error: err.message, status: 500, data: null })),
-        proxyToTarget(targets[1], bodyB)
-          .then(res => ({ success: true, error: null, ...res }))
-          .catch(err => ({ success: false, error: err.message, status: 500, data: null }))
-      ]
-    } else {
-      console.log(`[Scraper Proxy] Single city search: running on Target A (${targets[0]}) only to prevent duplicates.`)
-      promises = [
-        proxyToTarget(targets[0], bodyJson)
-          .then(res => ({ success: true, error: null, ...res }))
-          .catch(err => ({ success: false, error: err.message, status: 500, data: null }))
-      ]
-    }
+    promises = [
+      proxyToTarget(targets[0], bodyA)
+        .then(res => ({ success: true, error: null, ...res }))
+        .catch(err => ({ success: false, error: err.message, status: 500, data: null })),
+      proxyToTarget(targets[1], bodyB)
+        .then(res => ({ success: true, error: null, ...res }))
+        .catch(err => ({ success: false, error: err.message, status: 500, data: null }))
+    ]
   } else {
     promises = targets.map(target =>
       proxyToTarget(target, bodyJson)
