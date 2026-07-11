@@ -56,6 +56,12 @@ export default function PublishComposerPage() {
     }
   }, [])
 
+  React.useEffect(() => {
+    if (mediaMode === 'cloudinary') {
+      handleScanCloudinaryFolder()
+    }
+  }, [mediaMode])
+
   async function handleGenerateAICaption() {
     setGeneratingCaption(true)
     const toastId = toast.loading('Generating AI caption…')
@@ -278,8 +284,103 @@ export default function PublishComposerPage() {
       </div>
 
       {activeTab === 'compose' && (
-        <form onSubmit={handlePublish} className="grid gap-6 lg:grid-cols-3">
-          {/* Composer */}
+        <form onSubmit={handlePublish} className="grid gap-6 lg:grid-cols-4">
+          {/* Column 1: Media Library Browser Panel */}
+          <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-4 space-y-4">
+            <div className="flex justify-between items-center border-b border-[#2D2D30] pb-2">
+              <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider">📁 Media Library</h3>
+              <div className="flex gap-1 bg-[#1A1A1C] border border-[#2D2D30] rounded-lg p-0.5">
+                <button type="button" onClick={() => setMediaMode('supabase')}
+                  className={`px-2 py-1 rounded text-[8px] font-bold uppercase transition-colors ${mediaMode === 'supabase' ? 'bg-[#2D2D30] text-white' : 'text-gray-500 hover:text-white'}`}>
+                  Drive
+                </button>
+                <button type="button" onClick={() => setMediaMode('cloudinary')}
+                  className={`px-2 py-1 rounded text-[8px] font-bold uppercase transition-colors ${mediaMode === 'cloudinary' ? 'bg-[#2D2D30] text-white' : 'text-gray-500 hover:text-white'}`}>
+                  Cloudinary
+                </button>
+              </div>
+            </div>
+
+            {mediaMode === 'supabase' ? (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('file')} />
+                  <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                    className="w-full px-3 py-2 rounded-xl bg-[#1C1C1F] border border-[#2D2D30] text-gray-300 text-xs font-bold hover:text-white transition-colors disabled:opacity-40 text-center">
+                    {uploading ? '⏳ Uploading…' : '📁 Upload Local File'}
+                  </button>
+                  <div className="text-center text-[10px] text-gray-600 font-bold uppercase">or</div>
+                  <input
+                    value={driveInput}
+                    onChange={e => setDriveInput(e.target.value)}
+                    placeholder="Google Drive share link…"
+                    className="w-full bg-[#1C1C1F] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none"
+                  />
+                  <button type="button" onClick={() => handleMediaUpload('drive')} disabled={uploading || !driveInput.trim()}
+                    className="w-full px-3 py-2 rounded-xl bg-blue-950/40 border border-blue-900/30 text-blue-300 text-xs font-bold hover:bg-blue-900/30 transition-colors disabled:opacity-40">
+                    ☁️ Upload Drive Link
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input ref={cloudinaryFileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('cloudinary_file')} />
+                  <button type="button" onClick={() => cloudinaryFileRef.current?.click()} disabled={uploading}
+                    className="flex-1 px-3 py-2 rounded-xl bg-[#1C1C1F] border border-[#2D2D30] text-gray-400 text-xs font-bold hover:text-white hover:border-gray-500 transition-colors disabled:opacity-40 text-center">
+                    {uploading ? '⏳' : '📤 Upload'}
+                  </button>
+                  <button type="button" onClick={handleScanCloudinaryFolder} disabled={scanningFolder}
+                    className="px-3 py-2 rounded-xl bg-purple-950/40 border border-purple-900/30 text-purple-300 text-xs font-bold hover:bg-purple-900/30 transition-colors">
+                    {scanningFolder ? '⏳' : '🔍 Scan'}
+                  </button>
+                </div>
+                <input
+                  value={cloudinaryFolder}
+                  onChange={e => setCloudinaryFolder(e.target.value)}
+                  placeholder="Cloudinary folder path…"
+                  className="w-full bg-[#1C1C1F] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none"
+                />
+
+                {/* Scanned assets grid */}
+                {cloudinaryAssets.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto p-2 bg-[#0E0E10] border border-[#2D2D30] rounded-xl">
+                    {cloudinaryAssets.map(asset => (
+                      <button
+                        key={asset.publicId}
+                        type="button"
+                        onClick={() => setImageUrl(asset.url)}
+                        className={`relative aspect-square rounded-lg overflow-hidden border-2 ${
+                          imageUrl === asset.url ? 'border-[#E3B859]' : 'border-transparent'
+                        }`}
+                      >
+                        <img src={asset.url} alt="asset" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-10 text-center text-[10px] text-gray-650 uppercase border border-dashed border-[#2D2D30] rounded-xl">
+                    No Cloudinary assets
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Current URL preview inside Media Library column */}
+            {imageUrl && (
+              <div className="border-t border-[#2D2D30] pt-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Attached Asset:</span>
+                  <button type="button" onClick={() => setImageUrl('')} className="text-gray-550 hover:text-red-400 text-[10px]">Remove</button>
+                </div>
+                <div className="relative rounded-xl overflow-hidden border border-[#2D2D30] bg-[#141416]">
+                  <img src={imageUrl} alt="selected" className="w-full max-h-32 object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Column 2 & 3: Composer (Post Form) */}
           <div className="lg:col-span-2 space-y-4">
             {/* Platform selector */}
             <div>
@@ -302,113 +403,17 @@ export default function PublishComposerPage() {
             {/* Caption textarea */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Post Content</label>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Post Caption</label>
                 <span className={`text-[10px] font-mono ${charCount > charLimit * 0.9 ? 'text-red-400' : 'text-gray-500'}`}>{charCount} / {charLimit.toLocaleString()}</span>
               </div>
               <textarea
                 value={content}
                 onChange={e => setContent(e.target.value)}
                 placeholder="Write your post caption here… or use AI to generate one."
-                rows={8}
-                className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors resize-none leading-relaxed"
+                rows={4}
+                className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-650 focus:outline-none focus:border-gray-500 transition-colors resize-none leading-relaxed"
               />
             </div>
-
-            {/* Image / Media Panel */}
-            {selectedPlatforms.includes('instagram') && (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block">Image for Instagram <span className="text-red-400">*</span></label>
-                  {/* Mode switcher tabs */}
-                  <div className="flex gap-1 bg-[#141416] border border-[#2D2D30] rounded-lg p-0.5">
-                    <button type="button" onClick={() => setMediaMode('supabase')}
-                      className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors ${mediaMode === 'supabase' ? 'bg-[#222225] text-white' : 'text-gray-500 hover:text-white'}`}>
-                      Supabase/Drive
-                    </button>
-                    <button type="button" onClick={() => setMediaMode('cloudinary')}
-                      className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors ${mediaMode === 'cloudinary' ? 'bg-[#222225] text-white' : 'text-gray-500 hover:text-white'}`}>
-                      Cloudinary CDN
-                    </button>
-                  </div>
-                </div>
-
-                {mediaMode === 'supabase' ? (
-                  /* Option A: Supabase Upload / Drive Link */
-                  <div className="flex gap-2">
-                    <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('file')} />
-                    <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-                      className="px-3 py-2 rounded-xl bg-[#141416] border border-[#2D2D30] text-gray-400 text-xs font-bold hover:text-white hover:border-gray-500 transition-colors disabled:opacity-40">
-                      {uploading ? '⏳ Uploading…' : '📁 Upload File'}
-                    </button>
-                    <span className="text-gray-600 text-xs self-center">or</span>
-
-                    <input
-                      value={driveInput}
-                      onChange={e => setDriveInput(e.target.value)}
-                      placeholder="Google Drive share link…"
-                      className="flex-1 bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500"
-                    />
-                    <button type="button" onClick={() => handleMediaUpload('drive')} disabled={uploading || !driveInput.trim()}
-                      className="px-3 py-2 rounded-xl bg-blue-950/40 border border-blue-900/30 text-blue-300 text-xs font-bold hover:bg-blue-900/30 transition-colors disabled:opacity-40">
-                      {uploading ? '⏳' : '☁️ Upload'}
-                    </button>
-                  </div>
-                ) : (
-                  /* Option B: Cloudinary Integration */
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <input ref={cloudinaryFileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('cloudinary_file')} />
-                      <button type="button" onClick={() => cloudinaryFileRef.current?.click()} disabled={uploading}
-                        className="px-3 py-2 rounded-xl bg-[#141416] border border-[#2D2D30] text-gray-400 text-xs font-bold hover:text-white hover:border-gray-500 transition-colors disabled:opacity-40">
-                        {uploading ? '⏳ Uploading…' : '☁️ Cloudinary Upload'}
-                      </button>
-                      <span className="text-gray-600 text-xs self-center">or</span>
-
-                      <input
-                        value={cloudinaryFolder}
-                        onChange={e => setCloudinaryFolder(e.target.value)}
-                        placeholder="Cloudinary folder path (e.g. campaign1)…"
-                        className="flex-1 bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white font-mono placeholder-gray-600 focus:outline-none"
-                      />
-                      <button type="button" onClick={handleScanCloudinaryFolder} disabled={scanningFolder}
-                        className="px-3 py-2 rounded-xl bg-purple-950/40 border border-purple-900/30 text-purple-300 text-xs font-bold hover:bg-purple-900/30 transition-colors">
-                        {scanningFolder ? '⏳' : '🔍 Scan Folder'}
-                      </button>
-                    </div>
-
-                    {/* Scanned assets grid */}
-                    {cloudinaryAssets.length > 0 && (
-                      <div className="grid grid-cols-4 gap-2 max-h-32 overflow-y-auto p-2 bg-[#0E0E10] border border-[#2D2D30] rounded-xl">
-                        {cloudinaryAssets.map(asset => (
-                          <button
-                            key={asset.publicId}
-                            type="button"
-                            onClick={() => setImageUrl(asset.url)}
-                            className={`relative aspect-square rounded-lg overflow-hidden border-2 ${
-                              imageUrl === asset.url ? 'border-[#E3B859]' : 'border-transparent'
-                            }`}
-                          >
-                            <img src={asset.url} alt="asset" className="w-full h-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Current URL + Preview */}
-                {imageUrl && (
-                  <div className="space-y-2">
-                    <div className="flex gap-2 items-center">
-                      <input value={imageUrl} onChange={e => setImageUrl(e.target.value)}
-                        className="flex-1 bg-[#141416] border border-green-800/40 rounded-xl px-3 py-2 text-[10px] text-green-400 font-mono focus:outline-none" />
-                      <button type="button" onClick={() => setImageUrl('')} className="text-gray-500 hover:text-red-400 text-xs">✕</button>
-                    </div>
-                    <img src={imageUrl} alt="preview" className="rounded-xl max-h-40 object-cover border border-[#2D2D30]" onError={e => (e.currentTarget.style.display = 'none')} />
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Schedule */}
             <div>
@@ -446,7 +451,7 @@ export default function PublishComposerPage() {
             )}
           </div>
 
-          {/* Preview panel */}
+          {/* Column 4: Live Preview & Requirements Panel */}
           <div className="space-y-4">
             <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-4 space-y-3">
               <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Preview</h3>
