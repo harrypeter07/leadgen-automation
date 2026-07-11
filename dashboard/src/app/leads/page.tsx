@@ -195,7 +195,15 @@ export default function LeadsPage() {
       if (status)              params.set('status',   status)
       if (city.trim())         params.set('city',     city.trim())
       if (category)            params.set('category', category)
-      if (selectedJobId)       params.set('job_id',   selectedJobId)
+      if (selectedJobId) {
+        const job = jobs.find(j => j.id === selectedJobId)
+        if (job && (job as any).subJobs && (job as any).subJobs.length > 0) {
+          const ids = (job as any).subJobs.map((sj: any) => sj.id).join(',')
+          params.set('job_ids', ids)
+        } else {
+          params.set('job_id', selectedJobId)
+        }
+      }
       if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim())
 
       const res = await fetch(`/api/leads?${params.toString()}`)

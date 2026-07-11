@@ -97,7 +97,16 @@ export default function ScraperPage() {
         return
       }
       try {
-        const jobIdsParam = selectedEnrichJobIds.join(',')
+        const resolvedJobIds: string[] = []
+        selectedEnrichJobIds.forEach(id => {
+          const job = jobs.find(j => j.id === id)
+          if (job && (job as any).subJobs && (job as any).subJobs.length > 0) {
+            (job as any).subJobs.forEach((sj: any) => resolvedJobIds.push(sj.id))
+          } else {
+            resolvedJobIds.push(id)
+          }
+        })
+        const jobIdsParam = resolvedJobIds.join(',')
         const res = await fetch(`/api/leads?job_ids=${jobIdsParam}&limit=1000`)
         const data = await res.json()
         if (res.ok && data.leads) {
@@ -108,7 +117,7 @@ export default function ScraperPage() {
       }
     }
     loadLeadsForEnrichment()
-  }, [selectedEnrichJobIds])
+  }, [selectedEnrichJobIds, jobs])
 
   const enrichStats = React.useMemo(() => {
     const total = enrichLeads.length
@@ -192,7 +201,16 @@ export default function ScraperPage() {
     
     // Refresh leads list & counts
     if (selectedEnrichJobIds.length > 0) {
-      const jobIdsParam = selectedEnrichJobIds.join(',')
+      const resolvedJobIds: string[] = []
+      selectedEnrichJobIds.forEach(id => {
+        const job = jobs.find(j => j.id === id)
+        if (job && (job as any).subJobs && (job as any).subJobs.length > 0) {
+          (job as any).subJobs.forEach((sj: any) => resolvedJobIds.push(sj.id))
+        } else {
+          resolvedJobIds.push(id)
+        }
+      })
+      const jobIdsParam = resolvedJobIds.join(',')
       const res = await fetch(`/api/leads?job_ids=${jobIdsParam}&limit=1000`)
       const data = await res.json()
       if (res.ok && data.leads) {

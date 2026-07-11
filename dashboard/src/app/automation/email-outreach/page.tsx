@@ -29,6 +29,7 @@ interface ScraperJob {
   city: string
   created_at: string
   status: string
+  subJobs?: ScraperJob[]
 }
 
 interface Lead {
@@ -126,7 +127,16 @@ export default function EmailOutreachPage() {
     }
     setLoadingLeads(true)
     try {
-      const jobIdsParam = selectedJobIds.join(',')
+      const resolvedJobIds: string[] = []
+      selectedJobIds.forEach(id => {
+        const job = jobs.find(j => j.id === id)
+        if (job && job.subJobs && job.subJobs.length > 0) {
+          job.subJobs.forEach((sj: ScraperJob) => resolvedJobIds.push(sj.id))
+        } else {
+          resolvedJobIds.push(id)
+        }
+      })
+      const jobIdsParam = resolvedJobIds.join(',')
       const res = await fetch(`/api/leads?job_ids=${jobIdsParam}&has_email=true&limit=500`)
       const data = await res.json()
       if (res.ok && data.leads) {
@@ -746,7 +756,13 @@ export default function EmailOutreachPage() {
               ) : (
                 jobs.map(job => {
                   const isSelected = selectedJobIds.includes(job.id)
-                  const leadCount  = jobLeadsCounts[job.id] || 0
+                  const getLeadCount = (j: ScraperJob) => {
+                    if (j.subJobs && j.subJobs.length > 0) {
+                      return j.subJobs.reduce((sum: number, sj: ScraperJob) => sum + (jobLeadsCounts[sj.id] || 0), 0)
+                    }
+                    return jobLeadsCounts[j.id] || 0
+                  }
+                  const leadCount = getLeadCount(job)
                   return (
                     <div
                       key={job.id}
