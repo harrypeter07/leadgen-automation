@@ -149,12 +149,10 @@ export default function ScraperPage() {
     let doneCount = 0
     let foundCount = 0
 
-    for (const lead of enrichableLeads) {
-      if (shouldStopEnrichRef.current) {
-        toast.dismiss(toastId)
-        toast.success('Enrichment scan stopped by user.')
-        break
-      }
+    const mode = localStorage.getItem('scraper_backend_mode') || 'primary'
+
+    const runScanOnLead = async (lead: any, targetMode: 'primary' | 'secondary') => {
+      if (shouldStopEnrichRef.current) return
 
       setEnrichProgress(prev => ({
         ...prev,
@@ -163,9 +161,14 @@ export default function ScraperPage() {
       }))
 
       try {
-        const res = await fetchWithRouting('/api/scraper/enrich/website-email', {
+        const res = await fetch('/api/scraper/enrich/website-email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-backend-mode': targetMode,
+            'x-backend-primary': typeof window !== 'undefined' ? localStorage.getItem('scraper_primary_backend') || 'https://scraper-auto.up.railway.app' : 'https://scraper-auto.up.railway.app',
+            'x-backend-secondary': typeof window !== 'undefined' ? localStorage.getItem('scraper_secondary_backend') || 'https://leadgen-automation-production-12c6.up.railway.app' : 'https://leadgen-automation-production-12c6.up.railway.app',
+          },
           body: JSON.stringify({ website: lead.website }),
         })
         const data = await res.json()
@@ -185,7 +188,7 @@ export default function ScraperPage() {
           }
         }
       } catch (err) {
-        console.error(`Failed to enrich email for ${lead.name}:`, err)
+        console.error(`Failed to enrich email for ${lead.name} on ${targetMode}:`, err)
       }
 
       doneCount++
@@ -193,6 +196,32 @@ export default function ScraperPage() {
         ...prev,
         done: doneCount,
       }))
+    }
+
+    if (mode === 'both' && enrichableLeads.length >= 2) {
+      const mid = Math.ceil(enrichableLeads.length / 2)
+      const listA = enrichableLeads.slice(0, mid)
+      const listB = enrichableLeads.slice(mid)
+
+      console.log(`[Enrichment] Splitting list: scanning ${listA.length} leads on Primary and ${listB.length} leads on Secondary`)
+
+      const runList = async (list: any[], targetMode: 'primary' | 'secondary') => {
+        for (const lead of list) {
+          if (shouldStopEnrichRef.current) break
+          await runScanOnLead(lead, targetMode)
+        }
+      }
+
+      await Promise.all([
+        runList(listA, 'primary'),
+        runList(listB, 'secondary')
+      ])
+    } else {
+      const activeTarget: 'primary' | 'secondary' = mode === 'secondary' ? 'secondary' : 'primary'
+      for (const lead of enrichableLeads) {
+        if (shouldStopEnrichRef.current) break
+        await runScanOnLead(lead, activeTarget)
+      }
     }
 
     setEnriching(false)
