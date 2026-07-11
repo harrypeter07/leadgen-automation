@@ -80,6 +80,146 @@ export default function ScraperPage() {
   const [selectedJob, setSelectedJob] = useState<ScrapeJob | null>(null)
   const [isPaused, setIsPaused] = useState(false)
 
+  // Enrichment States
+  const [selectedEnrichJobIds, setSelectedEnrichJobIds] = useState<string[]>([])
+  const [enrichLeads, setEnrichLeads] = useState<any[]>([])
+  const [enriching, setEnriching] = useState(false)
+  const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0, currentName: '', currentUrl: '' })
+  const [foundEmails, setFoundEmails] = useState<{ name: string; email: string; website: string }[]>([])
+  const [shouldStopEnrich, setShouldStopEnrich] = useState(false)
+  const shouldStopEnrichRef = React.useRef(false)
+
+  // Fetch leads for enrichment jobs selection
+  useEffect(() => {
+    async function loadLeadsForEnrichment() {
+      if (selectedEnrichJobIds.length === 0) {
+        setEnrichLeads([])
+        return
+      }
+      try {
+        const resolvedJobIds: string[] = []
+        selectedEnrichJobIds.forEach(id => {
+          const job = jobs.find(j => j.id === id)
+          if (job && (job as any).subJobs && (job as any).subJobs.length > 0) {
+            (job as any).subJobs.forEach((sj: any) => resolvedJobIds.push(sj.id))
+          } else {
+            resolvedJobIds.push(id)
+          }
+        })
+        const jobIdsParam = resolvedJobIds.join(',')
+        const res = await fetch(`/api/leads?job_ids=${jobIdsParam}&limit=1000`)
+        const data = await res.json()
+        if (res.ok && data.leads) {
+          setEnrichLeads(data.leads)
+        }
+      } catch (err) {
+        console.error('Failed to load leads for enrichment count:', err)
+      }
+    }
+    loadLeadsForEnrichment()
+  }, [selectedEnrichJobIds, jobs])
+
+  const enrichStats = React.useMemo(() => {
+    const total = enrichLeads.length
+    const withEmail = enrichLeads.filter(l => !!l.email).length
+    const enrichable = enrichLeads.filter(l => !l.email && l.website && l.website.startsWith('http')).length
+    return { total, withEmail, enrichable }
+  }, [enrichLeads])
+
+  const stopEnrichment = () => {
+    shouldStopEnrichRef.current = true
+    setShouldStopEnrich(true)
+  }
+
+  async function startEnrichment() {
+    const enrichableLeads = enrichLeads.filter(l => !l.email && l.website && l.website.startsWith('http'))
+    if (enrichableLeads.length === 0) {
+      toast.error('No enrichable leads found (leads must have a website but no email).')
+      return
+    }
+
+    setEnriching(true)
+    setShouldStopEnrich(false)
+    shouldStopEnrichRef.current = false
+    setFoundEmails([])
+    setEnrichProgress({ done: 0, total: enrichableLeads.length, currentName: '', currentUrl: '' })
+
+    const toastId = toast.loading(`Starting website email scan for ${enrichableLeads.length} leads...`)
+
+    let doneCount = 0
+    let foundCount = 0
+
+    for (const lead of enrichableLeads) {
+      if (shouldStopEnrichRef.current) {
+        toast.dismiss(toastId)
+        toast.success('Enrichment scan stopped by user.')
+        break
+      }
+
+      setEnrichProgress(prev => ({
+        ...prev,
+        currentName: lead.name,
+        currentUrl: lead.website,
+      }))
+
+      try {
+        const res = await fetchWithRouting('/api/scraper/enrich/website-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ website: lead.website }),
+        })
+        const data = await res.json()
+
+        if (res.ok && data.email) {
+          const email = data.email.trim()
+          // Update in DB
+          const updateRes = await fetch('/api/leads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: lead.id, email }),
+          })
+          
+          if (updateRes.ok) {
+            foundCount++
+            setFoundEmails(prev => [{ name: lead.name, email, website: lead.website }, ...prev])
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to enrich email for ${lead.name}:`, err)
+      }
+
+      doneCount++
+      setEnrichProgress(prev => ({
+        ...prev,
+        done: doneCount,
+      }))
+    }
+
+    setEnriching(false)
+    toast.dismiss(toastId)
+    toast.success(`🎉 Completed email scan! Scanned ${doneCount} sites, found & saved ${foundCount} emails.`)
+    
+    // Refresh leads list & counts
+    if (selectedEnrichJobIds.length > 0) {
+      const resolvedJobIds: string[] = []
+      selectedEnrichJobIds.forEach(id => {
+        const job = jobs.find(j => j.id === id)
+        if (job && (job as any).subJobs && (job as any).subJobs.length > 0) {
+          (job as any).subJobs.forEach((sj: any) => resolvedJobIds.push(sj.id))
+        } else {
+          resolvedJobIds.push(id)
+        }
+      })
+      const jobIdsParam = resolvedJobIds.join(',')
+      const res = await fetch(`/api/leads?job_ids=${jobIdsParam}&limit=1000`)
+      const data = await res.json()
+      if (res.ok && data.leads) {
+        setEnrichLeads(data.leads)
+      }
+    }
+    fetchJobs()
+  }
+
   // API Routing Configurations
   const [primaryBackend, setPrimaryBackend] = useState('')
   const [secondaryBackend, setSecondaryBackend] = useState('')
@@ -822,6 +962,143 @@ export default function ScraperPage() {
               </div>
             </div>
           )}
+
+          {/* 📧 Website Email Enrichment Hub */}
+          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="font-bold text-[#1C1C1E] text-md uppercase tracking-wider text-[11px] text-gray-500 flex items-center gap-2">
+                  📧 Website Email Enrichment
+                </h3>
+                <p className="text-[10px] text-gray-400 mt-0.5 font-medium">
+                  Scan websites of scraped businesses to extract missing emails.
+                </p>
+              </div>
+              {enriching && (
+                <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded animate-pulse">
+                  ⚡ Scanning...
+                </span>
+              )}
+            </div>
+
+            {/* Job Selection Checkboxes */}
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Select Completed Jobs to Scan</label>
+              <div className="border border-[#E4E3DD] rounded-xl bg-[#F4F3EF] p-3 max-h-[140px] overflow-y-auto space-y-2 shadow-inner">
+                {jobs.filter(j => ['completed', 'stopped', 'failed'].includes(j.status)).length === 0 ? (
+                  <p className="text-[10px] text-gray-400 py-4 text-center font-semibold">No completed, stopped, or failed scrape jobs found.</p>
+                ) : (
+                  jobs.filter(j => ['completed', 'stopped', 'failed'].includes(j.status)).map(job => {
+                    const isChecked = selectedEnrichJobIds.includes(job.id)
+                    return (
+                      <label key={job.id} className="flex items-start gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white cursor-pointer select-none transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            setSelectedEnrichJobIds(prev =>
+                              prev.includes(job.id) ? prev.filter(id => id !== job.id) : [...prev, job.id]
+                            )
+                          }}
+                          className="accent-[#1C1C1E] rounded mt-0.5 cursor-pointer"
+                        />
+                        <div className="flex-1 min-w-0 text-[11px] font-sans">
+                          <div className="font-bold text-gray-800 truncate">{job.keyword} in {job.city}</div>
+                          <div className="text-[9px] text-gray-450 mt-0.5 font-semibold">
+                            {new Date(job.created_at).toLocaleDateString()} · {job.progress} leads
+                          </div>
+                        </div>
+                      </label>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Selected Jobs Stats */}
+            {selectedEnrichJobIds.length > 0 && (
+              <div className="grid grid-cols-3 gap-2.5 text-center text-xs">
+                <div className="rounded-xl bg-[#F4F3EF] p-2.5 border border-[#E4E3DD]">
+                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block">Total Leads</span>
+                  <span className="font-bold text-gray-800 text-sm mt-0.5 block">{enrichStats.total}</span>
+                </div>
+                <div className="rounded-xl bg-[#F4F3EF] p-2.5 border border-[#E4E3DD]">
+                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block">Has Email</span>
+                  <span className="font-bold text-green-600 text-sm mt-0.5 block">{enrichStats.withEmail}</span>
+                </div>
+                <div className="rounded-xl bg-[#F4F3EF] p-2.5 border border-[#E4E3DD]">
+                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block">No Email</span>
+                  <span className="font-bold text-amber-600 text-sm mt-0.5 block">{enrichStats.enrichable}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Run and Stop Buttons */}
+            {!enriching ? (
+              <button
+                type="button"
+                onClick={startEnrichment}
+                disabled={selectedEnrichJobIds.length === 0 || enrichStats.enrichable === 0}
+                className="w-full py-3.5 rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-2"
+              >
+                🔍 Scan & Enrich Missing Emails
+              </button>
+            ) : (
+              <div className="space-y-3.5 pt-1">
+                {/* Progress bar */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[10px] font-bold text-gray-500">
+                    <span className="max-w-[200px] truncate">Scanning: {enrichProgress.currentName}</span>
+                    <span>{enrichProgress.done} / {enrichProgress.total} Leads</span>
+                  </div>
+                  <div className="w-full bg-[#F4F3EF] rounded-full h-3 overflow-hidden p-0.5 border border-[#E4E3DD]">
+                    <div
+                      className="bg-purple-600 h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.round((enrichProgress.done / enrichProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[9px] text-gray-400 font-mono truncate">{enrichProgress.currentUrl}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={stopEnrichment}
+                  className="w-full py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase tracking-wider transition-all"
+                >
+                  ⏹️ Stop Scan
+                </button>
+              </div>
+            )}
+
+            {/* Found Emails Stream (Success Board) */}
+            {foundEmails.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-gray-150">
+                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                  📬 Successfully Found & Saved Emails ({foundEmails.length})
+                </span>
+                <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-0.5">
+                  {foundEmails.map((fe, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-[#F4F3EF] border border-green-200 rounded-lg px-3 py-2 shadow-inner text-[10px] animate-fadeIn">
+                      <div className="min-w-0 flex-1 pr-2">
+                        <span className="font-bold text-gray-800 block truncate">{fe.name}</span>
+                        <a
+                          href={fe.website}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[8px] text-gray-400 hover:text-[#E3B859] truncate block mt-0.5 font-medium"
+                        >
+                          {fe.website.replace(/^https?:\/\//, '')}
+                        </a>
+                      </div>
+                      <span className="font-mono font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">
+                        {fe.email}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Job History list */}
           <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">

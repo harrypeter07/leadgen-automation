@@ -32,11 +32,11 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/meta/instagram/thread-config
-// body: { senderId: string, enabled?: boolean, firstReplyDelay?: number, conversationDelay?: number, persona?: string }
+// body: { senderId: string, enabled?: boolean, firstReplyDelay?: number, conversationDelay?: number, persona?: string, staticReply?: string }
 // Updates custom configuration for a specific conversation/thread
 export async function POST(req: NextRequest) {
   try {
-    const { senderId, enabled, firstReplyDelay, conversationDelay, persona } = await req.json()
+    const { senderId, enabled, firstReplyDelay, conversationDelay, persona, staticReply, staticReplyEnabled, responseLength } = await req.json()
     if (!senderId) {
       return NextResponse.json({ error: 'senderId is required' }, { status: 400 })
     }
@@ -62,6 +62,9 @@ export async function POST(req: NextRequest) {
       ...(firstReplyDelay !== undefined ? { firstReplyDelay } : {}),
       ...(conversationDelay !== undefined ? { conversationDelay } : {}),
       ...(persona !== undefined ? { persona } : {}),
+      ...(staticReply !== undefined ? { staticReply } : {}),
+      ...(staticReplyEnabled !== undefined ? { staticReplyEnabled } : {}),
+      ...(responseLength !== undefined ? { responseLength } : {}),
     }
 
     // 3. Save back to meta_config
@@ -75,6 +78,22 @@ export async function POST(req: NextRequest) {
       }, { onConflict: 'key' })
 
     if (error) throw error
+
+    // Also sync `enabled` to THREAD_AUTOPILOT_OVERRIDES so the header Autopilot
+    // button reflects the same state as the Chat Settings modal toggle
+    if (enabled !== undefined) {
+      const { data: overridesRow } = await supabaseAdmin
+        .from('meta_config').select('value').eq('key', 'THREAD_AUTOPILOT_OVERRIDES').single()
+      let overrides: Record<string, boolean> = {}
+      try { overrides = overridesRow?.value ? JSON.parse(overridesRow.value) : {} } catch {}
+      overrides[senderId] = enabled
+      await supabaseAdmin.from('meta_config').upsert({
+        key: 'THREAD_AUTOPILOT_OVERRIDES',
+        value: JSON.stringify(overrides),
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' })
+    }
 
     return NextResponse.json({ success: true, configs })
   } catch (err: any) {

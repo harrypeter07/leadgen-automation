@@ -47,14 +47,19 @@ Only return raw JSON format without markdown blocks.`
       {
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
-          maxOutputTokens: 500,
+          maxOutputTokens: 1500, // Increased from 500 to allow complete generation without truncation
           temperature: 0.7,
           responseMimeType: 'application/json'
         },
       },
       apiKey
     )
-    const parsed = JSON.parse(rawText)
+
+    let cleanedText = rawText.trim()
+    if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.replace(/^```(json)?/, '').replace(/```$/, '').trim()
+    }
+    const parsed = JSON.parse(cleanedText)
 
     return NextResponse.json({ success: true, ...parsed })
   } catch (err: any) {

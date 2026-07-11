@@ -24,6 +24,48 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ error: 'Verification failed.' }, { status: 403 })
 }
 
+// Helper to record auto-reply events
+async function logAutoReplyEvent(event: {
+  timestamp: string
+  platform: string
+  senderId: string
+  message: string
+  matchedType: 'static_override' | 'keyword' | 'gemini_ai' | 'none'
+  replyContent: string
+  status: 'sent' | 'skipped' | 'failed'
+  error?: string
+  modelUsed?: string
+}) {
+  try {
+    const { data } = await supabaseAdmin
+      .from('meta_config')
+      .select('value')
+      .eq('key', 'AUTO_REPLY_LOGS')
+      .single()
+
+    let logs: any[] = []
+    if (data?.value) {
+      try {
+        logs = JSON.parse(data.value)
+      } catch {}
+    }
+
+    logs.unshift(event)
+    logs = logs.slice(0, 50)
+
+    await supabaseAdmin
+      .from('meta_config')
+      .upsert({
+        key: 'AUTO_REPLY_LOGS',
+        value: JSON.stringify(logs),
+        encrypted: false,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' })
+  } catch (err: any) {
+    console.error('[logAutoReplyEvent] Error saving log:', err.message)
+  }
+}
+
 // Helper to check rules and send AI/Keyword replies
 async function handleAutoReply(
   platform: 'instagram' | 'messenger',
@@ -49,7 +91,9 @@ async function handleAutoReply(
         'THREAD_AUTOPILOT_OVERRIDES',
         'AI_FIRST_REPLY_DELAY',
         'AI_CONVERSATION_DELAY',
-        'THREAD_AI_CONFIGS'
+        'THREAD_AI_CONFIGS',
+        'AI_STATIC_REPLY_OVERRIDE',
+        'AI_STATIC_REPLY_ENABLED'
       ])
 
     const settings: Record<string, string> = {}
@@ -90,19 +134,45 @@ async function handleAutoReply(
       ? Number(threadConfig.conversationDelay)
       : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 2)
 
+    // 4. Static test reply override
+    const staticReplyEnabled = threadConfig.staticReplyEnabled !== undefined
+      ? !!threadConfig.staticReplyEnabled
+      : (settings.AI_STATIC_REPLY_ENABLED === 'true')
+
+    const staticReply = threadConfig.staticReply !== undefined
+      ? threadConfig.staticReply
+      : (settings.AI_STATIC_REPLY_OVERRIDE || '')
+
+    // Response length → token limits
+    const responseLength: 'short' | 'medium' | 'long' = threadConfig.responseLength || 'medium'
+    const maxTokensMap = { short: 60, medium: 150, long: 350 }
+
     const textLower = messageText.toLowerCase()
     let replied = false
     let replyContent = ''
+    let matchedType: 'static_override' | 'keyword' | 'gemini_ai' | 'none' = 'none'
+    let modelUsed = ''
 
-    // 1. Keyword check
-    for (const rule of rules) {
-      const keywords = Array.isArray(rule.keywords) ? rule.keywords : String(rule.keywords || '').split(',')
-      const matched = keywords.some((kw: string) => textLower.includes(kw.trim().toLowerCase()))
-      if (matched && rule.reply) {
-        console.log(`[AutoReply] Keyword match for "${messageText}".`)
-        replyContent = rule.reply
-        replied = true
-        break
+    // 0. Static Reply Override check
+    if (staticReplyEnabled && staticReply.trim()) {
+      console.log(`[AutoReply] Static reply override matched: "${staticReply}"`)
+      replyContent = staticReply.trim()
+      replied = true
+      matchedType = 'static_override'
+    }
+
+    // 1. Keyword check (only if not already replied by static override)
+    if (!replied) {
+      for (const rule of rules) {
+        const keywords = Array.isArray(rule.keywords) ? rule.keywords : String(rule.keywords || '').split(',')
+        const matched = keywords.some((kw: string) => textLower.includes(kw.trim().toLowerCase()))
+        if (matched && rule.reply) {
+          console.log(`[AutoReply] Keyword match for "${messageText}".`)
+          replyContent = rule.reply
+          replied = true
+          matchedType = 'keyword'
+          break
+        }
       }
     }
 
@@ -111,17 +181,32 @@ async function handleAutoReply(
       console.log(`[AutoReply] Generating AI response for "${messageText}"...`)
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
       const { generateWithGemini } = await import('@/lib/gemini')
-      const { text: aiReply } = await generateWithGemini(
+      const lengthInstruction = responseLength === 'short'
+        ? 'Reply in MAXIMUM 1 short sentence. Be very concise.'
+        : responseLength === 'long'
+        ? 'Reply in 4-5 sentences. Be expressive and detailed.'
+        : 'Reply in 2-3 sentences. Be natural and conversational.'
+      const systemPrompt = `${chatbotPersona}
+
+CRITICAL RULES (never break these):
+- ${lengthInstruction}
+- You are replying to an Instagram DM.
+- NEVER admit you are an AI, bot, language model, ChatGPT, Gemini, or any AI system. If asked, deflect in character (e.g. "Haha, why would you think that? 😄").
+- Stay strictly in character as described above at ALL times.
+- Respond naturally. No markdown, no asterisks, no bullet points — plain conversational text only.`
+      const { text: aiReply, model } = await generateWithGemini(
         {
-          system_instruction: { parts: [{ text: chatbotPersona }] },
+          system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: 'user', parts: [{ text: messageText }] }],
-          generationConfig: { maxOutputTokens: 1000, temperature: 0.7 },
+          generationConfig: { maxOutputTokens: maxTokensMap[responseLength], temperature: 0.75 },
         },
         apiKey
       )
       if (aiReply.trim()) {
         replyContent = aiReply.trim()
         replied = true
+        matchedType = 'gemini_ai'
+        modelUsed = model
       }
     }
 
@@ -169,20 +254,83 @@ async function handleAutoReply(
       }
 
       const delaySec = isFirstReply ? firstReplyDelay : conversationDelay
+
+      // Show typing indicator to recipient (gives real-time "typing..." bubble)
+      if (platform === 'instagram') {
+        await InstagramService.sendTypingIndicator(senderId, 'typing_on').catch(() => {})
+      }
+
       if (delaySec > 0) {
         console.log(`[AutoReply] Sleeping for ${delaySec} seconds before dispatching reply...`)
         await new Promise(resolve => setTimeout(resolve, delaySec * 1000))
       }
 
       console.log(`[AutoReply] Sending reply: "${replyContent.slice(0, 60)}..."`)
+      let sendSuccess = false
+      let sendError = ''
       if (platform === 'instagram') {
-        await InstagramService.sendDM(senderId, replyContent)
+        const sendRes = await InstagramService.sendDM(senderId, replyContent)
+        sendSuccess = sendRes.success
+        sendError = sendRes.error?.message || ''
       } else {
-        await FacebookService.sendMessage(senderId, replyContent)
+        const sendRes = await FacebookService.sendMessage(senderId, replyContent)
+        sendSuccess = sendRes.success
+        sendError = sendRes.error?.message || ''
       }
+
+      if (sendSuccess) {
+        // Log success
+        await logAutoReplyEvent({
+          timestamp: new Date().toISOString(),
+          platform,
+          senderId,
+          message: messageText,
+          matchedType,
+          replyContent,
+          status: 'sent',
+          modelUsed
+        })
+      } else {
+        console.error(`[AutoReply] sendDM failed: ${sendError}`)
+        await logAutoReplyEvent({
+          timestamp: new Date().toISOString(),
+          platform,
+          senderId,
+          message: messageText,
+          matchedType,
+          replyContent,
+          status: 'failed',
+          error: sendError,
+          modelUsed
+        })
+      }
+    } else {
+      // Log skipped
+      await logAutoReplyEvent({
+        timestamp: new Date().toISOString(),
+        platform,
+        senderId,
+        message: messageText,
+        matchedType: 'none',
+        replyContent: '',
+        status: 'skipped'
+      })
     }
   } catch (err: any) {
     console.error('[AutoReply] Processor error:', err.message)
+    // Log failure
+    try {
+      await logAutoReplyEvent({
+        timestamp: new Date().toISOString(),
+        platform,
+        senderId,
+        message: messageText,
+        matchedType: 'none',
+        replyContent: '',
+        status: 'failed',
+        error: err.message
+      })
+    } catch {}
   }
 }
 
@@ -217,8 +365,8 @@ export async function POST(req: NextRequest) {
             const senderId = msgEvent.sender?.id
             const text = msgEvent.message?.text
             if (senderId && text) {
-              // Handle in background to keep response under 20s
-              handleAutoReply(platform, senderId, text)
+              // Await execution so Node runtime does not freeze the request context midway
+              await handleAutoReply(platform, senderId, text)
             }
           }
         }

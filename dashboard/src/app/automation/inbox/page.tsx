@@ -273,9 +273,14 @@ export default function SocialInboxPage() {
   const [showThreadSettings, setShowThreadSettings] = useState(false)
   const [isTyping, setIsTyping]             = useState(false)
 
+  // Webhook Logs Panel
+  const [showLogsPanel, setShowLogsPanel]   = useState(false)
+  const [logs, setLogs]                     = useState<any[]>([])
+
   // Thread specific autopilot state overrides
   const [autopilotOverrides, setAutopilotOverrides] = useState<Record<string, boolean>>({})
   const [globalAutopilotEnabled, setGlobalAutopilotEnabled] = useState(false)
+  const [threadConfigs, setThreadConfigs]                   = useState<Record<string, any>>({})
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -294,17 +299,22 @@ export default function SocialInboxPage() {
   // ── Autopilot settings ─────────────────────────────────────────────────────
   const fetchAutopilotSettings = useCallback(async () => {
     try {
-      const [overridesRes, configRes] = await Promise.all([
+      const [overridesRes, configRes, threadConfigsRes] = await Promise.all([
         fetch('/api/meta/instagram/thread-autopilot'),
         fetch('/api/meta/instagram/auto-reply'),
+        fetch('/api/meta/instagram/thread-config'),
       ])
       const overridesData = await overridesRes.json()
       const configData = await configRes.json()
+      const threadConfigsData = await threadConfigsRes.json()
       if (overridesRes.ok && overridesData.success) {
         setAutopilotOverrides(overridesData.overrides || {})
       }
       if (configRes.ok && configData.success) {
         setGlobalAutopilotEnabled(configData.chatbotEnabled || false)
+      }
+      if (threadConfigsRes.ok && threadConfigsData.success) {
+        setThreadConfigs(threadConfigsData.configs || {})
       }
     } catch (err) {
       console.error('Failed to load autopilot settings:', err)
@@ -313,9 +323,71 @@ export default function SocialInboxPage() {
 
   useEffect(() => { fetchAutopilotSettings() }, [fetchAutopilotSettings])
 
+  // ── Logs panel helpers ─────────────────────────────────────────────────────
+  const fetchLogs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/meta/instagram/auto-reply-logs')
+      const data = await res.json()
+      if (res.ok && data.success) setLogs(data.logs || [])
+    } catch (err) {
+      console.error('Failed to fetch auto-reply logs:', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (showLogsPanel) fetchLogs()
+  }, [showLogsPanel, fetchLogs])
+
+  const handleClearLogs = useCallback(async () => {
+    try {
+      await fetch('/api/meta/instagram/auto-reply-logs', { method: 'DELETE' })
+      setLogs([])
+      toast.success('Logs cleared')
+    } catch {
+      toast.error('Failed to clear logs')
+    }
+  }, [])
+
+  // ── Polling-based auto-reply (fallback when webhooks don't deliver DMs) ──────
+  const [pollStatus, setPollStatus] = useState<{ newMessages: number; repliesSent: number; polledAt: string } | null>(null)
+  const [isPolling, setIsPolling] = useState(false)
+
+  const runPollReplies = useCallback(async (silent = true) => {
+    if (isPolling) return
+    setIsPolling(true)
+    try {
+      const res = await fetch('/api/meta/instagram/poll-replies')
+      const data = await res.json()
+      if (data.success) {
+        setPollStatus({ newMessages: data.newMessages, repliesSent: data.repliesSent, polledAt: data.polledAt })
+        if (!silent && data.newMessages > 0) {
+          toast.success(`Polled: ${data.newMessages} new message(s), ${data.repliesSent} reply(ies) sent`)
+        }
+        // Refresh logs panel if it's open
+        if (showLogsPanel && data.repliesSent > 0) fetchLogs()
+      }
+    } catch (err) {
+      console.error('[PollReplies] Failed:', err)
+    } finally {
+      setIsPolling(false)
+    }
+  }, [isPolling, showLogsPanel, fetchLogs])
+
+  // Auto-poll every 30 seconds
+  useEffect(() => {
+    runPollReplies(true) // immediate first run
+    const interval = setInterval(() => runPollReplies(true), 30_000)
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const senderId = selectedThread?.participantId || selectedThread?.id.replace('ig_', '')
+  // Priority: threadConfig.enabled (Chat Settings modal) > THREAD_AUTOPILOT_OVERRIDES (header button) > global
+  const threadConfig = senderId ? (threadConfigs[senderId] || {}) : {}
   const threadOverride = senderId ? autopilotOverrides[senderId] : undefined
-  const isAutopilotActive = threadOverride !== undefined ? threadOverride : globalAutopilotEnabled
+  const isAutopilotActive = threadConfig.enabled !== undefined
+    ? threadConfig.enabled
+    : (threadOverride !== undefined ? threadOverride : globalAutopilotEnabled)
 
   async function toggleThreadAutopilot() {
     if (!selectedThread || !senderId) return
@@ -718,8 +790,10 @@ export default function SocialInboxPage() {
             </div>
           </div>
 
-          {/* ── Chat Panel ──────────────────────────────────────────────────── */}
-          <div className="flex-1 flex flex-col bg-gray-50 dark:bg-[#0A0A0C]">
+          {/* ── Chat & Logs Panel Wrapper ─────────────────────────────────────────── */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* ── Chat Panel ──────────────────────────────────────────────────── */}
+            <div className="flex-1 flex flex-col bg-gray-50 dark:bg-[#0A0A0C]">
             {!selectedThread ? (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-400 dark:text-gray-600 gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-white dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] flex items-center justify-center text-3xl shadow-sm">
@@ -775,6 +849,29 @@ export default function SocialInboxPage() {
                       }`}
                     >
                       🤖 Autopilot: {isAutopilotActive ? 'ON' : 'OFF'}
+                    </button>
+                    <button
+                      onClick={() => setShowLogsPanel(prev => !prev)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        showLogsPanel
+                          ? 'bg-amber-100 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700/50 text-amber-700 dark:text-amber-300'
+                          : 'bg-white dark:bg-[#141416] border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-500 hover:text-slate-800 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-500'
+                      }`}
+                      title="Toggle Webhook Logs Panel"
+                    >
+                      📜 Logs {showLogsPanel ? 'ON' : 'OFF'}
+                    </button>
+                    <button
+                      onClick={() => runPollReplies(false)}
+                      disabled={isPolling}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 ${
+                        isPolling
+                          ? 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700/50 text-green-700 dark:text-green-400 animate-pulse'
+                          : 'bg-white dark:bg-[#141416] border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-500 hover:text-green-700 dark:hover:text-green-400 hover:border-green-400 dark:hover:border-green-600'
+                      }`}
+                      title={pollStatus ? `Last poll: ${new Date(pollStatus.polledAt).toLocaleTimeString()} — ${pollStatus.newMessages} new msgs, ${pollStatus.repliesSent} sent` : 'Poll Instagram DMs now'}
+                    >
+                      {isPolling ? '⏳' : '🔄'} {isPolling ? 'Polling…' : 'Poll Now'}
                     </button>
                     <button
                       onClick={() => setShowCompose(true)}
@@ -895,8 +992,75 @@ export default function SocialInboxPage() {
               </>
             )}
           </div>
+
+          {/* Webhook Execution Logs Panel */}
+          {showLogsPanel && (
+            <div className="w-80 flex-shrink-0 flex flex-col bg-white dark:bg-[#0E0E10] border-l border-gray-200 dark:border-[#2D2D30] overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416]">
+                <span className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                  📜 Webhook Logs
+                </span>
+                <div className="flex items-center gap-1.5 font-sans">
+                  <button
+                    onClick={handleClearLogs}
+                    className="text-[9px] font-bold text-red-500 hover:underline hover:scale-105 active:scale-95 transition-all"
+                  >
+                    Clear
+                  </button>
+                  <span className="text-gray-300 dark:text-gray-700">|</span>
+                  <button
+                    onClick={() => setShowLogsPanel(false)}
+                    className="text-xs text-slate-405 dark:text-gray-500 hover:text-slate-700 dark:hover:text-white transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono">
+                {logs.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 text-xs border border-dashed border-gray-200 dark:border-[#2D2D30] rounded-xl font-sans">
+                    No webhook events logged yet.
+                  </div>
+                ) : (
+                  logs.map((log: any, idx: number) => (
+                    <div key={idx} className="p-2.5 rounded-xl border border-gray-150 dark:border-[#1E1E22] bg-gray-50 dark:bg-[#141416] text-[10px] space-y-1">
+                      <div className="flex items-center justify-between text-[8px] text-slate-400">
+                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                        <span className={`px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                          log.status === 'sent' ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400' :
+                          log.status === 'skipped' ? 'bg-gray-100 text-gray-650 dark:bg-gray-800 dark:text-gray-400' :
+                          'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+                        }`}>
+                          {log.status}
+                        </span>
+                      </div>
+                      <div className="text-slate-700 dark:text-gray-300">
+                        <span className="font-semibold text-purple-650 dark:text-purple-400">User:</span> {log.message}
+                      </div>
+                      <div className="text-slate-750 dark:text-gray-300">
+                        <span className="font-semibold text-[#E3B859]">Match:</span> <span className="underline">{log.matchedType}</span>
+                        {log.modelUsed && <span className="text-[8px] text-slate-400 ml-1.5">({log.modelUsed})</span>}
+                      </div>
+                      {log.replyContent && (
+                        <div className="text-slate-600 dark:text-gray-405 whitespace-pre-line bg-white dark:bg-[#0E0E10] p-1.5 rounded-md mt-1 border border-gray-100 dark:border-[#1c1c1f]">
+                          <span className="font-semibold text-green-600">Reply:</span> {log.replyContent}
+                        </div>
+                      )}
+                      {log.error && (
+                        <div className="text-red-500 bg-red-50 dark:bg-red-950/20 p-1.5 rounded-md mt-1 border border-red-100">
+                          <span className="font-semibold">Error:</span> {log.error}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    </>
+    </div>
+  </>
   )
 }

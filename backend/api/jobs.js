@@ -178,7 +178,7 @@ router.get('/', async (req, res, next) => {
 });
 
 router.post('/start', async (req, res, next) => {
-  const { keyword, city, maxLeads, workerCount, provider, area } = req.body || {};
+  const { keyword, city, maxLeads, workerCount, provider, area, cities, batch_id } = req.body || {};
   if (!keyword || !city) {
     return res.status(400).json({ success: false, error: 'keyword and city are required' });
   }
@@ -201,7 +201,9 @@ router.post('/start', async (req, res, next) => {
     let targetCities = [];
     const limitVal = maxLeads || 25;
 
-    if (finalCity === 'Global') {
+    if (Array.isArray(cities) && cities.length > 0) {
+      targetCities = cities;
+    } else if (finalCity === 'Global') {
       targetCities = ['New York', 'London', 'Sydney', 'Mumbai', 'Toronto', 'Berlin', 'Tokyo', 'Singapore'];
     } else if (finalCity.startsWith('Country: ')) {
       const countryName = finalCity.replace('Country: ', '');
@@ -220,9 +222,22 @@ router.post('/start', async (req, res, next) => {
     }
 
     if (targetCities.length > 0) {
-      const chunkLeads = Math.max(5, Math.ceil(limitVal / targetCities.length));
+      let fullCitiesCount = targetCities.length;
+      if (cities) {
+        if (finalCity === 'Global') {
+          fullCitiesCount = 8;
+        } else if (finalCity.startsWith('Country: ')) {
+          const countryName = finalCity.replace('Country: ', '');
+          const countryCities = {
+            'Sweden': 4, 'India': 5, 'United States': 5, 'United Kingdom': 5, 'Canada': 4, 'Australia': 4, 'Germany': 4, 'France': 4, 'United Arab Emirates': 3
+          };
+          fullCitiesCount = countryCities[countryName] || targetCities.length;
+        }
+      }
+
+      const chunkLeads = Math.max(5, Math.ceil(limitVal / fullCitiesCount));
       const createdJobs = [];
-      const batchId = `batch_${finalCity.replace(/\s+/g, '_')}_${Date.now()}`;
+      const batchId = batch_id || `batch_${finalCity.replace(/\s+/g, '_')}_${Date.now()}`;
       
       for (const tCity of targetCities) {
         const finalKeyword = area && area.trim() ? `${keyword.trim()} [Area: ${area.trim()}]` : keyword.trim();

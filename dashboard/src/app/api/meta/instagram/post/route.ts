@@ -15,6 +15,6 @@ export async function POST(req: NextRequest) {
     data: res.data,
     error: res.error,
     duration: res.duration,
-    containerId: (res as Record<string,unknown>).containerId,
+    containerId: (res as unknown as Record<string,unknown>).containerId,
   })
 }

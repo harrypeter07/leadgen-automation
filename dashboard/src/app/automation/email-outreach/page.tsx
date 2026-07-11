@@ -29,6 +29,7 @@ interface ScraperJob {
   city: string
   created_at: string
   status: string
+  subJobs?: ScraperJob[]
 }
 
 interface Lead {
@@ -78,6 +79,13 @@ export default function EmailOutreachPage() {
   const [editBody, setEditBody] = useState('')
   const [isSavingDraft, setIsSavingDraft] = useState(false)
 
+  // Custom Template Modal State
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [templateSubject, setTemplateSubject] = useState('')
+  const [templateBody, setTemplateBody] = useState('')
+  const [isApplyingTemplate, setIsApplyingTemplate] = useState(false)
+  const [lastFocusedField, setLastFocusedField] = useState<'subject' | 'body'>('body')
+
   // SMTP Config State
   const [smtpUser, setSmtpUser] = useState('')
   const [smtpPass, setSmtpPass] = useState('')
@@ -92,7 +100,7 @@ export default function EmailOutreachPage() {
       const res = await fetch('/api/scraper/jobs')
       const data = await res.json()
       if (res.ok && data.jobs) {
-        setJobs(data.jobs.filter((j: ScraperJob) => j.status === 'completed'))
+        setJobs(data.jobs.filter((j: ScraperJob) => ['completed', 'stopped', 'failed'].includes(j.status)))
       }
     } catch (err) {
       console.error('Error fetching jobs:', err)
@@ -119,7 +127,16 @@ export default function EmailOutreachPage() {
     }
     setLoadingLeads(true)
     try {
-      const jobIdsParam = selectedJobIds.join(',')
+      const resolvedJobIds: string[] = []
+      selectedJobIds.forEach(id => {
+        const job = jobs.find(j => j.id === id)
+        if (job && job.subJobs && job.subJobs.length > 0) {
+          job.subJobs.forEach((sj: ScraperJob) => resolvedJobIds.push(sj.id))
+        } else {
+          resolvedJobIds.push(id)
+        }
+      })
+      const jobIdsParam = resolvedJobIds.join(',')
       const res = await fetch(`/api/leads?job_ids=${jobIdsParam}&has_email=true&limit=500`)
       const data = await res.json()
       if (res.ok && data.leads) {
@@ -154,6 +171,11 @@ export default function EmailOutreachPage() {
     fetchJobs()
     fetchSmtpSettings()
     fetchJobCounts()
+    // Load custom template from localStorage
+    const savedSubject = localStorage.getItem('outreach_template_subject')
+    const savedBody = localStorage.getItem('outreach_template_body')
+    if (savedSubject) setTemplateSubject(savedSubject)
+    if (savedBody) setTemplateBody(savedBody)
   }, [])
 
   useEffect(() => {
@@ -337,6 +359,7 @@ export default function EmailOutreachPage() {
     const batchSize = 3
     let sentCount   = 0
     let failedCount = 0
+    let lastErrorMessage = ''
 
     try {
       for (let i = 0; i < selectedLeadIds.length; i += batchSize) {
@@ -354,8 +377,15 @@ export default function EmailOutreachPage() {
         if (res.ok) {
           sentCount   += data.sent   || 0
           failedCount += data.failed || 0
+          if (data.results) {
+            const fails = data.results.filter((r: any) => !r.success)
+            if (fails.length > 0) {
+              lastErrorMessage = fails[0].error || 'Send failed for some leads'
+            }
+          }
         } else {
           failedCount += batch.length
+          lastErrorMessage = data.error || 'Server error during send'
         }
         setGenerateProgress({
           done: sentCount + failedCount,
@@ -364,7 +394,12 @@ export default function EmailOutreachPage() {
         })
       }
       setSendResults({ sent: sentCount, failed: failedCount })
-      toast.success(`✉️ Dispatched! Sent: ${sentCount}, Failed: ${failedCount}`, { id: toastId })
+      
+      if (failedCount > 0) {
+        toast.error(`Send completed with issues: Sent ${sentCount}, Failed ${failedCount}.\nReason: ${lastErrorMessage}`, { id: toastId, duration: 6000 })
+      } else {
+        toast.success(`✉️ All emails successfully sent! Total: ${sentCount}`, { id: toastId })
+      }
       setSelectedLeadIds([])
       await fetchLeads()
     } catch (err: unknown) {
@@ -416,6 +451,153 @@ export default function EmailOutreachPage() {
       toast.error('Failed to update draft')
     } finally {
       setIsSavingDraft(false)
+    }
+  }
+
+  // ─── Custom Template Logic ────────────────────────────────────────────────
+  const templatePreview = useMemo(() => {
+    const previewLead = leads.find(l => selectedLeadIds.includes(l.id)) || {
+      name: 'Acme Corp',
+      email: 'contact@acme.com',
+      website: 'https://acme.com',
+      category: 'Software Solutions',
+      city: 'New York',
+      rating: 4.8,
+      review_count: 142,
+      enrichment_fields: {
+        contact_person: 'John Doe',
+        contact_position: 'Marketing Director'
+      }
+    }
+
+    const enrichment = previewLead.enrichment_fields || {}
+    const replacements: Record<string, string> = {
+      '{name}': previewLead.name || '',
+      '{email}': previewLead.email || '',
+      '{website}': previewLead.website || '',
+      '{category}': previewLead.category || '',
+      '{city}': previewLead.city || '',
+      '{rating}': previewLead.rating ? String(previewLead.rating) : '',
+      '{review_count}': previewLead.review_count ? String(previewLead.review_count) : '',
+      '{contact_person}': (enrichment as any).contact_person || '',
+      '{contact_position}': (enrichment as any).contact_position || '',
+    }
+
+    let subject = templateSubject || '(Empty Subject)'
+    let body = templateBody || '(Empty Body)'
+
+    Object.entries(replacements).forEach(([placeholder, value]) => {
+      const regex = new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+      subject = subject.replace(regex, value)
+      body = body.replace(regex, value)
+    })
+
+    return { subject, body, leadName: previewLead.name }
+  }, [templateSubject, templateBody, leads, selectedLeadIds])
+
+  const insertPlaceholder = (tag: string) => {
+    if (lastFocusedField === 'subject') {
+      const input = document.getElementById('templateSubjectInput') as HTMLInputElement
+      if (input) {
+        const start = input.selectionStart || 0
+        const end = input.selectionEnd || 0
+        const val = templateSubject
+        const newVal = val.substring(0, start) + tag + val.substring(end)
+        setTemplateSubject(newVal)
+        setTimeout(() => {
+          input.focus()
+          input.setSelectionRange(start + tag.length, start + tag.length)
+        }, 10)
+      } else {
+        setTemplateSubject(prev => prev + tag)
+      }
+    } else {
+      const textarea = document.getElementById('templateBodyInput') as HTMLTextAreaElement
+      if (textarea) {
+        const start = textarea.selectionStart || 0
+        const end = textarea.selectionEnd || 0
+        const val = templateBody
+        const newVal = val.substring(0, start) + tag + val.substring(end)
+        setTemplateBody(newVal)
+        setTimeout(() => {
+          textarea.focus()
+          textarea.setSelectionRange(start + tag.length, start + tag.length)
+        }, 10)
+      } else {
+        setTemplateBody(prev => prev + tag)
+      }
+    }
+  }
+
+  const handleApplyTemplate = async () => {
+    if (selectedLeadIds.length === 0) {
+      toast.error('Please select at least one lead first.')
+      return
+    }
+    if (!templateSubject.trim() || !templateBody.trim()) {
+      toast.error('Please enter both template subject and template body.')
+      return
+    }
+
+    setIsApplyingTemplate(true)
+    const toastId = toast.loading(`Applying template to ${selectedLeadIds.length} selected lead(s)...`)
+
+    // Save template persistently to localStorage
+    localStorage.setItem('outreach_template_subject', templateSubject)
+    localStorage.setItem('outreach_template_body', templateBody)
+
+    try {
+      const selectedLeads = leads.filter(l => selectedLeadIds.includes(l.id))
+      
+      const payload = selectedLeads.map(lead => {
+        const enrichment = lead.enrichment_fields || {}
+        const replacements: Record<string, string> = {
+          '{name}': lead.name || '',
+          '{email}': lead.email || '',
+          '{website}': lead.website || '',
+          '{category}': lead.category || '',
+          '{city}': lead.city || '',
+          '{rating}': lead.rating ? String(lead.rating) : '',
+          '{review_count}': lead.review_count ? String(lead.review_count) : '',
+          '{contact_person}': (enrichment as any).contact_person || '',
+          '{contact_position}': (enrichment as any).contact_position || '',
+        }
+
+        let subject = templateSubject
+        let body = templateBody
+
+        Object.entries(replacements).forEach(([placeholder, value]) => {
+          const regex = new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+          subject = subject.replace(regex, value)
+          body = body.replace(regex, value)
+        })
+
+        return {
+          id: lead.id,
+          name: lead.name,
+          ai_message_email_subject: subject,
+          ai_message_email_body: body
+        }
+      })
+
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(`Template applied successfully to ${selectedLeads.length} leads!`, { id: toastId })
+        setShowTemplateModal(false)
+        await fetchLeads()
+      } else {
+        throw new Error(data.error || 'Failed to apply template')
+      }
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`, { id: toastId })
+    } finally {
+      setIsApplyingTemplate(false)
     }
   }
 
@@ -471,6 +653,13 @@ export default function EmailOutreachPage() {
             </p>
           </div>
           <div className="flex gap-2.5">
+            <button
+              onClick={() => setShowTemplateModal(true)}
+              disabled={isGenerating || isSending}
+              className="bg-purple-650 hover:bg-purple-700 dark:bg-purple-900/50 dark:hover:bg-purple-900 border border-purple-300 dark:border-purple-800/40 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-300 shadow-md flex items-center gap-2"
+            >
+              <FileText className="w-3.5 h-3.5" /> Custom Template
+            </button>
             <button
               onClick={handleGenerateOutreach}
               disabled={isGenerating || isSending || selectedLeadIds.length === 0}
@@ -580,7 +769,13 @@ export default function EmailOutreachPage() {
               ) : (
                 jobs.map(job => {
                   const isSelected = selectedJobIds.includes(job.id)
-                  const leadCount  = jobLeadsCounts[job.id] || 0
+                  const getLeadCount = (j: ScraperJob) => {
+                    if (j.subJobs && j.subJobs.length > 0) {
+                      return j.subJobs.reduce((sum: number, sj: ScraperJob) => sum + (jobLeadsCounts[sj.id] || 0), 0)
+                    }
+                    return jobLeadsCounts[j.id] || 0
+                  }
+                  const leadCount = getLeadCount(job)
                   return (
                     <div
                       key={job.id}
@@ -953,6 +1148,145 @@ export default function EmailOutreachPage() {
                   {isSavingDraft ? 'Saving…' : 'Save Draft'}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Custom Template Modal ─────────────────────────────────────────── */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowTemplateModal(false)}>
+          <div
+            className="bg-white dark:bg-[#1A1A1E] border border-gray-300 dark:border-[#2D2D30] rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col md:grid md:grid-cols-2 max-h-[90vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Template Designer Form (Left Side) */}
+            <div className="p-6 space-y-4 overflow-y-auto max-h-[85vh] md:max-h-[90vh] flex flex-col justify-between border-b md:border-b-0 md:border-r border-gray-250 dark:border-[#2D2D30]">
+              <div className="space-y-4">
+                <div className="flex justify-between items-start border-b border-gray-200 dark:border-[#2D2D30] pb-3">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-purple-650 dark:text-purple-400" /> Outreach Template Designer
+                    </h3>
+                    <p className="text-[9px] text-slate-500 dark:text-gray-500 mt-0.5">
+                      Create a dynamic template with placeholders to customize messages for each lead.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Placeholder Selector */}
+                <div className="space-y-2 bg-slate-50/50 dark:bg-[#141416]/50 p-3 border border-gray-200 dark:border-[#2D2D30] rounded-xl">
+                  <span className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">Placeholders (Click to insert)</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { tag: '{name}', label: 'Lead Name' },
+                      { tag: '{email}', label: 'Email' },
+                      { tag: '{website}', label: 'Website' },
+                      { tag: '{category}', label: 'Category' },
+                      { tag: '{city}', label: 'City' },
+                      { tag: '{rating}', label: 'Rating' },
+                      { tag: '{review_count}', label: 'Reviews' },
+                      { tag: '{contact_person}', label: 'Contact Name' },
+                      { tag: '{contact_position}', label: 'Position' }
+                    ].map(p => (
+                      <button
+                        key={p.tag}
+                        type="button"
+                        onClick={() => insertPlaceholder(p.tag)}
+                        className="px-2 py-1 text-[8px] font-mono font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-705 dark:text-purple-350 border border-purple-200 dark:border-purple-800/40 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                      >
+                        {p.tag} <span className="text-[7px] opacity-60 font-sans font-normal font-mono">({p.label})</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Form Inputs */}
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black uppercase tracking-widest text-slate-550 dark:text-gray-500">Template Subject</label>
+                    <input
+                      id="templateSubjectInput"
+                      type="text"
+                      value={templateSubject}
+                      onChange={e => setTemplateSubject(e.target.value)}
+                      onFocus={() => setLastFocusedField('subject')}
+                      placeholder="e.g. Partnership opportunity for {name} in {city}"
+                      className="w-full bg-slate-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] focus:border-[#E3B859] rounded-xl px-4 py-2.5 text-xs text-slate-850 dark:text-[#E4E3DD] focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black uppercase tracking-widest text-slate-550 dark:text-gray-500">Template Body</label>
+                    <textarea
+                      id="templateBodyInput"
+                      value={templateBody}
+                      onChange={e => setTemplateBody(e.target.value)}
+                      onFocus={() => setLastFocusedField('body')}
+                      rows={10}
+                      placeholder={`e.g. Hi {contact_person},\n\nI noticed {name} is offering amazing services in {city}...`}
+                      className="w-full bg-slate-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] focus:border-[#E3B859] rounded-xl px-4 py-3 text-[11px] text-slate-850 dark:text-[#E4E3DD] focus:outline-none font-mono leading-relaxed transition-colors resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2.5 pt-4 border-t border-gray-200 dark:border-[#2D2D30]">
+                <button
+                  type="button"
+                  onClick={() => setShowTemplateModal(false)}
+                  className="bg-slate-100 dark:bg-[#222225] hover:bg-slate-200 dark:hover:bg-[#2D2D30] text-slate-650 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyTemplate}
+                  disabled={isApplyingTemplate || selectedLeadIds.length === 0}
+                  className="bg-purple-650 hover:bg-purple-700 disabled:opacity-40 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md"
+                >
+                  {isApplyingTemplate ? 'Applying…' : `Apply to Selected Leads (${selectedLeadIds.length})`}
+                </button>
+              </div>
+            </div>
+
+            {/* Live Preview Panel (Right Side) */}
+            <div className="bg-slate-550/5 dark:bg-[#141416]/50 p-6 flex flex-col space-y-4 font-sans h-full max-h-[85vh] md:max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center border-b border-gray-200 dark:border-[#2D2D30] pb-3">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-[#E3B859] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#E3B859] animate-pulse" /> Live Dynamic Preview
+                  </h3>
+                  <p className="text-[9px] text-slate-500 dark:text-gray-500 mt-0.5">
+                    Showing dynamic preview for: <span className="text-slate-850 dark:text-white font-bold">{templatePreview.leadName}</span>
+                  </p>
+                </div>
+              </div>
+
+              {selectedLeadIds.length === 0 && (
+                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-3 flex items-center gap-2.5 text-[10px] text-amber-800 dark:text-amber-300 leading-relaxed font-sans">
+                  <Info className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <span>
+                    No leads are currently selected on the main page. Showing a mock preview. Select leads to apply this template to them.
+                  </span>
+                </div>
+              )}
+
+              <div className="border border-gray-200 dark:border-[#2D2D30] rounded-xl bg-white dark:bg-[#0E0E10] overflow-hidden flex flex-col flex-1 shadow-sm min-h-[300px]">
+                {/* Subject Preview */}
+                <div className="px-4 py-3 border-b border-gray-150 dark:border-[#2D2D30] bg-slate-50/50 dark:bg-[#121214] text-[10px]">
+                  <span className="text-slate-400 font-bold mr-1.5 uppercase tracking-wide">Subject:</span>
+                  <span className="text-slate-900 dark:text-white font-bold">{templatePreview.subject}</span>
+                </div>
+                {/* Body Preview */}
+                <div className="p-4 text-[11px] text-slate-850 dark:text-gray-300 whitespace-pre-wrap leading-relaxed font-sans flex-1 overflow-y-auto max-h-[350px]">
+                  {templatePreview.body}
+                </div>
+              </div>
+
+              <div className="text-[9px] text-slate-400 dark:text-gray-600 leading-relaxed italic border-t border-gray-200 dark:border-[#2D2D30] pt-3">
+                💡 Placeholders are case-insensitive. If any value (like Website or Contact) is missing for a lead, it will render as empty.
+              </div>
             </div>
           </div>
         </div>

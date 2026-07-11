@@ -4,16 +4,17 @@ import { NextRequest, NextResponse } from 'next/server'
 // Checks the status, validity, and active quota of a Gemini API key by performing a test generation call
 export async function POST(req: NextRequest) {
   try {
-    const { apiKey } = await req.json()
+    const { apiKey, model } = await req.json()
     if (!apiKey) {
       return NextResponse.json({ success: false, error: 'API key is required' }, { status: 400 })
     }
 
     const keyAbbr = apiKey.slice(0, 8) + '...'
-    console.log('[GeminiStatus] Actively testing API key:', keyAbbr)
+    const targetModel = model || 'gemini-3.1-flash-lite'
+    console.log(`[GeminiStatus] Actively testing API key: ${keyAbbr} against model: ${targetModel}`)
 
     // Step 1: Active generation check to verify remaining quota (not just key validity)
-    const testGenUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
+    const testGenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`
     let isQuotaExhausted = false
     let isInvalidKey = false
     let testErrorMsg = ''
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
     const models: any[] = data.models || []
     const availableModels = models
       .map((m: any) => m.name?.replace('models/', ''))
-      .filter((name: string) => name && (name.includes('flash') || name.includes('pro')))
+      .filter((name: string) => name && (name.includes('flash') || name.includes('pro') || name.includes('gemma') || name.includes('omni')))
 
     console.log(`[GeminiStatus] API key is active. Found ${availableModels.length} models.`)
 
