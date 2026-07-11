@@ -280,6 +280,7 @@ export default function SocialInboxPage() {
   // Thread specific autopilot state overrides
   const [autopilotOverrides, setAutopilotOverrides] = useState<Record<string, boolean>>({})
   const [globalAutopilotEnabled, setGlobalAutopilotEnabled] = useState(false)
+  const [threadConfigs, setThreadConfigs]                   = useState<Record<string, any>>({})
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -298,17 +299,22 @@ export default function SocialInboxPage() {
   // ── Autopilot settings ─────────────────────────────────────────────────────
   const fetchAutopilotSettings = useCallback(async () => {
     try {
-      const [overridesRes, configRes] = await Promise.all([
+      const [overridesRes, configRes, threadConfigsRes] = await Promise.all([
         fetch('/api/meta/instagram/thread-autopilot'),
         fetch('/api/meta/instagram/auto-reply'),
+        fetch('/api/meta/instagram/thread-config'),
       ])
       const overridesData = await overridesRes.json()
       const configData = await configRes.json()
+      const threadConfigsData = await threadConfigsRes.json()
       if (overridesRes.ok && overridesData.success) {
         setAutopilotOverrides(overridesData.overrides || {})
       }
       if (configRes.ok && configData.success) {
         setGlobalAutopilotEnabled(configData.chatbotEnabled || false)
+      }
+      if (threadConfigsRes.ok && threadConfigsData.success) {
+        setThreadConfigs(threadConfigsData.configs || {})
       }
     } catch (err) {
       console.error('Failed to load autopilot settings:', err)
@@ -376,8 +382,12 @@ export default function SocialInboxPage() {
   }, [])
 
   const senderId = selectedThread?.participantId || selectedThread?.id.replace('ig_', '')
+  // Priority: threadConfig.enabled (Chat Settings modal) > THREAD_AUTOPILOT_OVERRIDES (header button) > global
+  const threadConfig = senderId ? (threadConfigs[senderId] || {}) : {}
   const threadOverride = senderId ? autopilotOverrides[senderId] : undefined
-  const isAutopilotActive = threadOverride !== undefined ? threadOverride : globalAutopilotEnabled
+  const isAutopilotActive = threadConfig.enabled !== undefined
+    ? threadConfig.enabled
+    : (threadOverride !== undefined ? threadOverride : globalAutopilotEnabled)
 
   async function toggleThreadAutopilot() {
     if (!selectedThread || !senderId) return

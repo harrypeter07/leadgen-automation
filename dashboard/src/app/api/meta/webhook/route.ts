@@ -177,11 +177,18 @@ async function handleAutoReply(
       console.log(`[AutoReply] Generating AI response for "${messageText}"...`)
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
       const { generateWithGemini } = await import('@/lib/gemini')
+      const systemPrompt = `${chatbotPersona}
+
+IMPORTANT RULES:
+- You are replying to an Instagram DM. Keep replies SHORT (1-3 sentences max).
+- Stay strictly in character with the persona above.
+- Never mention you are an AI.
+- Respond naturally and conversationally.`
       const { text: aiReply, model } = await generateWithGemini(
         {
-          system_instruction: { parts: [{ text: chatbotPersona }] },
+          system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: 'user', parts: [{ text: messageText }] }],
-          generationConfig: { maxOutputTokens: 1000, temperature: 0.7 },
+          generationConfig: { maxOutputTokens: 300, temperature: 0.5 },
         },
         apiKey
       )

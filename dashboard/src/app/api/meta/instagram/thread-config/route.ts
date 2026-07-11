@@ -78,6 +78,22 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error
 
+    // Also sync `enabled` to THREAD_AUTOPILOT_OVERRIDES so the header Autopilot
+    // button reflects the same state as the Chat Settings modal toggle
+    if (enabled !== undefined) {
+      const { data: overridesRow } = await supabaseAdmin
+        .from('meta_config').select('value').eq('key', 'THREAD_AUTOPILOT_OVERRIDES').single()
+      let overrides: Record<string, boolean> = {}
+      try { overrides = overridesRow?.value ? JSON.parse(overridesRow.value) : {} } catch {}
+      overrides[senderId] = enabled
+      await supabaseAdmin.from('meta_config').upsert({
+        key: 'THREAD_AUTOPILOT_OVERRIDES',
+        value: JSON.stringify(overrides),
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' })
+    }
+
     return NextResponse.json({ success: true, configs })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
