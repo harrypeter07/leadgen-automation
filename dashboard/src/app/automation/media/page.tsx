@@ -28,16 +28,16 @@ export default function MediaLibraryPage() {
     
     // 1. Fetch Cloudinary assets
     try {
-      const folderParam = cloudinaryFolder ? `&folder=${encodeURIComponent(cloudinaryFolder)}` : ''
-      const res = await fetch(`/api/meta/cloudinary?action=scan${folderParam}`)
+      const folderParam = cloudinaryFolder ? `folder=${encodeURIComponent(cloudinaryFolder)}` : ''
+      const res = await fetch(`/api/meta/cloudinary?${folderParam}`)
       const data = await res.json()
-      if (res.ok && data.images) {
-        data.images.forEach((img: any) => {
+      if (res.ok && data.assets) {
+        data.assets.forEach((asset: any) => {
           list.push({
-            name: img.filename || img.public_id,
-            url: img.url,
-            size: 'Cloud Storage',
-            date: new Date().toLocaleDateString(),
+            name: asset.publicId,
+            url: asset.url,
+            size: asset.bytes ? `${Math.ceil(asset.bytes / 1024)} KB` : 'Cloud Storage',
+            date: asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
             source: 'Cloudinary CDN'
           })
         })

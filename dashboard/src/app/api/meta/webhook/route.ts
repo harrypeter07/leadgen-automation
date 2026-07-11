@@ -334,6 +334,59 @@ CRITICAL RULES (never break these):
   }
 }
 
+// Helper to record raw incoming webhook payloads
+async function logIncomingWebhookEvent(object: string, payload: any) {
+  try {
+    const { data } = await supabaseAdmin
+      .from('meta_config')
+      .select('value')
+      .eq('key', 'WEBHOOK_INCOMING_LOGS')
+      .single()
+
+    let logs: any[] = []
+    if (data?.value) {
+      try {
+        logs = JSON.parse(data.value)
+      } catch {}
+    }
+
+    let senderId = 'unknown'
+    let messageSnippet = ''
+    try {
+      if (payload.entry?.[0]?.messaging?.[0]) {
+        const m = payload.entry[0].messaging[0]
+        senderId = m.sender?.id || 'unknown'
+        messageSnippet = m.message?.text || ''
+      } else if (payload.entry?.[0]?.changes?.[0]?.value) {
+        const val = payload.entry[0].changes[0].value
+        senderId = val.from?.id || 'unknown'
+        messageSnippet = val.text || ''
+      }
+    } catch {}
+
+    logs.unshift({
+      timestamp: new Date().toISOString(),
+      object,
+      senderId,
+      snippet: messageSnippet,
+      payload
+    })
+
+    logs = logs.slice(0, 50)
+
+    await supabaseAdmin
+      .from('meta_config')
+      .upsert({
+        key: 'WEBHOOK_INCOMING_LOGS',
+        value: JSON.stringify(logs),
+        encrypted: false,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' })
+  } catch (err: any) {
+    console.error('[logIncomingWebhookEvent] Error saving log:', err.message)
+  }
+}
+
 // POST /api/meta/webhook — Incoming event delivery
 export async function POST(req: NextRequest) {
   try {
@@ -352,6 +405,9 @@ export async function POST(req: NextRequest) {
     const object = body.object as string
 
     console.log(`[Meta Webhook] Received ${object} event:`, JSON.stringify(body).slice(0, 450))
+
+    // Log the raw incoming webhook event
+    await logIncomingWebhookEvent(object || 'unknown', body)
 
     // Parse messages
     if (body.entry && Array.isArray(body.entry)) {
