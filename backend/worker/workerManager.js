@@ -17,7 +17,7 @@ class Worker {
 
   start() {
     logger.info(`[WORKER #${this.id}] Started`);
-    this.loopInterval = setInterval(() => this.poll(), 2000);
+    this.loopInterval = setInterval(() => this.poll(), 15000);
   }
 
   async poll() {
