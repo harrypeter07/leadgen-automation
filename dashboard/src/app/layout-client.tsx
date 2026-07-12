@@ -16,30 +16,18 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const theme: 'dark' | 'light' = 'light' // Enforce light theme throughout the application
 
-  // Load theme & collapse preferences from localStorage on mount
+  // Load preferences from localStorage on mount
   useEffect(() => {
-    const savedTheme = localStorage.getItem('zarss_theme') as 'dark' | 'light' | null
-    if (savedTheme) {
-      setTheme(savedTheme)
-      document.documentElement.className = savedTheme
-      document.documentElement.setAttribute('data-theme', savedTheme)
-    }
+    document.documentElement.className = 'light'
+    document.documentElement.setAttribute('data-theme', 'light')
+    
     const savedCollapse = localStorage.getItem('zarss_main_sidebar_collapsed')
     if (savedCollapse) {
       setSidebarCollapsed(savedCollapse === 'true')
     }
   }, [])
-
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark'
-    setTheme(nextTheme)
-    localStorage.setItem('zarss_theme', nextTheme)
-    document.documentElement.className = nextTheme
-    document.documentElement.setAttribute('data-theme', nextTheme)
-    toast.success(`Switched to ${nextTheme === 'dark' ? '🌙 Dark' : '☀️ Light'} mode`)
-  }
 
   const toggleSidebar = () => {
     const nextCollapse = !sidebarCollapsed
@@ -214,57 +202,45 @@ export default function LayoutClient({ children }: LayoutClientProps) {
     }
   ]
 
-  const isDark = theme === 'dark'
+  const isDark = false
 
   const SidebarContent = () => (
-    <div className={`flex flex-col h-full border-r transition-colors select-none ${
-      isDark ? 'bg-[#18181A] border-[#252528] text-gray-400' : 'bg-white border-gray-200 text-gray-600'
-    }`}>
-      {/* Brand Logo - Zarss Style */}
-      <div className={`flex items-center gap-3 px-6 py-6 border-b ${
-        isDark ? 'border-[#252528]' : 'border-gray-200'
-      } ${sidebarCollapsed ? 'justify-center px-2' : ''}`}>
-        <div className="w-8 h-8 rounded-lg bg-[#E3B859] flex items-center justify-center text-[#18181A] font-black text-lg shadow-md shadow-[#E3B859]/20 flex-shrink-0">
+    <div className="flex flex-col h-full bg-white border-r border-slate-200 text-slate-650 transition-colors select-none">
+      {/* Brand Logo - Zarss Style (Red/Rose Variant) */}
+      <div className={`flex items-center gap-3 px-6 py-6 border-b border-slate-150 ${sidebarCollapsed ? 'justify-center px-2' : ''}`}>
+        <div className="w-8 h-8 rounded-lg bg-rose-600 flex items-center justify-center text-white font-black text-lg shadow-md shadow-rose-600/20 flex-shrink-0">
           Z
         </div>
         {!sidebarCollapsed && (
-          <Link href="/" className={`text-xl font-bold tracking-tight flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          <Link href="/" className="text-xl font-extrabold tracking-tight flex items-center gap-1.5 text-slate-900">
             <span>Zarss</span>
-            <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-mono font-normal ${
-              isDark ? 'bg-[#252528] text-gray-400' : 'bg-gray-100 text-gray-600'
-            }`}>v3</span>
+            <span className="text-[10px] uppercase px-1.5 py-0.5 rounded font-mono font-normal bg-slate-100 text-slate-600">v3</span>
           </Link>
         )}
       </div>
 
       {/* User profile widget inside sidebar */}
       {!sidebarCollapsed ? (
-        <div className={`px-6 py-5 border-b flex flex-col items-center text-center ${
-          isDark ? 'border-[#252528]' : 'border-gray-200'
-        }`}>
-          <div className="relative w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 to-[#E3B859] p-0.5 shadow-xl">
-            <div className={`w-full h-full rounded-full flex items-center justify-center text-white text-sm font-black ${
-              isDark ? 'bg-[#18181A]' : 'bg-[#E5E5EB]'
-            }`}>
+        <div className="px-6 py-5 border-b border-slate-150 flex flex-col items-center text-center">
+          <div className="relative w-14 h-14 rounded-full bg-gradient-to-tr from-rose-500 to-orange-400 p-0.5 shadow-md">
+            <div className="w-full h-full rounded-full flex items-center justify-center bg-white text-rose-600 text-sm font-black border border-rose-100">
               OP
             </div>
-            <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-inherit bg-green-500 shadow-sm" />
+            <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white bg-green-500 shadow-sm" />
           </div>
-          <span className="mt-2.5 text-[10px] text-gray-500 font-semibold uppercase tracking-wider block">Welcome Back,</span>
-          <span className={`text-xs font-bold tracking-tight mt-0.5 ${isDark ? 'text-white' : 'text-gray-900'}`}>Operator LeadGen</span>
+          <span className="mt-2.5 text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Welcome Back,</span>
+          <span className="text-xs font-bold tracking-tight mt-0.5 text-slate-800">Operator LeadGen</span>
           <button
             onClick={handleLogout}
-            className={`mt-2.5 px-2.5 py-1 text-[9px] uppercase tracking-wider rounded-lg border transition-all duration-200 active:scale-95 flex items-center gap-1.5 focus:outline-none ${
-              isDark ? 'bg-red-950/20 hover:bg-red-950/40 border-red-900/30 text-red-400' : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-600'
-            }`}
+            className="mt-2.5 px-2.5 py-1 text-[9px] uppercase tracking-wider rounded-lg border transition-all duration-200 active:scale-95 flex items-center gap-1.5 focus:outline-none bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-600"
           >
             Logout
           </button>
         </div>
       ) : (
-        <div className="py-4 border-b border-inherit flex justify-center">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-[#E3B859] p-0.5">
-            <div className="w-full h-full rounded-full bg-[#18181A] flex items-center justify-center text-white text-[10px] font-black">
+        <div className="py-4 border-b border-slate-150 flex justify-center">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-rose-500 to-orange-400 p-0.5">
+            <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-rose-600 text-[10px] font-black border border-rose-100">
               OP
             </div>
           </div>
@@ -283,16 +259,14 @@ export default function LayoutClient({ children }: LayoutClientProps) {
               title={sidebarCollapsed ? link.name : undefined}
               className={`flex items-center gap-3 px-3 py-2.5 text-xs font-semibold uppercase tracking-wider rounded-xl transition-all duration-200 group relative ${
                 isActive
-                  ? 'text-[#E3B859] bg-[#222225] font-bold shadow-sm'
-                  : isDark
-                  ? 'text-gray-400 hover:bg-[#202022] hover:text-gray-200'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  ? 'text-rose-600 bg-rose-50/80 font-extrabold shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               } ${sidebarCollapsed ? 'justify-center' : ''}`}
             >
               {isActive && (
-                <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#E3B859] rounded-r-md" />
+                <span className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-rose-600 rounded-r-md" />
               )}
-              <span className={`transition-colors duration-200 ${isActive ? 'text-[#E3B859]' : 'text-gray-500 group-hover:text-gray-300'}`}>
+              <span className={`transition-colors duration-200 ${isActive ? 'text-rose-600' : 'text-slate-400 group-hover:text-slate-650'}`}>
                 {link.icon}
               </span>
               {!sidebarCollapsed && <span>{link.name}</span>}
@@ -302,35 +276,22 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       </nav>
 
       {/* Footer Status Indicators */}
-      <div className={`p-4 border-t flex flex-col gap-2.5 text-[10px] bg-inherit ${
-        isDark ? 'border-[#252528] text-gray-500' : 'border-gray-200 text-gray-500'
-      }`}>
-        {/* Toggle Theme Control */}
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className={`w-full py-2 rounded-lg border transition-all duration-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 ${
-            isDark ? 'bg-[#222225] border-[#2D2D30] text-white hover:bg-[#2D2D30]' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
-          }`}
-        >
-          {isDark ? '☀️ Light Mode' : '🌙 Dark Mode'}
-        </button>
-
+      <div className="p-4 border-t border-slate-150 flex flex-col gap-2.5 text-[10px] text-slate-500">
         {!sidebarCollapsed && (
           <>
-            <div className="flex items-center justify-between border-t border-inherit pt-2">
+            <div className="flex items-center justify-between pt-1">
               <span className="font-semibold uppercase tracking-wider text-[9px]">WhatsApp Status</span>
               {whatsappConnected === null ? (
-                <span className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 font-mono text-[8px] animate-pulse">CHECKING</span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 font-mono text-[8px] animate-pulse">CHECKING</span>
               ) : whatsappConnected ? (
-                <span className="px-1.5 py-0.5 rounded bg-green-950/40 text-green-400 font-mono text-[8px] font-bold border border-green-900/30">ONLINE</span>
+                <span className="px-1.5 py-0.5 rounded bg-green-50 text-green-600 font-mono text-[8px] font-bold border border-green-200">ONLINE</span>
               ) : (
-                <span className="px-1.5 py-0.5 rounded bg-red-950/40 text-red-400 font-mono text-[8px] font-bold border border-red-900/30">OFFLINE</span>
+                <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 font-mono text-[8px] font-bold border border-rose-200">OFFLINE</span>
               )}
             </div>
             <div className="flex items-center justify-between text-[9px]">
-              <span className="text-gray-600">Engine Node:</span>
-              <span className="font-mono text-gray-400">Railway v3</span>
+              <span className="text-slate-400">Engine Node:</span>
+              <span className="font-mono text-slate-600 font-semibold">Railway v3</span>
             </div>
           </>
         )}
@@ -348,17 +309,13 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col md:flex-row font-sans transition-colors duration-300 ${
-      isDark ? 'dark bg-[#141416] text-white' : 'bg-[#F4F4F6] text-gray-900'
-    }`}>
-      <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: isDark ? '#1c1c1e' : '#ffffff', color: isDark ? '#f3f4f6' : '#1c1c1e', border: isDark ? '1px solid #2d2d30' : '1px solid #e5e5eb' } }} />
+    <div className="min-h-screen flex flex-col md:flex-row font-sans bg-slate-50 text-slate-900">
+      <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: '#ffffff', color: '#0f172a', border: '1px solid #e2e8f0' } }} />
 
       {/* Mobile Top Bar */}
-      <div className={`flex md:hidden items-center justify-between px-6 py-4 border-b text-white ${
-        isDark ? 'bg-[#18181A] border-[#252528]' : 'bg-[#18181A] border-[#252528]'
-      }`}>
+      <div className="flex md:hidden items-center justify-between px-6 py-4 border-b bg-slate-900 border-slate-800 text-white">
         <Link href="/" className="text-lg font-bold flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-[#E3B859] flex items-center justify-center text-[#18181A] font-black text-xs">
+          <div className="w-6 h-6 rounded bg-rose-600 flex items-center justify-center text-white font-black text-xs">
             Z
           </div>
           <span>Zarss</span>
