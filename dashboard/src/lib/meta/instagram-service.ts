@@ -138,4 +138,18 @@ export const InstagramService = {
     const res = await MetaClient.get<{ data: unknown[] }>(`/${igId}/insights?metric=${metric}&period=${period}&access_token=${token}`, { source: SOURCE })
     return res
   },
+  // Fetch a single IG media object with specified fields (like_count, comments_count)
+  async getMediaById(mediaId: string, fields = 'id,caption,media_type,media_url,like_count,comments_count,timestamp') {
+    const token = await getIgToken()
+    const endpoint = `/${mediaId}?fields=${fields}&access_token=${token}`
+    const res = await MetaClient.get<Record<string, unknown>>(endpoint, { source: SOURCE })
+    return res
+  },
+  // Fetch per-media Instagram insights (impressions, reach, likes, comments, shares, video_views)
+  async getMediaInsights(mediaId: string, metrics = 'impressions,reach,likes,comments,shares') {
+    const token = await getIgToken()
+    const endpoint = `/${mediaId}/insights?metric=${metrics}&access_token=${token}`
+    const res = await MetaClient.get<{ data: unknown[] }>(endpoint, { source: SOURCE })
+    return res
+  },
 }

@@ -91,4 +91,23 @@ export const FacebookService = {
     MetaLogger.response(SOURCE, `/${pageId}/messages`, res.statusCode, res.duration, res.error as MetaApiResponse['error'])
     return res
   },
+  // Fetch a single FB post with specific fields (likes, comments, shares)
+  async getPost(postId: string, fields = 'id,message,created_time,permalink_url,likes.summary(true),comments.summary(true),shares') {
+    const token = await getPageToken()
+    const endpoint = `/${postId}?fields=${fields}&access_token=${token}`
+    MetaLogger.request(SOURCE, 'GET', endpoint)
+    const res = await MetaClient.get<Record<string, unknown>>(endpoint, { source: SOURCE })
+    MetaLogger.response(SOURCE, endpoint, res.statusCode, res.duration, res.error as MetaApiResponse['error'])
+    return res
+  },
+  // Fetch per-post Facebook insights (impressions, reach, clicks, reactions, video views)
+  async getPostInsights(postId: string, metrics = 'post_impressions,post_impressions_unique,post_clicks,post_reactions_like_total,post_video_views') {
+    const token = await getPageToken()
+    const endpoint = `/${postId}/insights?metric=${metrics}&access_token=${token}`
+    MetaLogger.request(SOURCE, 'GET', endpoint)
+    const res = await MetaClient.get<{ data: unknown[] }>(endpoint, { source: SOURCE })
+    MetaLogger.response(SOURCE, endpoint, res.statusCode, res.duration, res.error as MetaApiResponse['error'])
+    return res
+  },
 }
+
