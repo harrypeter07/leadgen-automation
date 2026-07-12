@@ -3,19 +3,13 @@
   "nodes": [
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "minutes",
-              "minutesInterval": 5
-            }
-          ]
-        }
+        "interval": 15,
+        "unit": "seconds"
       },
       "id": "e4f8a1b2-2001-4000-8000-000000000001",
-      "name": "Poll Queue Every 5 Min",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.1,
+      "name": "Poll Queue Every 15 Sec",
+      "type": "n8n-nodes-base.interval",
+      "typeVersion": 1,
       "position": [100, 300]
     },
     {
@@ -238,7 +232,7 @@
     }
   ],
   "connections": {
-    "Poll Queue Every 5 Min": {
+    "Poll Queue Every 15 Sec": {
       "main": [
         [
           {
