@@ -3,19 +3,19 @@
   "nodes": [
     {
       "parameters": {
-        "interval": 30,
-        "unit": "seconds"
+        "path": "publishing-hub",
+        "options": {}
       },
       "id": "e4f8a1b2-2001-4000-8000-000000000001",
-      "name": "Poll Queue Every 30 Sec",
-      "type": "n8n-nodes-base.interval",
-      "typeVersion": 1,
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
       "position": [100, 300]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/publish/queue?status=scheduled",
+        "url": "=https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/publish/queue/{{ $json.id || $json.body?.id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -232,7 +232,7 @@
     }
   ],
   "connections": {
-    "Poll Queue Every 30 Sec": {
+    "Webhook Trigger": {
       "main": [
         [
           {
