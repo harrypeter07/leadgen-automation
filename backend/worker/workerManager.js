@@ -12,12 +12,23 @@ class Worker {
     this.currentProvider = null;
     this.startTime = null;
     this.onJobPull = onJobPull;
-    this.loopInterval = null;
+    this.jobCreatedHandler = null;
   }
 
   start() {
     logger.info(`[WORKER #${this.id}] Started`);
-    this.loopInterval = setInterval(() => this.poll(), 15000);
+    
+    // Listen for new jobs enqueued on the event bus
+    this.jobCreatedHandler = () => {
+      if (this.status === 'Idle') {
+        // Stagger poll calls to prevent multiple workers from grabbing the same job simultaneously
+        setTimeout(() => this.poll(), this.id * 300);
+      }
+    };
+    eventBus.subscribe('job.created', this.jobCreatedHandler);
+
+    // Initial check on startup to capture leftover queued jobs
+    this.poll();
   }
 
   async poll() {
@@ -59,6 +70,9 @@ class Worker {
       this.currentJobId = null;
       this.currentProvider = null;
       this.startTime = null;
+      
+      // If we just finished a job, check the queue again immediately for more work
+      setTimeout(() => this.poll(), 100);
     }
   }
 
@@ -78,8 +92,8 @@ class Worker {
 
   stop() {
     this.status = 'Stopped';
-    if (this.loopInterval) {
-      clearInterval(this.loopInterval);
+    if (this.jobCreatedHandler) {
+      eventBus.unsubscribe('job.created', this.jobCreatedHandler);
     }
     logger.info(`[WORKER #${this.id}] Stopped`);
   }
