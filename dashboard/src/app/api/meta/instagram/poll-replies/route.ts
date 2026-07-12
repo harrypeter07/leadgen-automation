@@ -259,22 +259,15 @@ CRITICAL RULES (never break these):
               error: sendErr.message,
             })
           }
-        } else {
-          await appendLog({
-            timestamp: new Date().toISOString(),
-            platform: 'instagram',
-            senderId,
-            message: messageText,
-            matchedType: 'none',
-            replyContent: '',
-            status: 'skipped',
-          })
         }
       }
     }
 
-    // Save poll timestamp
-    await saveConfig(LAST_POLL_KEY, nowTs.toISOString())
+    // Save poll timestamp only if new messages were processed or 5 minutes elapsed
+    const timeDiffMs = nowTs.getTime() - lastPollTs.getTime()
+    if (newMsgCount > 0 || timeDiffMs > 5 * 60 * 1000) {
+      await saveConfig(LAST_POLL_KEY, nowTs.toISOString())
+    }
 
     return NextResponse.json({
       success: true,
