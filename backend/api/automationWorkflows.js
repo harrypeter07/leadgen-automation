@@ -5,6 +5,7 @@ const supabase = require('../database/connection');
 const connectedAccountsRepository = require('../repositories/connectedAccountsRepository');
 const auditLogRepository = require('../repositories/auditLogRepository');
 const logger = require('../worker/logger');
+const qstashService = require('../services/qstashService');
 
 // Security middleware for system-to-system auth (n8n & internal hooks)
 function authenticateApiSecret(req, res, next) {
@@ -137,6 +138,23 @@ router.get('/publish/queue', async (req, res) => {
   }
 });
 
+// GET /api/automation/publish/queue/:id - Retrieve a single composed queue item by ID
+router.get('/publish/queue/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from('automation_publishing_queue')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    res.json({ queue: data ? [data] : [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/automation/publish/queue - Composing schedule posting item
 router.post('/publish/queue', async (req, res) => {
   try {
@@ -161,6 +179,16 @@ router.post('/publish/queue', async (req, res) => {
 
     if (error) throw error;
 
+    // Schedule post via Upstash QStash
+    const qstashMessageId = await qstashService.schedulePost(data.id, scheduled_at);
+    if (qstashMessageId) {
+      await supabase
+        .from('automation_publishing_queue')
+        .update({ qstash_message_id: qstashMessageId })
+        .eq('id', data.id);
+      data.qstash_message_id = qstashMessageId;
+    }
+
     await auditLogRepository.log('PUBLISH_QUEUED', `Queued post for ${account_name} on ${platform} at ${scheduled_at}`);
 
     res.json({ success: true, post: data });
@@ -175,6 +203,20 @@ router.put('/publish/queue/:id', async (req, res) => {
     const { id } = req.params;
     const { platform, content, media_url, scheduled_at } = req.body;
 
+    // Fetch the existing post to get the old QStash message ID
+    const { data: existingPost } = await supabase
+      .from('automation_publishing_queue')
+      .select('qstash_message_id')
+      .eq('id', id)
+      .single();
+
+    if (existingPost && existingPost.qstash_message_id) {
+      await qstashService.cancelScheduledPost(existingPost.qstash_message_id);
+    }
+
+    // Schedule new message via QStash
+    const newQstashId = await qstashService.schedulePost(id, scheduled_at);
+
     const { data, error } = await supabase
       .from('automation_publishing_queue')
       .update({
@@ -183,7 +225,8 @@ router.put('/publish/queue/:id', async (req, res) => {
         media_url: media_url || null,
         scheduled_at,
         status: 'scheduled',
-        error_log: null
+        error_log: null,
+        qstash_message_id: newQstashId || null
       })
       .eq('id', id)
       .select()

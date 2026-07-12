@@ -22,6 +22,7 @@ import {
   Timer,
   Zap,
   Send,
+  Activity,
 } from 'lucide-react'
 
 
@@ -41,6 +42,10 @@ interface CalendarPost {
   views?: number
   status?: string // 'scheduled', 'failed', 'published'
   errorLog?: string
+  qstash_message_id?: string
+  created_at?: string
+  published_at?: string
+  published_id?: string
 }
 
 interface CloudinaryAsset {
@@ -160,7 +165,11 @@ export default function ContentCalendarPage() {
           type: item.platform === 'instagram' ? 'ig' : 'fb',
           imageUrl: item.media_url,
           status: item.status,
-          errorLog: item.error_log
+          errorLog: item.error_log,
+          qstash_message_id: item.qstash_message_id,
+          created_at: item.created_at,
+          published_at: item.published_at,
+          published_id: item.published_id
         }))
       }
 
@@ -924,6 +933,61 @@ function PostDetailModal({
     { label: 'Views', value: analyticsData?.views ?? 0, icon: <BarChart3 className="w-4 h-4 text-slate-500" />, color: 'text-slate-600' },
   ]
 
+  // Generate logs array based on the post properties
+  const logs = [];
+
+  // 1. Queue creation
+  if (post.created_at || post.time) {
+    logs.push({
+      time: post.created_at ? new Date(post.created_at) : new Date(new Date(post.time).getTime() - 60000),
+      label: 'Post Queue Created',
+      desc: `Scheduled for platform: ${post.platform || post.type || 'meta'}`
+    });
+  }
+
+  // 2. QStash queueing
+  if (post.qstash_message_id) {
+    logs.push({
+      time: post.created_at ? new Date(post.created_at) : new Date(new Date(post.time).getTime() - 60000),
+      label: 'QStash Scheduled',
+      desc: `Delayed trigger registered (ID: ${post.qstash_message_id.substring(0, 12)}...)`
+    });
+  }
+
+  // 3. Status transitions
+  if (post.status === 'published') {
+    logs.push({
+      time: post.published_at ? new Date(post.published_at) : new Date(post.time),
+      label: 'Published Successfully',
+      desc: `Posted live! Meta ID: ${post.published_id || 'N/A'}`
+    });
+  } else if (post.status === 'failed') {
+    logs.push({
+      time: new Date(),
+      label: 'Publishing Failed',
+      desc: post.errorLog || 'Unknown publishing error'
+    });
+  } else {
+    // scheduled
+    const isOverdue = !timeLeft;
+    if (isOverdue) {
+      logs.push({
+        time: new Date(post.time),
+        label: 'Awaiting Queue Execution',
+        desc: 'Scheduled time reached. Queue runner is processing...'
+      });
+    } else {
+      logs.push({
+        time: new Date(post.time),
+        label: 'Scheduled Execution Queued',
+        desc: `Waiting for release at ${formattedTime}`
+      });
+    }
+  }
+
+  // Sort logs by time ascending
+  logs.sort((a, b) => a.time.getTime() - b.time.getTime());
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
       <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl text-slate-800 overflow-hidden">
@@ -1106,6 +1170,42 @@ function PostDetailModal({
               </div>
             </>
           )}
+
+          {/* Logs View Section */}
+          <div className="border-t border-slate-100 pt-4 space-y-2.5">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-slate-500" /> Activity &amp; Execution Logs
+            </p>
+            <div className="bg-slate-50 border border-slate-200/50 rounded-xl p-4 space-y-3.5 max-h-36 overflow-y-auto">
+              {logs.map((log, index) => {
+                const logFormattedTime = log.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const isFailed = log.label.includes('Failed');
+                const isSuccess = log.label.includes('Success');
+
+                return (
+                  <div key={index} className="flex gap-3 relative group text-left">
+                    {index < logs.length - 1 && (
+                      <div className="absolute left-[5px] top-[14px] bottom-[-20px] w-0.5 bg-slate-200" />
+                    )}
+                    <div className={`w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm mt-0.5 shrink-0 z-10 ${
+                      isFailed ? 'bg-red-500 ring-2 ring-red-100' : isSuccess ? 'bg-green-500 ring-2 ring-green-100' : 'bg-slate-400 ring-2 ring-slate-100'
+                    }`} />
+                    <div className="space-y-0.5 flex-1 min-w-0">
+                      <div className="flex justify-between items-baseline gap-2">
+                        <p className={`text-[11px] font-bold truncate ${isFailed ? 'text-red-700' : isSuccess ? 'text-green-700' : 'text-slate-700'}`}>
+                          {log.label}
+                        </p>
+                        <span className="text-[9px] font-bold text-slate-400 font-mono shrink-0">{logFormattedTime}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 break-words leading-normal">
+                        {log.desc}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Footer actions */}
           <div className="flex gap-2 pt-1">
