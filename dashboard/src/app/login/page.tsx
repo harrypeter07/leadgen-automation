@@ -50,16 +50,19 @@ export default function LoginPage() {
       <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-purple-600/5 blur-[120px]" />
 
       <div className="w-full max-w-md px-6 z-10 animate-fade-in">
-        {/* Zarss Logo Banner */}
+        {/* Stratnent Logo Banner */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-[#E3B859] flex items-center justify-center text-[#141416] font-black text-3xl shadow-xl shadow-[#E3B859]/10 transform hover:scale-105 transition-transform duration-300">
-            Z
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.jpg"
+            alt="Stratnent logo"
+            className="w-16 h-16 rounded-2xl object-cover shadow-xl shadow-[#E3B859]/5 transform hover:scale-105 transition-transform duration-300"
+          />
           <h1 className="text-2xl font-bold text-white tracking-tight mt-4 flex items-center gap-2">
-            <span>Zarss</span>
-            <span className="text-xs uppercase bg-[#252528] text-gray-400 px-2 py-0.5 rounded font-mono font-normal">v3</span>
+            <span>Stratnent</span>
+            <span className="text-xs uppercase bg-[#252528] text-gray-400 px-2 py-0.5 rounded font-mono font-normal">ADMIN</span>
           </h1>
-          <p className="text-gray-500 text-xs mt-1 uppercase tracking-wider font-semibold">Lead intelligence & Outreach Portal</p>
+          <p className="text-gray-500 text-xs mt-1 uppercase tracking-wider font-semibold">Marketing Automation &amp; CRM Portal</p>
         </div>
 
         {/* Login Card */}

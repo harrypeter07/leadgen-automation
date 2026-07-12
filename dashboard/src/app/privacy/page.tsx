@@ -1,16 +1,16 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy – FlowFyp',
-  description: 'Privacy Policy for FlowFyp – Social Automation & Lead Generation Platform',
+  title: 'Privacy Policy – Stratnent',
+  description: 'Privacy Policy for Stratnent – Social Automation & Lead Generation Platform',
 }
 
 export default function PrivacyPolicyPage() {
   const lastUpdated = 'July 9, 2026'
-  const appName = 'FlowFyp'
-  const companyName = 'Zarss Marketing'
-  const contactEmail = 'support@flowfyp.com'
-  const appUrl = 'https://leadgen-automation-git-beta-agent-harrypeter07s-projects.vercel.app'
+  const appName = 'Stratnent'
+  const companyName = 'Stratnent'
+  const contactEmail = 'support@stratnent.com'
+  const appUrl = 'https://admin.stratnent.com'
 
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', maxWidth: '860px', margin: '0 auto', padding: '48px 24px', color: '#1a1a1a', lineHeight: '1.8', fontSize: '16px' }}>
