@@ -417,8 +417,25 @@ export default function EmailOutreachPage() {
 
   const openDraftModal = (lead: Lead) => {
     setViewingLead(lead)
-    setEditSubject(lead.ai_message_email_subject || '')
-    setEditBody(lead.ai_message_email_body || '')
+    
+    const sender = smtpFromName.trim() || 'AarogyaHaar Team'
+    const contactPerson = (lead.enrichment_fields as any)?.contact_person || 'Business Owner'
+    
+    const clean = (text: string) => {
+      if (!text) return ''
+      return text
+        .replace(/\[Company\s*Name\]/gi, lead.name || '')
+        .replace(/\[Your\s*Name\]/gi, sender)
+        .replace(/\[Sender\s*Name\]/gi, sender)
+        .replace(/\[My\s*Name\]/gi, sender)
+        .replace(/\[Your\s*Phone\s*Number\]/gi, '')
+        .replace(/\[Name\]/gi, contactPerson)
+        .replace(/\[Your\s*Company\]/gi, sender)
+        .replace(/\[Contact\s*Person\]/gi, contactPerson)
+    }
+
+    setEditSubject(clean(lead.ai_message_email_subject || ''))
+    setEditBody(clean(lead.ai_message_email_body || ''))
     setDraftViewMode('preview')
   }
 

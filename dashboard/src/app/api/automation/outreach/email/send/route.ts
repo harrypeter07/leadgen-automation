@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     // Fetch leads with drafts
     const { data: leads, error: fetchErr } = await supabaseAdmin
       .from('leads')
-      .select('id,name,email,ai_message_email_subject,ai_message_email_body')
+      .select('id,name,email,ai_message_email_subject,ai_message_email_body,enrichment_fields')
       .in('id', leadIds)
 
     if (fetchErr || !leads) {
@@ -86,8 +86,25 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const subject = lead.ai_message_email_subject
-      const textBody = lead.ai_message_email_body
+      const enrichment = lead.enrichment_fields as Record<string, unknown> | null
+      const contactPerson = (enrichment && typeof enrichment.contact_person === 'string')
+        ? enrichment.contact_person
+        : 'Business Owner'
+
+      const cleanPlaceholders = (text: string) => {
+        return text
+          .replace(/\[Company\s*Name\]/gi, lead.name)
+          .replace(/\[Your\s*Name\]/gi, smtpFromName)
+          .replace(/\[Your\s*Phone\s*Number\]/gi, '')
+          .replace(/\[Name\]/gi, contactPerson)
+          .replace(/\[Your\s*Company\]/gi, smtpFromName)
+          .replace(/\[Contact\s*Person\]/gi, contactPerson)
+          .replace(/\[Sender\s*Name\]/gi, smtpFromName)
+          .replace(/\[My\s*Name\]/gi, smtpFromName)
+      }
+
+      const subject = cleanPlaceholders(lead.ai_message_email_subject)
+      const textBody = cleanPlaceholders(lead.ai_message_email_body)
       const htmlBody = `<div style="font-family:sans-serif;max-width:600px;line-height:1.6">${textBody.split('\n').map((p: string) => p ? `<p>${p}</p>` : '').join('')}</div>`
 
       let sentSuccess = false
