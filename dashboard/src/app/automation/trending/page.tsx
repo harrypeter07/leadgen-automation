@@ -22,13 +22,15 @@ export default function TrendingResearchPage() {
     hashtags: string[]
     sentiment: string
     ideas: TrendingIdea[]
+    realDataFetched?: boolean
+    hashtagsSearched?: string[]
   } | null>(null)
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!topic.trim()) return
     setSearching(true)
-    const toastId = toast.loading('Researching trends…')
+    const toastId = toast.loading('📡 Searching Instagram hashtags & generating ideas…')
     try {
       const res = await fetch('/api/meta/instagram/trending', {
         method: 'POST',
@@ -119,8 +121,15 @@ export default function TrendingResearchPage() {
               <div className="border border-[#2D2D30] rounded-2xl bg-[#0E0E10] p-5 space-y-3">
                 <div className="flex justify-between items-center border-b border-[#2D2D30] pb-2">
                   <span className="text-xs font-bold text-gray-400">RESEARCH RESULTS: {result.niche.toUpperCase()}</span>
-                  <span className="text-[10px] font-mono text-purple-400">Live Sentiment: {result.sentiment}</span>
+                  <div className="flex items-center gap-2">
+                    {result.realDataFetched ? (
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/30 text-green-400">📡 REAL INSTAGRAM DATA</span>
+                    ) : (
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/30 text-yellow-400">🤖 AI GENERATED</span>
+                    )}
+                  </div>
                 </div>
+                <p className="text-[10px] text-purple-400 font-mono leading-relaxed">{result.sentiment}</p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {result.hashtags.map(tag => (
                     <span key={tag} className="text-[10px] font-bold bg-[#141416] border border-[#2D2D30] px-2.5 py-1 rounded-full text-purple-300">
