@@ -2,6 +2,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
+import { 
+  Calendar, 
+  Image as ImageIcon, 
+  RefreshCw, 
+  Check, 
+  AlertCircle, 
+  Inbox, 
+  ChevronLeft, 
+  ChevronRight 
+} from 'lucide-react'
 
 interface CalendarPost {
   id: string
@@ -226,25 +236,27 @@ export default function ContentCalendarPage() {
   })
 
   return (
-    <div className="space-y-8 select-none text-white animate-fadeIn">
+    <div className="space-y-6 select-none text-slate-800 animate-fadeIn">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">📅 Content Calendar</h1>
-          <p className="mt-1 text-sm text-gray-500 font-medium font-bold uppercase tracking-wider">Drag visual assets onto dates for quick scheduling.</p>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
+            <Calendar className="w-7 h-7 text-rose-600" /> Content Calendar
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 font-bold uppercase tracking-wider">Drag visual assets onto dates for quick scheduling.</p>
         </div>
       </div>
 
       {/* Control panel for scheduling */}
-      <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-5 flex flex-col md:flex-row gap-5 items-center justify-between shadow-lg">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-col md:flex-row gap-5 items-center justify-between shadow-sm">
         <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500 font-black uppercase tracking-wider">Default Time:</span>
+            <span className="text-[10px] text-slate-500 font-black uppercase tracking-wider">Default Time:</span>
             <input
               type="time"
               value={defaultTime}
               onChange={e => setDefaultTime(e.target.value)}
-              className="bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-gray-500 font-mono"
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-850 focus:outline-none focus:border-rose-600 font-mono transition-colors"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -253,29 +265,29 @@ export default function ContentCalendarPage() {
               id="chkDefaultTime"
               checked={useDefaultTime}
               onChange={e => setUseDefaultTime(e.target.checked)}
-              className="w-4 h-4 accent-[#E3B859] rounded border-[#2D2D30] bg-[#141416]"
+              className="w-4 h-4 accent-rose-600 rounded border-slate-300 bg-slate-50 cursor-pointer"
             />
-            <label htmlFor="chkDefaultTime" className="text-xs text-gray-400 font-medium">Instant Schedule (No Dialog popup)</label>
+            <label htmlFor="chkDefaultTime" className="text-xs text-slate-500 font-medium cursor-pointer">Instant Schedule (No Dialog popup)</label>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest font-black">Meta Engine Active</span>
+          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-black">Meta Engine Active</span>
         </div>
       </div>
 
       {/* Main Grid: Left sidebar media | Right calendar grid */}
       <div className="grid gap-6 lg:grid-cols-4">
         {/* Left Panel: Draggable Media Library */}
-        <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-5 space-y-4 h-[600px] flex flex-col">
-          <div className="border-b border-[#2D2D30] pb-2 flex justify-between items-center">
-            <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-              <span>🖼️ Draggable Media</span>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4 h-[600px] flex flex-col shadow-sm">
+          <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <ImageIcon className="w-4 h-4 text-rose-600" /> Draggable Media
             </h3>
             <button
               onClick={scanCloudinary}
               disabled={scanningFolder}
-              className="text-[9px] text-[#E3B859] hover:underline uppercase font-bold"
+              className="text-[9px] text-rose-600 hover:text-rose-700 uppercase font-bold transition-colors"
             >
               {scanningFolder ? '⏳' : 'Refresh'}
             </button>
@@ -286,7 +298,7 @@ export default function ContentCalendarPage() {
               value={cloudinaryFolder}
               onChange={e => setCloudinaryFolder(e.target.value)}
               placeholder="Search folder..."
-              className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors"
             />
 
             {/* Draggable items list */}
@@ -297,17 +309,17 @@ export default function ContentCalendarPage() {
                     key={asset.publicId}
                     draggable
                     onDragStart={(e) => handleDragStart(e, asset.url)}
-                    className="relative aspect-square rounded-lg overflow-hidden border border-[#2D2D30] hover:border-gray-500 transition-all cursor-grab active:cursor-grabbing group shadow-sm bg-[#141416]"
+                    className="relative w-full h-24 rounded-lg overflow-hidden border border-slate-200 hover:border-rose-400 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group bg-slate-50"
                   >
                     <img src={asset.url} alt="asset" className="w-full h-full object-cover select-none pointer-events-none" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      <span className="text-[8px] uppercase tracking-wider font-bold bg-[#141416] text-[#E3B859] px-1.5 py-0.5 rounded border border-[#E3B859]">DRAG</span>
+                    <div className="absolute inset-0 bg-rose-950/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <span className="text-[8px] uppercase tracking-wider font-bold bg-rose-600 text-white px-2 py-0.5 rounded shadow-sm">DRAG</span>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="py-20 text-center text-xs text-gray-600 uppercase border border-dashed border-[#2D2D30] rounded-xl flex-1 flex items-center justify-center">
+              <div className="py-20 text-center text-xs text-slate-400 uppercase border border-dashed border-slate-200 rounded-xl flex-1 flex items-center justify-center">
                 No Media Found
               </div>
             )}
@@ -315,35 +327,35 @@ export default function ContentCalendarPage() {
         </div>
 
         {/* Right Panel: Calendar Container */}
-        <div className="lg:col-span-3 rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-6">
+        <div className="lg:col-span-3 rounded-2xl border border-slate-200 bg-white p-6 space-y-6 shadow-sm">
           {/* Month Selector header */}
-          <div className="flex justify-between items-center border-b border-[#2D2D30] pb-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-4">
             <div className="flex items-center gap-4">
-              <h2 className="text-lg font-bold text-white tracking-tight">{monthNames[month]} {year}</h2>
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">{monthNames[month]} {year}</h2>
               <div className="flex gap-1">
-                <button onClick={handlePrevMonth} className="px-3 py-1.5 bg-[#141416] border border-[#2D2D30] hover:bg-gray-800 rounded-lg text-xs font-bold font-mono">◀</button>
-                <button onClick={handleNextMonth} className="px-3 py-1.5 bg-[#141416] border border-[#2D2D30] hover:bg-gray-800 rounded-lg text-xs font-bold font-mono">▶</button>
+                <button onClick={handlePrevMonth} className="p-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-650 transition-colors flex items-center justify-center"><ChevronLeft className="w-4 h-4" /></button>
+                <button onClick={handleNextMonth} className="p-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-650 transition-colors flex items-center justify-center"><ChevronRight className="w-4 h-4" /></button>
               </div>
             </div>
             <button
               onClick={fetchCalendarPosts}
-              className="text-xs font-mono text-gray-500 hover:text-white transition-colors"
+              className="text-xs font-bold text-slate-455 hover:text-rose-600 transition-colors flex items-center gap-1"
             >
-              🔄 Sync Live
+              <RefreshCw className="w-3.5 h-3.5" /> Sync Live
             </button>
           </div>
 
           {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-px bg-[#2D2D30] overflow-hidden rounded-xl">
+          <div className="grid grid-cols-7 gap-px bg-slate-200 overflow-hidden rounded-xl border border-slate-200">
             {daysOfWeek.map((day) => (
-              <div key={day} className="bg-[#141416] py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-[#2D2D30]">
+              <div key={day} className="bg-slate-50 py-3 text-center text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-100">
                 {day}
               </div>
             ))}
 
             {/* Dummy empty grid offset */}
             {Array.from({ length: firstDayIndex }).map((_, i) => (
-              <div key={`empty-${i}`} className="bg-[#18181A] min-h-[120px] p-2 text-xs" />
+              <div key={`empty-${i}`} className="bg-slate-50/30 min-h-[120px] p-2 text-xs" />
             ))}
 
             {daysArray.map((day) => {
@@ -353,13 +365,13 @@ export default function ContentCalendarPage() {
                   key={day}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDropMedia(e, day)}
-                  className="bg-[#18181A] min-h-[120px] p-2.5 text-xs flex flex-col justify-between hover:bg-[#202022] transition-colors border-r border-b border-[#2D2D30]/40 relative group/cell"
+                  className="bg-white min-h-[120px] p-2.5 text-xs flex flex-col justify-between hover:bg-slate-50/50 transition-all border-r border-b border-slate-100 relative group/cell"
                 >
-                  <span className="font-bold text-gray-400 block mb-1 text-[10px]">{day}</span>
+                  <span className="font-extrabold text-slate-400 block mb-1 text-[10px]">{day}</span>
                   
                   <div className="space-y-1 flex-1 overflow-y-auto max-h-[85px] scrollbar-none">
                     {loading && items.length === 0 ? (
-                      <div className="h-4 bg-[#141416] rounded animate-pulse" />
+                      <div className="h-4 bg-slate-100 rounded animate-pulse" />
                     ) : (
                       items.map((item) => {
                         const formattedTime = new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -371,15 +383,15 @@ export default function ContentCalendarPage() {
                             href={item.permalink || '#'}
                             target="_blank"
                             rel="noreferrer"
-                            className={`block p-1 rounded border text-[9px] font-semibold tracking-wide leading-tight truncate ${
+                            className={`block p-1 rounded border text-[9px] font-semibold tracking-wide leading-tight truncate transition-colors ${
                               isScheduled
-                                ? 'bg-amber-950/20 text-amber-300 border-amber-800/30 border-dashed hover:bg-amber-900/10'
+                                ? 'bg-amber-50 text-amber-700 border-amber-250 border-dashed hover:bg-amber-100/50'
                                 : item.type === 'ig'
-                                ? 'bg-purple-950/30 text-purple-400 border-purple-900/30 hover:bg-purple-900/20'
-                                : 'bg-blue-950/30 text-blue-400 border-blue-900/30 hover:bg-blue-900/20'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100/50'
+                                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100/50'
                             }`}
                           >
-                            <span className="block text-[7px] font-black opacity-60 uppercase">
+                            <span className="block text-[7px] font-black opacity-60 uppercase mb-0.5">
                               {formattedTime} {isScheduled && '• SCHEDULED'}
                             </span>
                             {item.title}
@@ -397,37 +409,37 @@ export default function ContentCalendarPage() {
 
       {/* Modal Dialog for Drop Scheduling */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4 select-none animate-fadeIn">
-          <div className="bg-[#18181A] border border-[#2D2D30] rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-[#2D2D30] pb-2">
-              <h3 className="font-bold text-white text-sm">📅 Schedule dropped post</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-white text-sm">✕</button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 select-none animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl text-slate-800">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="font-extrabold text-slate-900 text-sm">Schedule Dropped Post</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900 text-sm font-bold">✕</button>
             </div>
 
             <div className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Selected Date</label>
+                  <label className="block text-slate-450 text-[10px] font-bold uppercase tracking-wider mb-1.5">Selected Date</label>
                   <input
                     type="text"
                     readOnly
                     value={modalDate ? modalDate.toLocaleDateString() : ''}
-                    className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-gray-400 focus:outline-none"
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Posting Time</label>
+                  <label className="block text-slate-450 text-[10px] font-bold uppercase tracking-wider mb-1.5">Posting Time</label>
                   <input
                     type="time"
                     value={modalTime}
                     onChange={e => setModalTime(e.target.value)}
-                    className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-white focus:outline-none font-mono"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-rose-600 font-mono transition-colors"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Publish To</label>
+                <label className="block text-slate-455 text-[10px] font-bold uppercase tracking-wider mb-1.5">Publish To</label>
                 <div className="flex gap-2">
                   {['facebook', 'instagram'].map(p => (
                     <button
@@ -436,10 +448,10 @@ export default function ContentCalendarPage() {
                       onClick={() => setModalPlatforms(prev =>
                         prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
                       )}
-                      className={`flex-1 py-2 rounded-xl text-center border font-bold uppercase text-[10px] tracking-wider transition-colors ${
+                      className={`flex-1 py-2.5 rounded-xl text-center border font-bold uppercase text-[10px] tracking-wider transition-all ${
                         modalPlatforms.includes(p)
-                          ? 'bg-[#E3B859] border-[#E3B859] text-[#141416]'
-                          : 'bg-[#141416] border-[#2D2D30] text-gray-400'
+                          ? 'bg-rose-600 border-rose-600 text-white shadow-sm shadow-rose-600/10'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
                       }`}
                     >
                       {p}
@@ -449,20 +461,20 @@ export default function ContentCalendarPage() {
               </div>
 
               <div>
-                <label className="block text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Post Caption</label>
+                <label className="block text-slate-455 text-[10px] font-bold uppercase tracking-wider mb-1.5">Post Caption</label>
                 <textarea
                   rows={4}
                   value={modalCaption}
                   onChange={e => setModalCaption(e.target.value)}
-                  className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-gray-500 resize-none leading-relaxed"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-rose-500 transition-colors resize-none leading-relaxed"
                   placeholder="Enter caption..."
                 />
               </div>
 
               {modalImageUrl && (
                 <div>
-                  <label className="block text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Selected Image</label>
-                  <img src={modalImageUrl} alt="dropped" className="rounded-xl max-h-32 object-cover border border-[#2D2D30] w-full" />
+                  <label className="block text-slate-455 text-[10px] font-bold uppercase tracking-wider mb-1.5">Selected Image</label>
+                  <img src={modalImageUrl} alt="dropped" className="rounded-xl max-h-32 object-cover border border-slate-200 w-full" />
                 </div>
               )}
 
@@ -470,7 +482,7 @@ export default function ContentCalendarPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-[#2D2D30] text-gray-400 font-bold hover:bg-gray-800 transition-colors"
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-500 font-bold hover:bg-slate-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -478,7 +490,7 @@ export default function ContentCalendarPage() {
                   type="button"
                   onClick={handleSaveModalPost}
                   disabled={savingPost || modalPlatforms.length === 0}
-                  className="flex-1 py-2.5 rounded-xl bg-[#E3B859] text-[#141416] font-bold uppercase hover:bg-[#d4ac50] transition-colors disabled:opacity-40"
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold uppercase hover:bg-rose-700 transition-colors disabled:opacity-40 shadow-md shadow-rose-600/10"
                 >
                   {savingPost ? 'Scheduling...' : 'Confirm Schedule'}
                 </button>
