@@ -88,7 +88,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"platform\": \"{{ $json.platform }}\",\n  \"account_name\": \"{{ $json.account_name }}\"\n}",
+        "jsonBody": "={\n  \"platform\": \"{{ $json.platform }}\",\n  \"account_name\": \"{{ $json.platform === 'instagram' ? 'Instagram Business' : 'Meta Page' }}\",\n  \"page_id\": \"{{ $json.platform === 'instagram' ? $json.instagram_business_id : $json.page_id }}\",\n  \"post_id\": \"{{ $json.id }}\",\n  \"content\": \"{{ $json.content }}\",\n  \"media_url\": \"{{ $json.media_url }}\"\n}",
         "options": {
           "timeout": 10000
         }
@@ -102,7 +102,7 @@
     {
       "parameters": {
         "dataType": "string",
-        "value1": "={{ $('Split Queue Items').item.json.platform }}",
+        "value1": "={{ $json.platform }}",
         "rules": {
           "rules": [
             {
@@ -129,7 +129,7 @@
         "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $json.page_id }}/feed",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"message\": \"{{ $('Split Queue Items').item.json.content }}\",\n  \"access_token\": \"{{ $json.access_token }}\"\n}",
+        "jsonBody": "={\n  \"message\": \"{{ $json.content }}\",\n  \"access_token\": \"{{ $json.access_token }}\"\n}",
         "options": {
           "timeout": 20000
         }
@@ -146,7 +146,7 @@
         "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $json.page_id }}/media",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"image_url\": \"{{ $('Split Queue Items').item.json.media_url }}\",\n  \"caption\": \"{{ $('Split Queue Items').item.json.content }}\",\n  \"access_token\": \"{{ $('Fetch Page Credentials').item.json.access_token }}\"\n}",
+        "jsonBody": "={\n  \"image_url\": \"{{ $json.media_url }}\",\n  \"caption\": \"{{ $json.content }}\",\n  \"access_token\": \"{{ $json.access_token }}\"\n}",
         "options": {
           "timeout": 30000
         }
@@ -189,7 +189,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"id\": \"{{ $('Split Queue Items').item.json.id }}\",\n  \"status\": \"published\",\n  \"published_id\": \"{{ $json.id }}\",\n  \"published_at\": \"{{ new Date().toISOString() }}\"\n}",
+        "jsonBody": "={\n  \"id\": \"{{ $('Fetch Page Credentials').item.json.post_id }}\",\n  \"status\": \"published\",\n  \"published_id\": \"{{ $json.id }}\",\n  \"published_at\": \"{{ new Date().toISOString() }}\"\n}",
         "options": {}
       },
       "id": "e4f8a1b2-2009-4000-8000-000000000009",
@@ -221,7 +221,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"id\": \"{{ $('Split Queue Items').item.json.id }}\",\n  \"status\": \"failed\",\n  \"error_log\": \"Failed on node '{{ $json.execution.error.node.name }}': {{ $json.execution.error.message }}\"\n}",
+        "jsonBody": "={\n  \"id\": \"{{ $('Fetch Page Credentials').item.json.post_id }}\",\n  \"status\": \"failed\",\n  \"error_log\": \"Failed on node '{{ $json.execution.error.node.name }}': {{ $json.execution.error.message }}\"\n}",
         "options": {}
       },
       "id": "e4f8a1b2-200c-4000-8000-000000000021",
