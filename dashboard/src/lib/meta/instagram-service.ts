@@ -83,8 +83,31 @@ export const InstagramService = {
     // Step 1: Create media container via Facebook Graph API
     const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, { image_url: imageUrl, caption }, { accessToken: token, source: SOURCE })
     if (!container.success || !container.data?.id) return container
+
+    const containerId = container.data.id
+
+    // Polling container status (up to 8 attempts, waiting 2 seconds between each)
+    let attempts = 0
+    while (attempts < 8) {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      attempts++
+
+      try {
+        const statusRes = await MetaClient.get<{ status_code: string; error_message?: string }>(`/${containerId}?fields=status_code,error_message`, { accessToken: token, source: SOURCE })
+        if (statusRes.success && statusRes.data?.status_code === 'FINISHED') {
+          break
+        }
+        if (statusRes.success && (statusRes.data?.status_code === 'ERROR' || statusRes.data?.status_code === 'EXPIRED')) {
+          const failMsg = statusRes.data?.error_message || `Instagram media container status: ${statusRes.data?.status_code}`
+          return { success: false, error: { message: failMsg, type: 'OAuthException', code: 0 }, statusCode: statusRes.statusCode, duration: statusRes.duration, endpoint: statusRes.endpoint, requestId: statusRes.requestId }
+        }
+      } catch (pollErr) {
+        console.warn(`[InstagramService] Error polling container status:`, pollErr)
+      }
+    }
+
     // Step 2: Publish
-    return MetaClient.post<{ id: string }>(`/${igId}/media_publish`, { creation_id: container.data.id }, { accessToken: token, source: SOURCE })
+    return MetaClient.post<{ id: string }>(`/${igId}/media_publish`, { creation_id: containerId }, { accessToken: token, source: SOURCE })
   },
   async publishReel(videoUrl: string, caption: string) {
     const igId = await getIgBizId()
@@ -96,8 +119,31 @@ export const InstagramService = {
     // Step 1: Create video/reel container via Facebook Graph API
     const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, { video_url: videoUrl, caption, media_type: 'REELS' }, { accessToken: token, source: SOURCE })
     if (!container.success || !container.data?.id) return container
+
+    const containerId = container.data.id
+
+    // Reels can take longer, poll up to 15 attempts
+    let attempts = 0
+    while (attempts < 15) {
+      await new Promise(resolve => setTimeout(resolve, 3000))
+      attempts++
+
+      try {
+        const statusRes = await MetaClient.get<{ status_code: string; error_message?: string }>(`/${containerId}?fields=status_code,error_message`, { accessToken: token, source: SOURCE })
+        if (statusRes.success && statusRes.data?.status_code === 'FINISHED') {
+          break
+        }
+        if (statusRes.success && (statusRes.data?.status_code === 'ERROR' || statusRes.data?.status_code === 'EXPIRED')) {
+          const failMsg = statusRes.data?.error_message || `Instagram Reel container status: ${statusRes.data?.status_code}`
+          return { success: false, error: { message: failMsg, type: 'OAuthException', code: 0 }, statusCode: statusRes.statusCode, duration: statusRes.duration, endpoint: statusRes.endpoint, requestId: statusRes.requestId }
+        }
+      } catch (pollErr) {
+        console.warn(`[InstagramService] Error polling Reel status:`, pollErr)
+      }
+    }
+
     // Step 2: Publish
-    return MetaClient.post<{ id: string }>(`/${igId}/media_publish`, { creation_id: container.data.id }, { accessToken: token, source: SOURCE })
+    return MetaClient.post<{ id: string }>(`/${igId}/media_publish`, { creation_id: containerId }, { accessToken: token, source: SOURCE })
   },
   async getComments(mediaId: string, limit = 25) {
     return igGet<{ data: unknown[] }>(`/${mediaId}/comments?fields=id,text,from,timestamp,like_count,replies{text,from,timestamp}&limit=${limit}`)
