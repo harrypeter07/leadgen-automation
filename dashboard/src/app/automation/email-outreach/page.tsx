@@ -120,12 +120,12 @@ export default function EmailOutreachPage() {
     }
   }
 
-  const fetchLeads = useCallback(async () => {
+  const fetchLeads = useCallback(async (silent = false) => {
     if (selectedJobIds.length === 0) {
       setLeads([])
       return
     }
-    setLoadingLeads(true)
+    if (!silent) setLoadingLeads(true)
     try {
       const resolvedJobIds: string[] = []
       selectedJobIds.forEach(id => {
@@ -149,9 +149,9 @@ export default function EmailOutreachPage() {
       console.error('Error fetching leads:', err)
       toast.error('Failed to load leads')
     } finally {
-      setLoadingLeads(false)
+      if (!silent) setLoadingLeads(false)
     }
-  }, [selectedJobIds])
+  }, [selectedJobIds, jobs])
 
   const fetchSmtpSettings = async () => {
     try {
@@ -309,6 +309,8 @@ export default function EmailOutreachPage() {
               lastErrorMessage = fails[0].error || 'Generation failed for some leads'
             }
           }
+          // Refresh leads list in real-time to show newly generated drafts
+          await fetchLeads(true)
         } else {
           failedCount += batch.length
           lastErrorMessage = data.error || 'Server error during generation'
