@@ -57,7 +57,13 @@ function useCountdown(targetISO: string | null) {
   useEffect(() => {
     if (!targetISO) return
     const calc = () => {
-      const diff = new Date(targetISO).getTime() - Date.now()
+      const parsedTime = new Date(targetISO).getTime()
+      if (isNaN(parsedTime)) {
+        setIsPast(true)
+        setTimeLeft('')
+        return
+      }
+      const diff = parsedTime - Date.now()
       if (diff <= 0) {
         setIsPast(true)
         setTimeLeft('')
