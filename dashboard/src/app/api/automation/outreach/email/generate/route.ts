@@ -11,12 +11,23 @@ export async function POST(req: NextRequest) {
   try {
     await ensureMetaConfig()
 
-    const { leadIds } = await req.json()
+    const { leadIds, senderName: bodySenderName } = await req.json()
     if (!Array.isArray(leadIds) || leadIds.length === 0) {
       return NextResponse.json({ error: 'leadIds array required' }, { status: 400 })
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
+
+    // Resolve senderName from request or config settings
+    let senderName = bodySenderName || ''
+    if (!senderName) {
+      const { data: configRow } = await supabaseAdmin
+        .from('meta_config')
+        .select('value')
+        .eq('key', 'SMTP_FROM_NAME')
+        .maybeSingle()
+      senderName = configRow?.value || 'the Partnership Team'
+    }
 
     // Fetch lead details from Supabase
     const { data: leads, error: fetchErr } = await supabaseAdmin
@@ -35,14 +46,24 @@ export async function POST(req: NextRequest) {
         const enrichment = lead.enrichment_fields as Record<string, unknown> | null
         const prompt = `Write a professional, personalized cold outreach email for a business.
 
-Business Details:
+Sender Details:
+- Sender Name: ${senderName}
+
+Recipient Business Details:
 - Name: ${lead.name}
 - Category: ${lead.category || 'local business'}
 - City: ${lead.city || 'unknown city'}
 - Website: ${lead.website || 'no website listed'}
 - Rating: ${lead.rating ? `${lead.rating}/5 (${lead.review_count} reviews)` : 'not available'}
 ${enrichment?.business_description ? `- Description: ${enrichment.business_description}` : ''}
-${enrichment?.contact_person ? `- Contact: ${enrichment.contact_person} (${enrichment.contact_position || ''})` : ''}
+${enrichment?.contact_person ? `- Contact Person: ${enrichment.contact_person} (${enrichment.contact_position || ''})` : ''}
+
+CRITICAL INSTRUCTIONS:
+1. DO NOT use generic bracket placeholders (like "[Company Name]", "[Name]", "[Your Name]", "[Your Phone Number]", or "<Company Name>") under any circumstances.
+2. Replace the recipient company name placeholder with "${lead.name}".
+3. Replace the recipient contact name placeholder with "${enrichment?.contact_person || 'Business Owner'}".
+4. Replace the signature placeholder (like "[Your Name]") with "${senderName}".
+5. If any details (like phone number) are missing or unspecified, DO NOT output placeholder text like "[Your Phone Number]"; instead, write a natural closing statement (e.g., "Best regards,\n${senderName}") or omit the missing detail entirely.
 
 Write the email in two parts separated by "|||":
 1. Email subject line (max 8 words, compelling)
@@ -60,8 +81,25 @@ Format: SUBJECT|||BODY`
         )
         const parts = raw.split('|||')
 
-        const subject = parts[0]?.trim().replace(/^subject[:\s]*/i, '') || `Following up — ${lead.name}`
-        const body = parts[1]?.trim() || raw.trim()
+        let subject = parts[0]?.trim().replace(/^subject[:\s]*/i, '') || `Following up — ${lead.name}`
+        let body = parts[1]?.trim() || raw.trim()
+
+        // Post-processing safety sweep to catch and replace any accidental bracket placeholders
+        const cleanPlaceholders = (text: string) => {
+          const contactName = (enrichment && typeof enrichment.contact_person === 'string') 
+            ? enrichment.contact_person 
+            : 'Business Owner'
+          return text
+            .replace(/\[Company\s*Name\]/gi, lead.name)
+            .replace(/\[Your\s*Name\]/gi, senderName)
+            .replace(/\[Your\s*Phone\s*Number\]/gi, '')
+            .replace(/\[Name\]/gi, contactName)
+            .replace(/\[Your\s*Company\]/gi, senderName)
+            .replace(/\[Contact\s*Person\]/gi, contactName)
+        }
+
+        subject = cleanPlaceholders(subject)
+        body = cleanPlaceholders(body)
 
         // Save to Supabase
         await supabaseAdmin

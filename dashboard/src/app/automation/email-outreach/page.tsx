@@ -297,7 +297,7 @@ export default function EmailOutreachPage() {
         const res = await fetch('/api/automation/outreach/email/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ leadIds: batch })
+          body: JSON.stringify({ leadIds: batch, senderName: smtpFromName })
         })
         const data = await res.json()
         if (res.ok && data.success !== false) {
