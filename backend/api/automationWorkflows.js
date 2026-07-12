@@ -26,7 +26,12 @@ router.post('/accounts/credentials', authenticateApiSecret, async (req, res) => 
       return res.status(400).json({ error: 'Missing platform query parameter.' });
     }
 
-    let accounts = await connectedAccountsRepository.getByPlatform(platform);
+    let accounts = [];
+    try {
+      accounts = await connectedAccountsRepository.getByPlatform(platform);
+    } catch (e) {
+      logger.warn(`[Workflows API] Failed to fetch from connectedAccountsRepository: ${e.message}`);
+    }
 
     let match = null;
     if (page_id) {
@@ -39,19 +44,65 @@ router.post('/accounts/credentials', authenticateApiSecret, async (req, res) => 
       match = accounts[0]; // fallback to first configured connection
     }
 
-    if (!match) {
-      return res.status(404).json({ error: `No connection credentials configured for platform: ${platform}` });
+    // Load actual configurations from Supabase meta_config table
+    const { data: configData, error: configError } = await supabase
+      .from('meta_config')
+      .select('key, value, encrypted');
+
+    const configMap = {};
+    if (!configError && configData) {
+      const crypto = require('crypto');
+      const getMetaConfigKey = () => {
+        const raw = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+        return Buffer.from(raw.slice(0, 32).padEnd(32, '0'));
+      };
+      const decryptMetaConfigValue = (val) => {
+        try {
+          if (!val || !val.startsWith('enc:')) return val;
+          const parts = val.split(':');
+          if (parts.length < 3) return val;
+          const iv = Buffer.from(parts[1], 'hex');
+          const encrypted = Buffer.from(parts[2], 'hex');
+          const decipher = crypto.createDecipheriv('aes-256-cbc', getMetaConfigKey(), iv);
+          return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+        } catch {
+          return val;
+        }
+      };
+
+      configData.forEach(row => {
+        configMap[row.key] = row.encrypted ? decryptMetaConfigValue(row.value) : row.value;
+      });
+    }
+
+    // Use DB config values as primary fallback
+    const app_id = match?.app_id || configMap.META_APP_ID || '';
+    const app_secret = (match?.credentials && match.credentials.app_secret) || configMap.META_APP_SECRET || '';
+    
+    let access_token = '';
+    let resolved_page_id = '';
+
+    if (platform === 'instagram') {
+      access_token = configMap.INSTAGRAM_ACCESS_TOKEN || configMap.META_PAGE_ACCESS_TOKEN || '';
+      resolved_page_id = configMap.INSTAGRAM_BUSINESS_ID || configMap.META_PAGE_ID || '';
+    } else {
+      access_token = (match?.credentials && match.credentials.access_token) || configMap.META_PAGE_ACCESS_TOKEN || '';
+      resolved_page_id = (match?.credentials && match.credentials.page_id) || configMap.META_PAGE_ID || '';
+    }
+
+    if (!access_token) {
+      return res.status(404).json({ error: `No active access token or configuration found for platform: ${platform}` });
     }
 
     // Return the decrypted credentials object directly to n8n stateless engine
     res.json({
-      id: match.id,
-      account_name: match.account_name,
-      app_id: match.app_id,
-      access_token: match.credentials.access_token || '',
-      app_secret: match.credentials.app_secret || '',
-      page_id: match.credentials.page_id || '',
-      waba_id: match.credentials.waba_id || ''
+      id: match?.id || 'meta-config-fallback',
+      account_name: match?.account_name || (platform === 'instagram' ? 'smritifyp' : 'Smriti (Facebook Page)'),
+      app_id,
+      access_token,
+      app_secret,
+      page_id: resolved_page_id,
+      waba_id: (match?.credentials && match.credentials.waba_id) || configMap.WHATSAPP_PHONE_NUMBER_ID || ''
     });
   } catch (err) {
     logger.error(`[Workflows API] credentials fetch failed: ${err.message}`);
@@ -113,24 +164,29 @@ router.post('/publish/queue', async (req, res) => {
 // POST /api/automation/publish/queue/callback - Action completed trigger from n8n
 router.post('/publish/queue/callback', authenticateApiSecret, async (req, res) => {
   try {
-    const { id, status, published_id } = req.body;
+    const { id, status, published_id, error_log } = req.body;
     if (!id || !status) {
       return res.status(400).json({ error: 'Missing id or status.' });
     }
 
+    const updatePayload = {
+      status,
+      published_id: published_id || null
+    };
+    if (error_log !== undefined) {
+      updatePayload.error_log = error_log;
+    }
+
     const { data, error } = await supabase
       .from('automation_publishing_queue')
-      .update({
-        status,
-        published_id: published_id || null
-      })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();
 
     if (error) throw error;
 
-    await auditLogRepository.log('PUBLISH_DISPATCHED', `Post ID ${id} completed publication on Meta API status: ${status}`);
+    await auditLogRepository.log('PUBLISH_DISPATCHED', `Post ID ${id} completed publication on Meta API status: ${status}. Error details: ${error_log || 'None'}`);
 
     res.json({ success: true, post: data });
   } catch (err) {
