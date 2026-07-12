@@ -373,13 +373,18 @@ export default function SocialInboxPage() {
     }
   }, [isPolling, showLogsPanel, fetchLogs])
 
-  // Auto-poll every 30 seconds
+  // Auto-poll every 90 seconds, only when tab is active/visible to save database hits
   useEffect(() => {
-    runPollReplies(true) // immediate first run
-    const interval = setInterval(() => runPollReplies(true), 30_000)
+    const handleAutoPoll = () => {
+      if (document.visibilityState === 'visible') {
+        runPollReplies(true)
+      }
+    }
+
+    handleAutoPoll() // immediate run on mount if visible
+    const interval = setInterval(handleAutoPoll, 90_000)
     return () => clearInterval(interval)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [runPollReplies])
 
   const senderId = selectedThread?.participantId || selectedThread?.id.replace('ig_', '')
   // Priority: threadConfig.enabled (Chat Settings modal) > THREAD_AUTOPILOT_OVERRIDES (header button) > global
