@@ -16,6 +16,7 @@ export default function TrendingResearchPage() {
   const router = useRouter()
   const [topic, setTopic] = useState('')
   const [platform, setPlatform] = useState<'instagram' | 'facebook'>('instagram')
+  const [directMode, setDirectMode] = useState(false)
   const [searching, setSearching] = useState(false)
   const [result, setResult] = useState<{
     niche: string
@@ -23,6 +24,7 @@ export default function TrendingResearchPage() {
     sentiment: string
     ideas: TrendingIdea[]
     realDataFetched?: boolean
+    directMode?: boolean
     hashtagsSearched?: string[]
   } | null>(null)
 
@@ -35,7 +37,7 @@ export default function TrendingResearchPage() {
       const res = await fetch('/api/meta/instagram/trending', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: topic.trim(), platform }),
+        body: JSON.stringify({ topic: topic.trim(), platform, directMode }),
       })
       const data = await res.json()
       if (res.ok && data.success) {
@@ -98,6 +100,28 @@ export default function TrendingResearchPage() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#141416] border border-[#2D2D30]">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-gray-300 uppercase">Direct Live Data</span>
+                  <span className="text-[8px] text-gray-500 font-medium">Bypass AI synthesis, show raw posts</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDirectMode(!directMode)}
+                  className={`w-9 h-5 flex items-center rounded-full p-1 cursor-pointer transition-colors shrink-0 ${
+                    directMode ? 'bg-[#E3B859]' : 'bg-gray-700'
+                  }`}
+                >
+                  <div
+                    className={`bg-[#141416] w-3 h-3 rounded-full shadow-md transform transition-transform ${
+                      directMode ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={searching || !topic.trim()}
@@ -157,9 +181,24 @@ export default function TrendingResearchPage() {
                     </div>
 
                     <div className="p-3.5 bg-[#141416] border border-[#2D2D30]/60 rounded-xl space-y-2 font-mono">
-                      <div className="text-[10px] leading-relaxed"><span className="text-purple-400 font-bold">HOOK:</span> "{idea.hook}"</div>
-                      <div className="text-[10px] leading-relaxed"><span className="text-purple-400 font-bold">CONCEPT:</span> {idea.description}</div>
-                      <div className="text-[10px] leading-relaxed border-t border-[#2D2D30]/40 pt-2 text-gray-300 whitespace-pre-wrap"><span className="text-purple-400 font-bold block mb-1">CAPTION COPY:</span>{idea.copy}</div>
+                      <div className="text-[10px] leading-relaxed">
+                        <span className="text-purple-400 font-bold">
+                          {result.directMode ? 'METRICS' : 'HOOK'}:
+                        </span>{' '}
+                        {result.directMode ? idea.hook : `"${idea.hook}"`}
+                      </div>
+                      <div className="text-[10px] leading-relaxed">
+                        <span className="text-purple-400 font-bold">
+                          {result.directMode ? 'FORMAT' : 'CONCEPT'}:
+                        </span>{' '}
+                        {idea.description}
+                      </div>
+                      <div className="text-[10px] leading-relaxed border-t border-[#2D2D30]/40 pt-2 text-gray-300 whitespace-pre-wrap">
+                        <span className="text-purple-400 font-bold block mb-1">
+                          {result.directMode ? 'ORIGINAL CAPTION' : 'CAPTION COPY'}:
+                        </span>
+                        {idea.copy}
+                      </div>
                     </div>
                   </div>
                 ))}

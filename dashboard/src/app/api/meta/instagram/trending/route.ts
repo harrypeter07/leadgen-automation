@@ -181,13 +181,10 @@ Only return raw JSON. No markdown. Ground everything in the real data above.`
   return { ...parsed, dataSource: 'meta_graph_api' }
 }
 
-// ─────────────────────────────────────────────
-// MAIN HANDLER
-// ─────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     await ensureMetaConfig()
-    const { topic, platform = 'instagram' } = await req.json()
+    const { topic, platform = 'instagram', directMode = false } = await req.json()
 
     if (!topic?.trim()) {
       return NextResponse.json({ error: 'topic is required' }, { status: 400 })
@@ -205,7 +202,6 @@ export async function POST(req: NextRequest) {
     const hashtags = await generateHashtags(topic, platform, apiKey)
 
     // ── Phase 2: Search each hashtag on Instagram (parallel) ──
-    // If no Meta credentials, skip and fall back to pure Gemini
     let realData: Awaited<ReturnType<typeof searchHashtagOnInstagram>>[] = []
     let hasRealData = false
 
@@ -216,6 +212,45 @@ export async function POST(req: NextRequest) {
       hasRealData = realData.some((d) => d.topPosts.length > 0)
     }
 
+    // If directMode is active AND we fetched real posts, bypass Gemini synthesis
+    if (directMode && hasRealData) {
+      // Flatten all posts and sort by like count descending
+      const allPosts: { caption: string; likeCount: number; commentCount: number; mediaType: string; hashtag: string }[] = []
+      realData.forEach((d) => {
+        d.topPosts.forEach((post) => {
+          allPosts.push({
+            ...post,
+            hashtag: d.tag
+          })
+        })
+      })
+
+      // Sort by likes descending
+      allPosts.sort((a, b) => b.likeCount - a.likeCount)
+
+      // Take the top 5 unique-ish or just top 5 posts
+      const topPosts = allPosts.slice(0, 5)
+
+      const ideas = topPosts.map((post, idx) => ({
+        title: `Instagram Top Post (via #${post.hashtag})`,
+        hook: `🔥 Likes: ${post.likeCount.toLocaleString()} | 💬 Comments: ${post.commentCount.toLocaleString()}`,
+        description: `Source format: ${post.mediaType}`,
+        copy: post.caption || '[No caption]',
+        mediaSuggestion: post.mediaType
+      }))
+
+      return NextResponse.json({
+        success: true,
+        niche: topic,
+        hashtags: hashtags.map(t => '#' + t),
+        sentiment: `Direct Feed: Showing raw top-performing posts directly from Instagram for niche hashtags.`,
+        ideas,
+        realDataFetched: true,
+        directMode: true,
+        hashtagsSearched: hashtags
+      })
+    }
+
     // ── Phase 3: Gemini synthesizes ideas based on real data (or falls back) ──
     const result = await synthesizeWithRealData(topic, platform, hashtags, realData, apiKey)
 
@@ -223,6 +258,7 @@ export async function POST(req: NextRequest) {
       success: true,
       ...result,
       realDataFetched: hasRealData,
+      directMode: false,
       hashtagsSearched: hashtags,
     })
   } catch (err: any) {
