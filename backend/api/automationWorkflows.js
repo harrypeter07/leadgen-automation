@@ -20,7 +20,7 @@ function authenticateApiSecret(req, res, next) {
 // POST /api/automation/accounts/credentials - Fetch decrypted secrets securely for n8n execution
 router.post('/accounts/credentials', authenticateApiSecret, async (req, res) => {
   try {
-    const { platform, account_name, page_id } = req.body;
+    const { platform, account_name, page_id, post_id, content, media_url } = req.body;
 
     if (!platform) {
       return res.status(400).json({ error: 'Missing platform query parameter.' });
@@ -102,7 +102,11 @@ router.post('/accounts/credentials', authenticateApiSecret, async (req, res) => 
       access_token,
       app_secret,
       page_id: resolved_page_id,
-      waba_id: (match?.credentials && match.credentials.waba_id) || configMap.WHATSAPP_PHONE_NUMBER_ID || ''
+      waba_id: (match?.credentials && match.credentials.waba_id) || configMap.WHATSAPP_PHONE_NUMBER_ID || '',
+      post_id: post_id || '',
+      platform: platform || '',
+      content: content || '',
+      media_url: media_url || ''
     });
   } catch (err) {
     logger.error(`[Workflows API] credentials fetch failed: ${err.message}`);
@@ -118,6 +122,10 @@ router.get('/publish/queue', async (req, res) => {
     
     if (status) {
       query = query.eq('status', status);
+      // Only return posts that are due for publication if status is scheduled
+      if (status === 'scheduled') {
+        query = query.lte('scheduled_at', new Date().toISOString());
+      }
     }
 
     const { data, error } = await query;
