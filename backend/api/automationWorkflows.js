@@ -161,6 +161,37 @@ router.post('/publish/queue', async (req, res) => {
   }
 });
 
+// PUT /api/automation/publish/queue/:id - Rescheduling or updating a queued item
+router.put('/publish/queue/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { platform, content, media_url, scheduled_at } = req.body;
+
+    const { data, error } = await supabase
+      .from('automation_publishing_queue')
+      .update({
+        platform,
+        content,
+        media_url: media_url || null,
+        scheduled_at,
+        status: 'scheduled',
+        error_log: null
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await auditLogRepository.log('PUBLISH_RESCHEDULED', `Rescheduled post ID ${id} for platform ${platform} to ${scheduled_at}`);
+
+    res.json({ success: true, post: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // POST /api/automation/publish/queue/callback - Action completed trigger from n8n
 router.post('/publish/queue/callback', authenticateApiSecret, async (req, res) => {
   try {

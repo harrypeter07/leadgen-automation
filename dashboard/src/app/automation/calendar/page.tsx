@@ -125,6 +125,7 @@ export default function ContentCalendarPage() {
   const [analyticsData, setAnalyticsData] = useState<Partial<CalendarPost> | null>(null)
   const [showAnalyticsPanel, setShowAnalyticsPanel] = useState(false)
   const [activeDayPosts, setActiveDayPosts] = useState<{ day: number; posts: CalendarPost[] } | null>(null)
+  const [reschedulingPostId, setReschedulingPostId] = useState<string | null>(null)
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -258,33 +259,72 @@ export default function ContentCalendarPage() {
     }
   }
 
+  const handleRescheduleClick = (post: CalendarPost) => {
+    setReschedulingPostId(post.id)
+    
+    const postDate = new Date(post.time)
+    setModalDate(postDate)
+    
+    const hours = String(postDate.getHours()).padStart(2, '0')
+    const minutes = String(postDate.getMinutes()).padStart(2, '0')
+    setModalTime(`${hours}:${minutes}`)
+    
+    setModalImageUrl(post.imageUrl || '')
+    setModalCaption(post.title || '')
+    setModalPlatforms([post.platform])
+    
+    // Close detail modal, open schedule modal
+    setSelectedPost(null)
+    setIsModalOpen(true)
+  }
+
   const handleSaveModalPost = async () => {
     if (!modalDate) return
     setSavingPost(true)
-    const toastId = toast.loading('Scheduling post...')
+    const toastId = toast.loading(reschedulingPostId ? 'Updating scheduled post...' : 'Scheduling post...')
     try {
       const scheduledDate = new Date(modalDate)
       const [hours, minutes] = modalTime.split(':').map(Number)
       scheduledDate.setHours(hours || 12, minutes || 0, 0, 0)
 
-      for (const platform of modalPlatforms) {
-        const res = await fetch('/api/backend-v3/automation/workflows/publish/queue', {
-          method: 'POST',
+      if (reschedulingPostId) {
+        // Rescheduling an existing post!
+        const res = await fetch(`/api/backend-v3/automation/workflows/publish/queue/${reschedulingPostId}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            platform,
-            account_name: platform === 'instagram' ? 'Instagram Business' : 'Meta Page',
+            platform: modalPlatforms[0] || 'facebook',
             content: modalCaption,
             media_url: modalImageUrl || null,
             scheduled_at: scheduledDate.toISOString()
           })
         })
         if (!res.ok) {
-          throw new Error(`Schedule failed for ${platform}`)
+          throw new Error('Failed to update scheduled post')
         }
+        toast.success('Post successfully rescheduled!', { id: toastId })
+        setReschedulingPostId(null)
+      } else {
+        // Creating a new post!
+        for (const platform of modalPlatforms) {
+          const res = await fetch('/api/backend-v3/automation/workflows/publish/queue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              platform,
+              account_name: platform === 'instagram' ? 'Instagram Business' : 'Meta Page',
+              content: modalCaption,
+              media_url: modalImageUrl || null,
+              scheduled_at: scheduledDate.toISOString()
+            })
+          })
+          if (!res.ok) {
+            throw new Error(`Schedule failed for ${platform}`)
+          }
+        }
+        toast.success('Post successfully scheduled!', { id: toastId })
       }
       
-      toast.success('Post successfully scheduled!', { id: toastId })
       setIsModalOpen(false)
       fetchCalendarPosts()
     } catch (err: any) {
@@ -628,8 +668,16 @@ export default function ContentCalendarPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 select-none animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl text-slate-800">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-              <h3 className="font-extrabold text-slate-900 text-sm">Schedule Dropped Post</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900 transition-colors"><X className="w-4 h-4" /></button>
+              <h3 className="font-extrabold text-slate-900 text-sm">{reschedulingPostId ? 'Reschedule Post' : 'Schedule Dropped Post'}</h3>
+              <button
+                onClick={() => {
+                  setIsModalOpen(false)
+                  setReschedulingPostId(null)
+                }}
+                className="text-slate-400 hover:text-slate-900 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             <div className="space-y-4 text-xs">
@@ -697,7 +745,10 @@ export default function ContentCalendarPage() {
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false)
+                    setReschedulingPostId(null)
+                  }}
                   className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-500 font-bold hover:bg-slate-50 transition-colors"
                 >
                   Cancel
@@ -822,6 +873,7 @@ export default function ContentCalendarPage() {
           setShowAnalyticsPanel={setShowAnalyticsPanel}
           publishingNow={publishingNow}
           onPublishNow={handlePublishNow}
+          onReschedule={handleRescheduleClick}
           onClose={() => { setSelectedPost(null); setAnalyticsData(null); setShowAnalyticsPanel(false) }}
         />
       )}
@@ -838,6 +890,7 @@ interface PostDetailModalProps {
   setShowAnalyticsPanel: (v: boolean) => void
   publishingNow: boolean
   onPublishNow: (post: CalendarPost) => Promise<void>
+  onReschedule: (post: CalendarPost) => void
   onClose: () => void
 }
 
@@ -849,6 +902,7 @@ function PostDetailModal({
   setShowAnalyticsPanel,
   publishingNow,
   onPublishNow,
+  onReschedule,
   onClose
 }: PostDetailModalProps) {
   const isScheduled = post.status === 'scheduled'
@@ -949,16 +1003,25 @@ function PostDetailModal({
                     )}
                   </div>
                 </div>
-                {!timeLeft && (
+                <div className="flex flex-wrap gap-2 shrink-0">
                   <button
-                    onClick={() => onPublishNow(post)}
-                    disabled={publishingNow}
-                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/10 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                    onClick={() => onReschedule(post)}
+                    className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                   >
-                    <Send className="w-3.5 h-3.5" />
-                    {publishingNow ? 'Publishing...' : 'Publish Now'}
+                    <Clock className="w-3.5 h-3.5 text-slate-500" />
+                    Reschedule
                   </button>
-                )}
+                  {!timeLeft && (
+                    <button
+                      onClick={() => onPublishNow(post)}
+                      disabled={publishingNow}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/10 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      {publishingNow ? 'Publishing...' : 'Publish Now'}
+                    </button>
+                  )}
+                </div>
               </div>
               {post.errorLog && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-700 flex flex-col gap-1">
