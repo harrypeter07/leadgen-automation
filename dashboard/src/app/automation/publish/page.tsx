@@ -17,8 +17,8 @@ interface PostJob {
 }
 
 const PLATFORMS = [
-  { id: 'facebook',  label: 'Facebook Page',  icon: '📘', color: 'border-blue-700/40 text-blue-400',  active: 'bg-blue-950/40 border-blue-700/50' },
-  { id: 'instagram', label: 'Instagram',       icon: '📸', color: 'border-pink-700/40 text-pink-400',  active: 'bg-pink-950/40 border-pink-700/50' },
+  { id: 'facebook',  label: 'Facebook Page',  icon: '📘', color: 'border-blue-200 text-blue-700 bg-blue-50/20 hover:bg-blue-50/50',  active: 'bg-blue-50 border-blue-600 text-blue-800 ring-2 ring-blue-600/10' },
+  { id: 'instagram', label: 'Instagram',       icon: '📸', color: 'border-rose-200 text-rose-700 bg-rose-50/20 hover:bg-rose-50/50',  active: 'bg-rose-50 border-rose-600 text-rose-800 ring-2 ring-rose-600/10' },
 ]
 
 export default function PublishComposerPage() {
@@ -269,33 +269,33 @@ export default function PublishComposerPage() {
   const charLimit = 63206 // FB char limit
 
   return (
-    <div className="space-y-6 text-white select-none">
+    <div className="space-y-6 text-slate-800 select-none">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">📤 Content Publisher</h1>
-          <p className="mt-1 text-sm text-gray-500">Publish directly to Facebook Page and Instagram Business account via the Graph API.</p>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900">📤 Content Publisher</h1>
+          <p className="mt-1 text-sm text-slate-500">Publish directly to Facebook Page and Instagram Business account via the Graph API.</p>
         </div>
         {/* Tab switcher */}
-        <div className="flex gap-1 bg-[#141416] border border-[#2D2D30] rounded-xl p-1">
-          <button onClick={() => setActiveTab('compose')}  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeTab === 'compose'  ? 'bg-[#222225] text-white' : 'text-gray-500 hover:text-white'}`}>✏️ Compose</button>
-          <button onClick={() => setActiveTab('history')}  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeTab === 'history'  ? 'bg-[#222225] text-white' : 'text-gray-500 hover:text-white'}`}>📋 History {jobs.length > 0 ? `(${jobs.length})` : ''}</button>
+        <div className="flex gap-1 bg-slate-100 border border-slate-200 rounded-xl p-1">
+          <button onClick={() => setActiveTab('compose')}  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'compose'  ? 'bg-white text-slate-800 border border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>✏️ Compose</button>
+          <button onClick={() => setActiveTab('history')}  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'history'  ? 'bg-white text-slate-800 border border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>📋 History {jobs.length > 0 ? `(${jobs.length})` : ''}</button>
         </div>
       </div>
 
       {activeTab === 'compose' && (
-        <form onSubmit={handlePublish} className="grid gap-6 lg:grid-cols-4">
-          {/* Column 1: Media Library Browser Panel */}
-          <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-4 space-y-4">
-            <div className="flex justify-between items-center border-b border-[#2D2D30] pb-2">
-              <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider">📁 Media Library</h3>
-              <div className="flex gap-1 bg-[#1A1A1C] border border-[#2D2D30] rounded-lg p-0.5">
+        <form onSubmit={handlePublish} className="grid gap-6 lg:grid-cols-12">
+          {/* Column 1: Media Library Browser Panel (Wider Layout: col-span-4) */}
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 space-y-4 lg:col-span-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">📁 Media Library</h3>
+              <div className="flex gap-1 bg-slate-100 border border-slate-200 rounded-lg p-0.5">
                 <button type="button" onClick={() => setMediaMode('supabase')}
-                  className={`px-2 py-1 rounded text-[8px] font-bold uppercase transition-colors ${mediaMode === 'supabase' ? 'bg-[#2D2D30] text-white' : 'text-gray-500 hover:text-white'}`}>
+                  className={`px-2 py-1 rounded text-[8px] font-bold uppercase transition-all ${mediaMode === 'supabase' ? 'bg-white text-slate-800 border border-slate-150 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}>
                   Drive
                 </button>
                 <button type="button" onClick={() => setMediaMode('cloudinary')}
-                  className={`px-2 py-1 rounded text-[8px] font-bold uppercase transition-colors ${mediaMode === 'cloudinary' ? 'bg-[#2D2D30] text-white' : 'text-gray-500 hover:text-white'}`}>
+                  className={`px-2 py-1 rounded text-[8px] font-bold uppercase transition-all ${mediaMode === 'cloudinary' ? 'bg-white text-slate-800 border border-slate-150 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}>
                   Cloudinary
                 </button>
               </div>
@@ -306,18 +306,18 @@ export default function PublishComposerPage() {
                 <div className="space-y-2">
                   <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('file')} />
                   <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-                    className="w-full px-3 py-2 rounded-xl bg-[#1C1C1F] border border-[#2D2D30] text-gray-300 text-xs font-bold hover:text-white transition-colors disabled:opacity-40 text-center">
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors disabled:opacity-40 text-center">
                     {uploading ? '⏳ Uploading…' : '📁 Upload Local File'}
                   </button>
-                  <div className="text-center text-[10px] text-gray-600 font-bold uppercase">or</div>
+                  <div className="text-center text-[10px] text-slate-400 font-bold uppercase">or</div>
                   <input
                     value={driveInput}
                     onChange={e => setDriveInput(e.target.value)}
                     placeholder="Google Drive share link…"
-                    className="w-full bg-[#1C1C1F] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors"
                   />
                   <button type="button" onClick={() => handleMediaUpload('drive')} disabled={uploading || !driveInput.trim()}
-                    className="w-full px-3 py-2 rounded-xl bg-blue-950/40 border border-blue-900/30 text-blue-300 text-xs font-bold hover:bg-blue-900/30 transition-colors disabled:opacity-40">
+                    className="w-full px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100/50 transition-colors disabled:opacity-40">
                     ☁️ Upload Drive Link
                   </button>
                 </div>
@@ -327,11 +327,11 @@ export default function PublishComposerPage() {
                 <div className="flex gap-2">
                   <input ref={cloudinaryFileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('cloudinary_file')} />
                   <button type="button" onClick={() => cloudinaryFileRef.current?.click()} disabled={uploading}
-                    className="flex-1 px-3 py-2 rounded-xl bg-[#1C1C1F] border border-[#2D2D30] text-gray-400 text-xs font-bold hover:text-white hover:border-gray-500 transition-colors disabled:opacity-40 text-center">
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors disabled:opacity-40 text-center">
                     {uploading ? '⏳' : '📤 Upload'}
                   </button>
                   <button type="button" onClick={handleScanCloudinaryFolder} disabled={scanningFolder}
-                    className="px-3 py-2 rounded-xl bg-purple-950/40 border border-purple-900/30 text-purple-300 text-xs font-bold hover:bg-purple-900/30 transition-colors">
+                    className="px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100/50 transition-colors">
                     {scanningFolder ? '⏳' : '🔍 Scan'}
                   </button>
                 </div>
@@ -339,19 +339,19 @@ export default function PublishComposerPage() {
                   value={cloudinaryFolder}
                   onChange={e => setCloudinaryFolder(e.target.value)}
                   placeholder="Cloudinary folder path…"
-                  className="w-full bg-[#1C1C1F] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors"
                 />
 
                 {/* Scanned assets grid */}
                 {cloudinaryAssets.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto p-2 bg-[#0E0E10] border border-[#2D2D30] rounded-xl">
+                  <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto p-2 bg-slate-50 border border-slate-200 rounded-xl">
                     {cloudinaryAssets.map(asset => (
                       <button
                         key={asset.publicId}
                         type="button"
                         onClick={() => setImageUrl(asset.url)}
-                        className={`relative aspect-square rounded-lg overflow-hidden border-2 ${
-                          imageUrl === asset.url ? 'border-[#E3B859]' : 'border-transparent'
+                        className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                          imageUrl === asset.url ? 'border-rose-600 shadow-sm' : 'border-transparent hover:border-slate-300'
                         }`}
                       >
                         <img src={asset.url} alt="asset" className="w-full h-full object-cover" />
@@ -359,7 +359,7 @@ export default function PublishComposerPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="py-10 text-center text-[10px] text-gray-650 uppercase border border-dashed border-[#2D2D30] rounded-xl">
+                  <div className="py-10 text-center text-[10px] text-slate-400 font-bold uppercase border border-dashed border-slate-200 rounded-xl">
                     No Cloudinary assets
                   </div>
                 )}
@@ -368,33 +368,33 @@ export default function PublishComposerPage() {
 
             {/* Current URL preview inside Media Library column */}
             {imageUrl && (
-              <div className="border-t border-[#2D2D30] pt-3 space-y-2">
+              <div className="border-t border-slate-150 pt-3 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Attached Asset:</span>
-                  <button type="button" onClick={() => setImageUrl('')} className="text-gray-550 hover:text-red-400 text-[10px]">Remove</button>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Attached Asset:</span>
+                  <button type="button" onClick={() => setImageUrl('')} className="text-slate-400 hover:text-rose-600 text-[10px] font-bold transition-colors">Remove</button>
                 </div>
-                <div className="relative rounded-xl overflow-hidden border border-[#2D2D30] bg-[#141416]">
+                <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                   <img src={imageUrl} alt="selected" className="w-full max-h-32 object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
                 </div>
               </div>
             )}
           </div>
 
-          {/* Column 2 & 3: Composer (Post Form) */}
-          <div className="lg:col-span-2 space-y-4">
+          {/* Column 2 & 3: Composer (Post Form) (Wider Layout: col-span-5) */}
+          <div className="lg:col-span-5 bg-white border border-slate-200 shadow-sm p-5 rounded-2xl space-y-4">
             {/* Platform selector */}
             <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Publish To</label>
+              <label className="text-[10px] font-bold text-slate-450 uppercase tracking-widest block mb-2">Publish To</label>
               <div className="flex gap-3">
                 {PLATFORMS.map(p => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => togglePlatform(p.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${selectedPlatforms.includes(p.id) ? p.active : `bg-[#141416] ${p.color} hover:opacity-80`}`}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${selectedPlatforms.includes(p.id) ? p.active : `bg-slate-50 border-slate-200 ${p.color}`}`}
                   >
                     <span>{p.icon}</span>{p.label}
-                    {selectedPlatforms.includes(p.id) && <span className="ml-1 text-green-400">✓</span>}
+                    {selectedPlatforms.includes(p.id) && <span className="ml-1 text-green-500 font-bold">✓</span>}
                   </button>
                 ))}
               </div>
@@ -403,81 +403,81 @@ export default function PublishComposerPage() {
             {/* Caption textarea */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Post Caption</label>
-                <span className={`text-[10px] font-mono ${charCount > charLimit * 0.9 ? 'text-red-400' : 'text-gray-500'}`}>{charCount} / {charLimit.toLocaleString()}</span>
+                <label className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">Post Caption</label>
+                <span className={`text-[10px] font-mono ${charCount > charLimit * 0.9 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>{charCount} / {charLimit.toLocaleString()}</span>
               </div>
               <textarea
                 value={content}
                 onChange={e => setContent(e.target.value)}
                 placeholder="Write your post caption here… or use AI to generate one."
                 rows={4}
-                className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-650 focus:outline-none focus:border-gray-500 transition-colors resize-none leading-relaxed"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors resize-none leading-relaxed"
               />
             </div>
 
             {/* Schedule */}
             <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Schedule (optional)</label>
+              <label className="text-[10px] font-bold text-slate-450 uppercase tracking-widest block mb-2">Schedule (optional)</label>
               <input
                 type="datetime-local"
                 value={scheduledFor}
                 onChange={e => setScheduledFor(e.target.value)}
-                className="bg-[#141416] border border-[#2D2D30] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-gray-500 transition-colors"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-rose-500 transition-colors"
               />
             </div>
 
             {/* Actions */}
             <div className="flex gap-3">
               <button type="button" onClick={handleGenerateAICaption} disabled={generatingCaption}
-                className="px-4 py-2.5 rounded-xl bg-purple-950/40 border border-purple-900/30 text-purple-300 text-xs font-bold hover:bg-purple-900/30 transition-colors disabled:opacity-40">
+                className="px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100/50 transition-colors disabled:opacity-40">
                 {generatingCaption ? '⏳ Generating…' : '✨ AI Caption'}
               </button>
               <button type="submit" disabled={publishing || !content.trim() || selectedPlatforms.length === 0}
-                className="flex-1 px-5 py-2.5 rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] disabled:opacity-40 text-[#141416] text-xs font-bold uppercase tracking-wider transition-colors">
+                className="flex-1 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-rose-600/10">
                 {publishing ? '⏳ Publishing…' : scheduledFor ? '📅 Schedule Post' : '📤 Publish Now'}
               </button>
             </div>
 
             {/* Publish Log */}
             {publishLog.length > 0 && (
-              <div className="rounded-xl border border-[#2D2D30] bg-[#0A0A0C] p-3 space-y-1 max-h-40 overflow-y-auto">
-                <div className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Publish Log</div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 max-h-40 overflow-y-auto">
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Publish Log</div>
                 {publishLog.map((line, i) => (
                   <div key={i} className={`text-[10px] font-mono ${
-                    line.includes('✅') ? 'text-green-400' : line.includes('❌') ? 'text-red-400' : 'text-gray-400'
+                    line.includes('✅') ? 'text-green-600 font-bold' : line.includes('❌') ? 'text-rose-600 font-bold' : 'text-slate-500'
                   }`}>{line}</div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Column 4: Live Preview & Requirements Panel */}
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-4 space-y-3">
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Preview</h3>
+          {/* Column 4: Live Preview & Requirements Panel (Wider Layout: col-span-3) */}
+          <div className="lg:col-span-3 space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 space-y-3">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Preview</h3>
               {content ? (
                 <div className="space-y-2">
-                  <div className="text-xs text-white whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">{content}</div>
+                  <div className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">{content}</div>
                   {imageUrl && (
-                    <div className="text-[10px] font-mono text-purple-400 truncate">🖼 {imageUrl}</div>
+                    <div className="text-[10px] font-mono text-rose-500 truncate">🖼 {imageUrl}</div>
                   )}
                 </div>
               ) : (
-                <div className="h-24 flex items-center justify-center text-gray-600 text-xs">Preview will appear here…</div>
+                <div className="h-24 flex items-center justify-center text-slate-400 text-xs">Preview will appear here…</div>
               )}
-              <div className="flex flex-wrap gap-1.5 pt-2 border-t border-[#2D2D30]">
+              <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-150">
                 {selectedPlatforms.map(p => {
                   const pl = PLATFORMS.find(x => x.id === p)
                   return (
-                    <span key={p} className="text-[10px] font-bold bg-[#222225] border border-[#2D2D30] px-2 py-0.5 rounded-full text-gray-400">
+                    <span key={p} className="text-[10px] font-bold bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full text-slate-600">
                       {pl?.icon} {pl?.label}
                     </span>
                   )
                 })}
               </div>
             </div>
-            <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-4 space-y-2">
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Requirements</h3>
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 space-y-2">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Requirements</h3>
               <div className="space-y-1.5 text-[11px]">
                 {[
                   { label: 'Facebook: Page Access Token', ok: true },
@@ -485,7 +485,7 @@ export default function PublishComposerPage() {
                   { label: 'Instagram: Image URL required', ok: !selectedPlatforms.includes('instagram') || !!imageUrl },
                   { label: 'Caption not empty',            ok: content.trim().length > 0 },
                 ].map(r => (
-                  <div key={r.label} className={`flex items-center gap-2 ${r.ok ? 'text-green-400' : 'text-amber-400'}`}>
+                  <div key={r.label} className={`flex items-center gap-2 ${r.ok ? 'text-green-600 font-bold' : 'text-rose-500 font-bold'}`}>
                     <span>{r.ok ? '✓' : '!'}</span>
                     <span>{r.label}</span>
                   </div>
@@ -499,23 +499,23 @@ export default function PublishComposerPage() {
       {activeTab === 'history' && (
         <div className="space-y-3">
           {jobs.length === 0 ? (
-            <div className="rounded-2xl border border-[#2D2D30] bg-[#141416] p-12 text-center text-gray-600">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-12 text-center text-slate-400">
               <div className="text-4xl mb-3">📭</div>
-              <div className="text-sm">No posts published yet this session.</div>
+              <div className="text-sm font-semibold">No posts published yet this session.</div>
             </div>
           ) : (
             jobs.map(job => (
-              <div key={job.id} className="p-5 rounded-2xl border border-[#2D2D30] bg-[#141416] space-y-2">
+              <div key={job.id} className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-2">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-xs text-gray-200 leading-relaxed line-clamp-2">{job.content}</p>
-                  <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
-                    job.status === 'published' ? 'bg-green-900/30 border-green-800/30 text-green-300' :
-                    job.status === 'failed'    ? 'bg-red-900/30 border-red-800/30 text-red-300' :
-                    job.status === 'scheduled' ? 'bg-blue-900/30 border-blue-800/30 text-blue-300' :
-                    'bg-gray-800/30 border-gray-700/30 text-gray-400'
+                  <p className="text-xs text-slate-700 leading-relaxed line-clamp-2">{job.content}</p>
+                  <span className={`flex-shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                    job.status === 'published' ? 'bg-green-50 border-green-200 text-green-700' :
+                    job.status === 'failed'    ? 'bg-rose-50 border-rose-200 text-rose-750' :
+                    job.status === 'scheduled' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                    'bg-slate-50 border-slate-200 text-slate-600'
                   }`}>{job.status}</span>
                 </div>
-                <div className="flex flex-wrap gap-2 text-[10px] text-gray-500 font-mono">
+                <div className="flex flex-wrap gap-2 text-[10px] text-slate-400 font-mono">
                   {job.platforms.map(p => <span key={p}>{PLATFORMS.find(x => x.id === p)?.icon} {p}</span>)}
                   {job.fbPostId && <span>FB: {job.fbPostId}</span>}
                   {job.igPostId && <span>IG: {job.igPostId}</span>}
