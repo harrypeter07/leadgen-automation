@@ -31,7 +31,7 @@ interface AutomationLayoutProps {
 
 export default function AutomationLayout({ children }: AutomationLayoutProps) {
   const pathname = usePathname()
-  const [activeWorkspace, setActiveWorkspace] = useState('Zarss Marketing Workspace')
+  const [activeWorkspace, setActiveWorkspace] = useState('Stratnent Workspace')
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -131,7 +131,7 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
                   onChange={(e) => setActiveWorkspace(e.target.value)}
                   className="w-full border text-[10px] font-bold px-2.5 py-2 rounded-xl appearance-none focus:outline-none cursor-pointer bg-slate-50 border-slate-200 text-slate-800 focus:border-rose-600 transition-colors"
                 >
-                  <option value="Zarss Marketing Workspace">Zarss Marketing</option>
+                  <option value="Stratnent Workspace">Stratnent Marketing</option>
                   <option value="Personal Sandbox Workspace">Personal Sandbox</option>
                   <option value="Client Staging Workspace">Client Staging</option>
                 </select>

@@ -149,7 +149,7 @@ export default function HomeDashboard() {
         </div>
       </div>
 
-      {/* Main Stats Row & Conversion Widget (Zarss Pastel Aesthetic) */}
+      {/* Main Stats Row & Conversion Widget (Stratnent Pastel Aesthetic) */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {/* Total Leads */}
         <div className="rounded-2xl bg-[#D4E0CD] p-6 flex flex-col justify-between shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)] min-h-[140px]">

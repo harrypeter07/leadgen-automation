@@ -9,8 +9,12 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Lead Gen Dashboard",
-  description: "View and manage leads from the LeadGen automation pipeline",
+  title: "Stratnent Admin Portal",
+  description: "Stratnent marketing automation and lead generation admin control center.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 import LayoutClient from './layout-client';

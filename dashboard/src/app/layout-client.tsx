@@ -23,7 +23,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
     document.documentElement.className = 'light'
     document.documentElement.setAttribute('data-theme', 'light')
     
-    const savedCollapse = localStorage.getItem('zarss_main_sidebar_collapsed')
+    const savedCollapse = localStorage.getItem('stratnent_main_sidebar_collapsed')
     if (savedCollapse) {
       setSidebarCollapsed(savedCollapse === 'true')
     }
@@ -32,7 +32,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   const toggleSidebar = () => {
     const nextCollapse = !sidebarCollapsed
     setSidebarCollapsed(nextCollapse)
-    localStorage.setItem('zarss_main_sidebar_collapsed', String(nextCollapse))
+    localStorage.setItem('stratnent_main_sidebar_collapsed', String(nextCollapse))
   }
 
   // Handle user logout
@@ -206,15 +206,18 @@ export default function LayoutClient({ children }: LayoutClientProps) {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-white border-r border-slate-200 text-slate-650 transition-colors select-none">
-      {/* Brand Logo - Zarss Style (Red/Rose Variant) */}
-      <div className={`flex items-center gap-3 px-6 py-6 border-b border-slate-150 ${sidebarCollapsed ? 'justify-center px-2' : ''}`}>
-        <div className="w-8 h-8 rounded-lg bg-rose-600 flex items-center justify-center text-white font-black text-lg shadow-md shadow-rose-600/20 flex-shrink-0">
-          Z
-        </div>
+      {/* Brand Logo - Stratnent Style */}
+      <div className={`flex items-center gap-3 px-6 py-5 border-b border-slate-150 ${sidebarCollapsed ? 'justify-center px-2' : ''}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo.jpg"
+          alt="Stratnent logo"
+          className="w-8 h-8 rounded-lg object-cover shadow-sm flex-shrink-0"
+        />
         {!sidebarCollapsed && (
-          <Link href="/" className="text-xl font-extrabold tracking-tight flex items-center gap-1.5 text-slate-900">
-            <span>Zarss</span>
-            <span className="text-[10px] uppercase px-1.5 py-0.5 rounded font-mono font-normal bg-slate-100 text-slate-600">v3</span>
+          <Link href="/" className="text-lg font-black tracking-tight flex items-center gap-1.5 text-slate-900">
+            <span>Stratnent</span>
+            <span className="text-[9px] uppercase px-1.5 py-0.5 rounded font-mono font-semibold bg-slate-100 text-slate-500">ADMIN</span>
           </Link>
         )}
       </div>
@@ -312,13 +315,15 @@ export default function LayoutClient({ children }: LayoutClientProps) {
     <div className="min-h-screen flex flex-col md:flex-row font-sans bg-slate-50 text-slate-900">
       <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: '#ffffff', color: '#0f172a', border: '1px solid #e2e8f0' } }} />
 
-      {/* Mobile Top Bar */}
       <div className="flex md:hidden items-center justify-between px-6 py-4 border-b bg-slate-900 border-slate-800 text-white">
-        <Link href="/" className="text-lg font-bold flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-rose-600 flex items-center justify-center text-white font-black text-xs">
-            Z
-          </div>
-          <span>Zarss</span>
+        <Link href="/" className="text-base font-black flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.jpg"
+            alt="Stratnent logo"
+            className="w-6 h-6 rounded object-cover shadow-sm"
+          />
+          <span>Stratnent Admin</span>
         </Link>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -343,7 +348,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
         style={{ width: sidebarCollapsed ? '64px' : '256px' }}
       >
         <div className="h-screen sticky top-0">
-          {/* Main Sidebar Collapse Arrow Trigger (Zarss Style) */}
+          {/* Main Sidebar Collapse Arrow Trigger (Stratnent Style) */}
           <button
             onClick={toggleSidebar}
             className={`absolute -right-3 top-7 z-30 w-6 h-6 rounded-full flex items-center justify-center text-gray-400 border transition-all shadow-md focus:outline-none ${

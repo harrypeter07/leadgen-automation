@@ -21,7 +21,7 @@ export default function SettingsPage() {
   const [configStatus, setConfigStatus] = useState<Record<string, boolean>>({})
 
   // Outreach Settings states
-  const [companyName, setCompanyName] = useState('Zarss Dev')
+  const [companyName, setCompanyName] = useState('Stratnent')
   const [icpDescription, setIcpDescription] = useState('')
   const [offeringPitch, setOfferingPitch] = useState('')
   const [systemInstructions, setSystemInstructions] = useState('')
@@ -73,7 +73,7 @@ export default function SettingsPage() {
         const json = await res.json()
         if (json.success && json.data) {
           const s = json.data
-          setCompanyName(s.company_name || 'Zarss Dev')
+          setCompanyName(s.company_name || 'Stratnent')
           setIcpDescription(s.icp_description || '')
           setOfferingPitch(s.offering_pitch || '')
           setSystemInstructions(s.system_instructions || '')
@@ -445,7 +445,7 @@ RESEND_API_KEY=re_your_key`
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     className="w-full px-4 py-3 bg-[#F4F3EF] border border-[#E4E3DD] focus:border-[#E3B859] rounded-xl text-xs text-[#2D2D2D] focus:outline-none transition-colors"
-                    placeholder="e.g. Zarss Marketing"
+                    placeholder="e.g. Stratnent"
                   />
                 </div>
 
