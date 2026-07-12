@@ -233,7 +233,7 @@ export async function POST(req: NextRequest) {
 
       const ideas = topPosts.map((post, idx) => ({
         title: `Instagram Top Post (via #${post.hashtag})`,
-        hook: `🔥 Likes: ${post.likeCount.toLocaleString()} | 💬 Comments: ${post.commentCount.toLocaleString()}`,
+        hook: `Likes: ${post.likeCount.toLocaleString()} | Comments: ${post.commentCount.toLocaleString()}`,
         description: `Source format: ${post.mediaType}`,
         copy: post.caption || '[No caption]',
         mediaSuggestion: post.mediaType

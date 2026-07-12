@@ -1,8 +1,16 @@
-'use client'
-
 import React, { useState } from 'react'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
+import { 
+  Flame, 
+  Sparkles, 
+  Database, 
+  BarChart2, 
+  Search, 
+  MessageCircle, 
+  ThumbsUp, 
+  Compass 
+} from 'lucide-react'
 
 interface TrendingIdea {
   title: string
@@ -61,9 +69,14 @@ export default function TrendingResearchPage() {
 
   return (
     <div className="space-y-6 text-white select-none">
-      <div>
-        <h1 className="text-3xl font-black tracking-tight">🔥 Trending Content Research</h1>
-        <p className="mt-1 text-sm text-gray-500 font-medium">Discover trending hashtags, hooks, and content formats for your niche using Gemini AI research.</p>
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#E3B859] to-[#f5d58c] flex items-center justify-center shadow-lg shadow-[#E3B859]/10">
+          <Flame className="w-5.5 h-5.5 text-[#141416]" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">Trending Content Research</h1>
+          <p className="mt-0.5 text-xs text-gray-500 font-medium">Discover trending hashtags, hooks, and content formats for your niche using real-time data.</p>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -84,17 +97,41 @@ export default function TrendingResearchPage() {
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Platform</label>
-              <div className="flex gap-2">
-                {['instagram', 'facebook'].map(p => (
+              <div className="grid grid-cols-2 p-1 bg-[#141416] border border-[#2D2D30] rounded-xl">
+                {([
+                  { 
+                    id: 'instagram', 
+                    label: 'Instagram', 
+                    icon: (
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                        <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                      </svg>
+                    )
+                  },
+                  { 
+                    id: 'facebook', 
+                    label: 'Facebook', 
+                    icon: (
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+                      </svg>
+                    )
+                  }
+                ] as const).map(p => (
                   <button
-                    key={p}
+                    key={p.id}
                     type="button"
-                    onClick={() => setPlatform(p as any)}
-                    className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase border transition-all ${
-                      platform === p ? 'bg-[#222225] border-purple-500/40 text-white' : 'bg-[#141416] border-[#2D2D30] text-gray-500 hover:text-white'
+                    onClick={() => setPlatform(p.id)}
+                    className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                      platform === p.id 
+                        ? 'bg-[#27272A] text-white border border-[#3F3F46]/50 shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-300'
                     }`}
                   >
-                    {p}
+                    {p.icon}
+                    <span>{p.label}</span>
                   </button>
                 ))}
               </div>
@@ -135,9 +172,14 @@ export default function TrendingResearchPage() {
         {/* Results Panel */}
         <div className="md:col-span-2 space-y-4">
           {!result ? (
-            <div className="border border-[#2D2D30] rounded-2xl bg-[#0E0E10] p-12 text-center text-gray-600 flex flex-col items-center justify-center gap-3">
-              <span className="text-4xl">📊</span>
-              <span className="text-xs">Enter a topic to generate trending strategy and content formats.</span>
+            <div className="border border-[#2D2D30] rounded-2xl bg-[#0E0E10] p-12 text-center text-gray-500 flex flex-col items-center justify-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-[#141416] border border-[#2D2D30] flex items-center justify-center text-gray-400">
+                <Compass className="w-8 h-8 text-gray-400" />
+              </div>
+              <div className="max-w-xs space-y-1">
+                <h3 className="text-sm font-bold text-gray-300">No Research Run Yet</h3>
+                <p className="text-xs text-gray-500">Enter a target niche or topic on the left to scan live social media trends.</p>
+              </div>
             </div>
           ) : (
             <div className="space-y-6">
@@ -147,9 +189,13 @@ export default function TrendingResearchPage() {
                   <span className="text-xs font-bold text-gray-400">RESEARCH RESULTS: {result.niche.toUpperCase()}</span>
                   <div className="flex items-center gap-2">
                     {result.realDataFetched ? (
-                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/30 text-green-400">📡 REAL INSTAGRAM DATA</span>
+                      <span className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/30 text-green-400">
+                        <Database className="w-2.5 h-2.5" /> REAL INSTAGRAM DATA
+                      </span>
                     ) : (
-                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/30 text-yellow-400">🤖 AI GENERATED</span>
+                      <span className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/30 text-yellow-400">
+                        <Sparkles className="w-2.5 h-2.5" /> AI GENERATED
+                      </span>
                     )}
                   </div>
                 </div>
@@ -180,24 +226,30 @@ export default function TrendingResearchPage() {
                       </button>
                     </div>
 
-                    <div className="p-3.5 bg-[#141416] border border-[#2D2D30]/60 rounded-xl space-y-2 font-mono">
-                      <div className="text-[10px] leading-relaxed">
-                        <span className="text-purple-400 font-bold">
-                          {result.directMode ? 'METRICS' : 'HOOK'}:
-                        </span>{' '}
-                        {result.directMode ? idea.hook : `"${idea.hook}"`}
-                      </div>
-                      <div className="text-[10px] leading-relaxed">
-                        <span className="text-purple-400 font-bold">
-                          {result.directMode ? 'FORMAT' : 'CONCEPT'}:
-                        </span>{' '}
-                        {idea.description}
-                      </div>
-                      <div className="text-[10px] leading-relaxed border-t border-[#2D2D30]/40 pt-2 text-gray-300 whitespace-pre-wrap">
-                        <span className="text-purple-400 font-bold block mb-1">
-                          {result.directMode ? 'ORIGINAL CAPTION' : 'CAPTION COPY'}:
+                    <div className="p-4 bg-[#141416] border border-[#2D2D30]/60 rounded-xl space-y-3 font-sans">
+                      <div className="flex items-start gap-2 text-xs text-gray-300">
+                        <span className="text-purple-400 font-bold uppercase tracking-wider text-[10px] min-w-[70px] inline-block pt-0.5">
+                          {result.directMode ? 'METRICS:' : 'HOOK:'}
                         </span>
-                        {idea.copy}
+                        <span className="text-white font-medium">
+                          {result.directMode ? idea.hook : `"${idea.hook}"`}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2 text-xs text-gray-300">
+                        <span className="text-purple-400 font-bold uppercase tracking-wider text-[10px] min-w-[70px] inline-block pt-0.5">
+                          {result.directMode ? 'FORMAT:' : 'CONCEPT:'}
+                        </span>
+                        <span className="text-white">
+                          {idea.description}
+                        </span>
+                      </div>
+                      <div className="border-t border-[#2D2D30]/40 pt-3.5 space-y-1.5">
+                        <span className="text-purple-400 font-bold text-[10px] uppercase tracking-wider block">
+                          {result.directMode ? 'ORIGINAL CAPTION:' : 'CAPTION COPY:'}
+                        </span>
+                        <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap font-sans">
+                          {idea.copy}
+                        </p>
                       </div>
                     </div>
                   </div>
