@@ -3,11 +3,11 @@
   "nodes": [
     {
       "parameters": {
-        "interval": 15,
+        "interval": 30,
         "unit": "seconds"
       },
       "id": "e4f8a1b2-2001-4000-8000-000000000001",
-      "name": "Poll Queue Every 15 Sec",
+      "name": "Poll Queue Every 30 Sec",
       "type": "n8n-nodes-base.interval",
       "typeVersion": 1,
       "position": [100, 300]
@@ -232,7 +232,7 @@
     }
   ],
   "connections": {
-    "Poll Queue Every 15 Sec": {
+    "Poll Queue Every 30 Sec": {
       "main": [
         [
           {
