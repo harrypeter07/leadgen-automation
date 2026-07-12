@@ -21,6 +21,7 @@ import {
   X,
   Timer,
   Zap,
+  Send,
 } from 'lucide-react'
 
 
@@ -315,6 +316,74 @@ export default function ContentCalendarPage() {
     }
   }
 
+  const [publishingNow, setPublishingNow] = useState(false)
+
+  const handlePublishNow = async (post: CalendarPost) => {
+    setPublishingNow(true)
+    const toastId = toast.loading('Publishing to Meta API immediately...')
+    try {
+      let publishedId = ''
+      const isInstagram = post.platform === 'instagram' || post.type === 'ig'
+
+      if (isInstagram) {
+        const res = await fetch('/api/meta/instagram/post', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image_url: post.imageUrl || '',
+            caption: post.title || ''
+          })
+        })
+        const data = await res.json()
+        if (!res.ok || !data.success) {
+          throw new Error(data.error?.message || data.error || 'Instagram publish failed')
+        }
+        publishedId = data.data?.id || data.id || 'ig_published'
+      } else {
+        const res = await fetch('/api/meta/facebook/post', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'publish',
+            message: post.title || '',
+            link: post.imageUrl || ''
+          })
+        })
+        const data = await res.json()
+        if (!res.ok || !data.success) {
+          throw new Error(data.error?.message || data.error || 'Facebook publish failed')
+        }
+        publishedId = data.data?.id || data.id || 'fb_published'
+      }
+
+      // Update the queue status in Supabase DB via our backend queue callback
+      const callbackRes = await fetch('/api/backend-v3/automation/workflows/publish/queue/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: post.id,
+          status: 'published',
+          published_id: publishedId
+        })
+      })
+
+      if (callbackRes.ok) {
+        toast.success('Successfully published live!', { id: toastId })
+        setSelectedPost(null)
+        fetchCalendarPosts()
+      } else {
+        const callbackData = await callbackRes.json()
+        throw new Error(callbackData.error || 'Failed to update calendar status in database')
+      }
+    } catch (err: any) {
+      console.error('Immediate publish failed:', err)
+      toast.error(err.message || 'Immediate publish failed', { id: toastId })
+    } finally {
+      setPublishingNow(false)
+    }
+  }
+
+
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -604,6 +673,8 @@ export default function ContentCalendarPage() {
           analyticsData={analyticsData}
           showAnalyticsPanel={showAnalyticsPanel}
           setShowAnalyticsPanel={setShowAnalyticsPanel}
+          publishingNow={publishingNow}
+          onPublishNow={handlePublishNow}
           onClose={() => { setSelectedPost(null); setAnalyticsData(null); setShowAnalyticsPanel(false) }}
         />
       )}
@@ -618,10 +689,21 @@ interface PostDetailModalProps {
   analyticsData: Partial<CalendarPost> | null
   showAnalyticsPanel: boolean
   setShowAnalyticsPanel: (v: boolean) => void
+  publishingNow: boolean
+  onPublishNow: (post: CalendarPost) => Promise<void>
   onClose: () => void
 }
 
-function PostDetailModal({ post, analyticsLoading, analyticsData, showAnalyticsPanel, setShowAnalyticsPanel, onClose }: PostDetailModalProps) {
+function PostDetailModal({
+  post,
+  analyticsLoading,
+  analyticsData,
+  showAnalyticsPanel,
+  setShowAnalyticsPanel,
+  publishingNow,
+  onPublishNow,
+  onClose
+}: PostDetailModalProps) {
   const isScheduled = post.status === 'scheduled'
   const postTime = post.time
   const { timeLeft, isPast } = useCountdown(isScheduled ? postTime : null)
@@ -699,24 +781,36 @@ function PostDetailModal({ post, analyticsLoading, analyticsData, showAnalyticsP
 
           {/* Status block */}
           {isScheduled ? (
-            <div className={`rounded-xl p-4 border flex items-center gap-4 ${
+            <div className={`rounded-xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
               timeLeft
                 ? 'bg-amber-50 border-amber-200'
                 : 'bg-orange-50 border-orange-200'
             }`}>
-              <div className={`p-2.5 rounded-lg ${timeLeft ? 'bg-amber-100' : 'bg-orange-100'}`}>
-                <Timer className={`w-5 h-5 ${timeLeft ? 'text-amber-600' : 'text-orange-600'}`} />
+              <div className="flex items-center gap-4">
+                <div className={`p-2.5 rounded-lg ${timeLeft ? 'bg-amber-100' : 'bg-orange-100'}`}>
+                  <Timer className={`w-5 h-5 ${timeLeft ? 'text-amber-600' : 'text-orange-600'}`} />
+                </div>
+                <div>
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${timeLeft ? 'text-amber-500' : 'text-orange-500'}`}>
+                    {timeLeft ? 'Publishing In' : 'Overdue — Not Yet Posted'}
+                  </p>
+                  {timeLeft ? (
+                    <p className="text-xl font-black text-amber-700 font-mono tabular-nums">{timeLeft}</p>
+                  ) : (
+                    <p className="text-sm font-bold text-orange-700">Check your Meta credentials and queue runner.</p>
+                  )}
+                </div>
               </div>
-              <div>
-                <p className={`text-[9px] font-black uppercase tracking-widest ${timeLeft ? 'text-amber-500' : 'text-orange-500'}`}>
-                  {timeLeft ? 'Publishing In' : 'Overdue — Not Yet Posted'}
-                </p>
-                {timeLeft ? (
-                  <p className="text-xl font-black text-amber-700 font-mono tabular-nums">{timeLeft}</p>
-                ) : (
-                  <p className="text-sm font-bold text-orange-700">Check your Meta credentials and queue runner.</p>
-                )}
-              </div>
+              {!timeLeft && (
+                <button
+                  onClick={() => onPublishNow(post)}
+                  disabled={publishingNow}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/10 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {publishingNow ? 'Publishing...' : 'Publish Now'}
+                </button>
+              )}
             </div>
           ) : (
             <div className="rounded-xl p-4 border bg-green-50 border-green-200 flex items-center gap-4">
