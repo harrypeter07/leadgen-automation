@@ -1,17 +1,28 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { 
-  Calendar, 
-  Image as ImageIcon, 
-  RefreshCw, 
-  Check, 
-  AlertCircle, 
-  Inbox, 
-  ChevronLeft, 
-  ChevronRight 
+import {
+  Calendar,
+  Image as ImageIcon,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  BarChart3,
+  Heart,
+  MessageCircle,
+  Eye,
+  Share2,
+  ThumbsUp,
+  ExternalLink,
+  X,
+  Timer,
+  Zap,
 } from 'lucide-react'
+
 
 interface CalendarPost {
   id: string
@@ -23,6 +34,10 @@ interface CalendarPost {
   permalink?: string
   likes?: number
   comments?: number
+  shares?: number
+  impressions?: number
+  reach?: number
+  views?: number
   status?: string // 'scheduled', 'failed', 'published'
 }
 
@@ -31,6 +46,34 @@ interface CloudinaryAsset {
   url: string
   bytes?: number
   createdAt?: string
+}
+
+// Reusable countdown hook
+function useCountdown(targetISO: string | null) {
+  const [timeLeft, setTimeLeft] = useState('')
+  const [isPast, setIsPast] = useState(false)
+  useEffect(() => {
+    if (!targetISO) return
+    const calc = () => {
+      const diff = new Date(targetISO).getTime() - Date.now()
+      if (diff <= 0) {
+        setIsPast(true)
+        setTimeLeft('')
+        return
+      }
+      setIsPast(false)
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      if (h > 0) setTimeLeft(`${h}h ${m}m ${s}s`)
+      else if (m > 0) setTimeLeft(`${m}m ${s}s`)
+      else setTimeLeft(`${s}s`)
+    }
+    calc()
+    const id = setInterval(calc, 1000)
+    return () => clearInterval(id)
+  }, [targetISO])
+  return { timeLeft, isPast }
 }
 
 export default function ContentCalendarPage() {
@@ -47,7 +90,7 @@ export default function ContentCalendarPage() {
   const [cloudinaryFolder, setCloudinaryFolder] = useState('')
   const [scanningFolder, setScanningFolder] = useState(false)
 
-  // Modal Scheduling states
+  // Modal Scheduling states (for drop-to-schedule)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalDate, setModalDate] = useState<Date | null>(null)
   const [modalImageUrl, setModalImageUrl] = useState('')
@@ -55,6 +98,12 @@ export default function ContentCalendarPage() {
   const [modalTime, setModalTime] = useState('12:00')
   const [modalPlatforms, setModalPlatforms] = useState<string[]>(['facebook'])
   const [savingPost, setSavingPost] = useState(false)
+
+  // Post Detail Modal states (for clicking calendar events)
+  const [selectedPost, setSelectedPost] = useState<CalendarPost | null>(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const [analyticsData, setAnalyticsData] = useState<Partial<CalendarPost> | null>(null)
+  const [showAnalyticsPanel, setShowAnalyticsPanel] = useState(false)
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -158,7 +207,7 @@ export default function ContentCalendarPage() {
           body: JSON.stringify({
             platform: 'facebook',
             account_name: 'Meta Page',
-            content: 'Scheduled via Calendar Drag & Drop 🚀',
+            content: 'Scheduled via Calendar Drag & Drop',
             media_url: imageUrl,
             scheduled_at: scheduledDate.toISOString()
           })
@@ -177,7 +226,7 @@ export default function ContentCalendarPage() {
       setModalDate(droppedDate)
       setModalImageUrl(imageUrl)
       setModalTime(defaultTime || '12:00')
-      setModalCaption('Scheduled via Calendar Drag & Drop 🚀')
+      setModalCaption('Scheduled via Calendar Drag & Drop')
       setModalPlatforms(['facebook'])
       setIsModalOpen(true)
     }
@@ -219,6 +268,53 @@ export default function ContentCalendarPage() {
     }
   }
 
+  // Open post detail modal
+  const handlePostClick = async (post: CalendarPost) => {
+    setSelectedPost(post)
+    setShowAnalyticsPanel(false)
+    setAnalyticsData(null)
+
+    // If published, try to load analytics
+    if (post.status !== 'scheduled' && post.permalink) {
+      setAnalyticsLoading(true)
+      try {
+        const res = await fetch(`/api/meta/posts/${post.id}/insights`)
+        const data = await res.json()
+        if (res.ok && data) {
+          setAnalyticsData({
+            likes: data.likes ?? post.likes ?? 0,
+            comments: data.comments ?? post.comments ?? 0,
+            shares: data.shares ?? post.shares ?? 0,
+            impressions: data.impressions ?? post.impressions ?? 0,
+            reach: data.reach ?? post.reach ?? 0,
+            views: data.views ?? post.views ?? 0,
+          })
+        } else {
+          // Fallback to data already in post object
+          setAnalyticsData({
+            likes: post.likes ?? 0,
+            comments: post.comments ?? 0,
+            shares: post.shares ?? 0,
+            impressions: post.impressions ?? 0,
+            reach: post.reach ?? 0,
+            views: post.views ?? 0,
+          })
+        }
+      } catch {
+        setAnalyticsData({
+          likes: post.likes ?? 0,
+          comments: post.comments ?? 0,
+          shares: post.shares ?? 0,
+          impressions: post.impressions ?? 0,
+          reach: post.reach ?? 0,
+          views: post.views ?? 0,
+        })
+      } finally {
+        setAnalyticsLoading(false)
+      }
+    }
+  }
+
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -243,7 +339,7 @@ export default function ContentCalendarPage() {
           <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
             <Calendar className="w-7 h-7 text-rose-600" /> Content Calendar
           </h1>
-          <p className="mt-1 text-sm text-slate-500 font-bold uppercase tracking-wider">Drag visual assets onto dates for quick scheduling.</p>
+          <p className="mt-1 text-sm text-slate-500 font-bold uppercase tracking-wider">Drag visual assets onto dates · Click events for details &amp; analytics</p>
         </div>
       </div>
 
@@ -256,7 +352,7 @@ export default function ContentCalendarPage() {
               type="time"
               value={defaultTime}
               onChange={e => setDefaultTime(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-850 focus:outline-none focus:border-rose-600 font-mono transition-colors"
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-rose-600 font-mono transition-colors"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -287,9 +383,10 @@ export default function ContentCalendarPage() {
             <button
               onClick={scanCloudinary}
               disabled={scanningFolder}
-              className="text-[9px] text-rose-600 hover:text-rose-700 uppercase font-bold transition-colors"
+              className="text-[9px] text-rose-600 hover:text-rose-700 uppercase font-bold transition-colors flex items-center gap-1"
             >
-              {scanningFolder ? '⏳' : 'Refresh'}
+              <RefreshCw className={`w-3 h-3 ${scanningFolder ? 'animate-spin' : ''}`} />
+              {scanningFolder ? 'Scanning...' : 'Refresh'}
             </button>
           </div>
 
@@ -333,13 +430,13 @@ export default function ContentCalendarPage() {
             <div className="flex items-center gap-4">
               <h2 className="text-lg font-black text-slate-900 tracking-tight">{monthNames[month]} {year}</h2>
               <div className="flex gap-1">
-                <button onClick={handlePrevMonth} className="p-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-650 transition-colors flex items-center justify-center"><ChevronLeft className="w-4 h-4" /></button>
-                <button onClick={handleNextMonth} className="p-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-650 transition-colors flex items-center justify-center"><ChevronRight className="w-4 h-4" /></button>
+                <button onClick={handlePrevMonth} className="p-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors flex items-center justify-center"><ChevronLeft className="w-4 h-4" /></button>
+                <button onClick={handleNextMonth} className="p-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors flex items-center justify-center"><ChevronRight className="w-4 h-4" /></button>
               </div>
             </div>
             <button
               onClick={fetchCalendarPosts}
-              className="text-xs font-bold text-slate-455 hover:text-rose-600 transition-colors flex items-center gap-1"
+              className="text-xs font-bold text-slate-500 hover:text-rose-600 transition-colors flex items-center gap-1"
             >
               <RefreshCw className="w-3.5 h-3.5" /> Sync Live
             </button>
@@ -360,14 +457,15 @@ export default function ContentCalendarPage() {
 
             {daysArray.map((day) => {
               const items = postsByDay[day] || []
+              const isToday = day === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear()
               return (
                 <div
                   key={day}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDropMedia(e, day)}
-                  className="bg-white min-h-[120px] p-2.5 text-xs flex flex-col justify-between hover:bg-slate-50/50 transition-all border-r border-b border-slate-100 relative group/cell"
+                  className="bg-white min-h-[120px] p-2.5 text-xs flex flex-col hover:bg-slate-50/50 transition-all border-r border-b border-slate-100 relative group/cell"
                 >
-                  <span className="font-extrabold text-slate-400 block mb-1 text-[10px]">{day}</span>
+                  <span className={`font-extrabold block mb-1 text-[10px] w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-rose-600 text-white' : 'text-slate-400'}`}>{day}</span>
                   
                   <div className="space-y-1 flex-1 overflow-y-auto max-h-[85px] scrollbar-none">
                     {loading && items.length === 0 ? (
@@ -378,24 +476,22 @@ export default function ContentCalendarPage() {
                         const isScheduled = item.status === 'scheduled'
 
                         return (
-                          <a
+                          <button
                             key={item.id}
-                            href={item.permalink || '#'}
-                            target="_blank"
-                            rel="noreferrer"
-                            className={`block p-1 rounded border text-[9px] font-semibold tracking-wide leading-tight truncate transition-colors ${
+                            onClick={() => handlePostClick(item)}
+                            className={`w-full text-left block p-1 rounded border text-[9px] font-semibold tracking-wide leading-tight truncate transition-all hover:scale-[1.02] hover:shadow-sm cursor-pointer ${
                               isScheduled
-                                ? 'bg-amber-50 text-amber-700 border-amber-250 border-dashed hover:bg-amber-100/50'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200 border-dashed hover:bg-amber-100/80'
                                 : item.type === 'ig'
-                                ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100/50'
-                                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100/50'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100/80'
+                                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100/80'
                             }`}
                           >
                             <span className="block text-[7px] font-black opacity-60 uppercase mb-0.5">
-                              {formattedTime} {isScheduled && '• SCHEDULED'}
+                              {formattedTime} {isScheduled && '• SCHED'}
                             </span>
                             {item.title}
-                          </a>
+                          </button>
                         )
                       })
                     )}
@@ -407,19 +503,19 @@ export default function ContentCalendarPage() {
         </div>
       </div>
 
-      {/* Modal Dialog for Drop Scheduling */}
+      {/* Drop Scheduling Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 select-none animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl text-slate-800">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
               <h3 className="font-extrabold text-slate-900 text-sm">Schedule Dropped Post</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900 text-sm font-bold">✕</button>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900 transition-colors"><X className="w-4 h-4" /></button>
             </div>
 
             <div className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-450 text-[10px] font-bold uppercase tracking-wider mb-1.5">Selected Date</label>
+                  <label className="block text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Selected Date</label>
                   <input
                     type="text"
                     readOnly
@@ -428,7 +524,7 @@ export default function ContentCalendarPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-450 text-[10px] font-bold uppercase tracking-wider mb-1.5">Posting Time</label>
+                  <label className="block text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Posting Time</label>
                   <input
                     type="time"
                     value={modalTime}
@@ -439,7 +535,7 @@ export default function ContentCalendarPage() {
               </div>
 
               <div>
-                <label className="block text-slate-455 text-[10px] font-bold uppercase tracking-wider mb-1.5">Publish To</label>
+                <label className="block text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Publish To</label>
                 <div className="flex gap-2">
                   {['facebook', 'instagram'].map(p => (
                     <button
@@ -461,7 +557,7 @@ export default function ContentCalendarPage() {
               </div>
 
               <div>
-                <label className="block text-slate-455 text-[10px] font-bold uppercase tracking-wider mb-1.5">Post Caption</label>
+                <label className="block text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Post Caption</label>
                 <textarea
                   rows={4}
                   value={modalCaption}
@@ -473,7 +569,7 @@ export default function ContentCalendarPage() {
 
               {modalImageUrl && (
                 <div>
-                  <label className="block text-slate-455 text-[10px] font-bold uppercase tracking-wider mb-1.5">Selected Image</label>
+                  <label className="block text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Selected Image</label>
                   <img src={modalImageUrl} alt="dropped" className="rounded-xl max-h-32 object-cover border border-slate-200 w-full" />
                 </div>
               )}
@@ -499,6 +595,223 @@ export default function ContentCalendarPage() {
           </div>
         </div>
       )}
+
+      {/* Post Detail Modal */}
+      {selectedPost && (
+        <PostDetailModal
+          post={selectedPost}
+          analyticsLoading={analyticsLoading}
+          analyticsData={analyticsData}
+          showAnalyticsPanel={showAnalyticsPanel}
+          setShowAnalyticsPanel={setShowAnalyticsPanel}
+          onClose={() => { setSelectedPost(null); setAnalyticsData(null); setShowAnalyticsPanel(false) }}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ─── Post Detail Modal Component ─── */
+interface PostDetailModalProps {
+  post: CalendarPost
+  analyticsLoading: boolean
+  analyticsData: Partial<CalendarPost> | null
+  showAnalyticsPanel: boolean
+  setShowAnalyticsPanel: (v: boolean) => void
+  onClose: () => void
+}
+
+function PostDetailModal({ post, analyticsLoading, analyticsData, showAnalyticsPanel, setShowAnalyticsPanel, onClose }: PostDetailModalProps) {
+  const isScheduled = post.status === 'scheduled'
+  const postTime = post.time
+  const { timeLeft, isPast } = useCountdown(isScheduled ? postTime : null)
+
+  const postDate = new Date(postTime)
+  const formattedDate = postDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+  const formattedTime = postDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+  const isPlatformIG = post.type === 'ig' || post.platform === 'instagram'
+
+  const statCards = [
+    { label: 'Likes', value: analyticsData?.likes ?? 0, icon: <Heart className="w-4 h-4 text-rose-500" />, color: 'text-rose-600' },
+    { label: 'Comments', value: analyticsData?.comments ?? 0, icon: <MessageCircle className="w-4 h-4 text-blue-500" />, color: 'text-blue-600' },
+    { label: 'Shares', value: analyticsData?.shares ?? 0, icon: <Share2 className="w-4 h-4 text-green-500" />, color: 'text-green-600' },
+    { label: 'Impressions', value: analyticsData?.impressions ?? 0, icon: <Eye className="w-4 h-4 text-purple-500" />, color: 'text-purple-600' },
+    { label: 'Reach', value: analyticsData?.reach ?? 0, icon: <Zap className="w-4 h-4 text-orange-500" />, color: 'text-orange-600' },
+    { label: 'Views', value: analyticsData?.views ?? 0, icon: <BarChart3 className="w-4 h-4 text-slate-500" />, color: 'text-slate-600' },
+  ]
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl text-slate-800 overflow-hidden">
+        
+        {/* Header banner */}
+        <div className={`px-6 py-4 flex items-center justify-between ${isPlatformIG ? 'bg-gradient-to-r from-purple-50 to-pink-50 border-b border-purple-100' : 'bg-gradient-to-r from-blue-50 to-sky-50 border-b border-blue-100'}`}>
+          <div className="flex items-center gap-2.5">
+            {isPlatformIG ? (
+              <svg className="w-5 h-5 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+            )}
+            <span className={`text-xs font-black uppercase tracking-wider ${isPlatformIG ? 'text-purple-700' : 'text-blue-700'}`}>
+              {isPlatformIG ? 'Instagram' : 'Facebook'} Post
+            </span>
+            <span className={`ml-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+              isScheduled
+                ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                : isPast
+                ? 'bg-green-100 text-green-700 border border-green-200'
+                : 'bg-rose-100 text-rose-700 border border-rose-200'
+            }`}>
+              {isScheduled ? 'Scheduled' : 'Published'}
+            </span>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900 transition-colors p-1 rounded-lg hover:bg-white/60">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+
+          {/* Caption */}
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Caption</p>
+            <p className="text-sm text-slate-800 font-medium leading-relaxed line-clamp-3">{post.title || '(No caption)'}</p>
+          </div>
+
+          {/* Date & Time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+              <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Date</p>
+              <p className="text-xs font-bold text-slate-800">{formattedDate}</p>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+              <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Time</p>
+              <p className="text-xs font-bold text-slate-800 font-mono">{formattedTime}</p>
+            </div>
+          </div>
+
+          {/* Status block */}
+          {isScheduled ? (
+            <div className={`rounded-xl p-4 border flex items-center gap-4 ${
+              timeLeft
+                ? 'bg-amber-50 border-amber-200'
+                : 'bg-orange-50 border-orange-200'
+            }`}>
+              <div className={`p-2.5 rounded-lg ${timeLeft ? 'bg-amber-100' : 'bg-orange-100'}`}>
+                <Timer className={`w-5 h-5 ${timeLeft ? 'text-amber-600' : 'text-orange-600'}`} />
+              </div>
+              <div>
+                <p className={`text-[9px] font-black uppercase tracking-widest ${timeLeft ? 'text-amber-500' : 'text-orange-500'}`}>
+                  {timeLeft ? 'Publishing In' : 'Overdue — Not Yet Posted'}
+                </p>
+                {timeLeft ? (
+                  <p className="text-xl font-black text-amber-700 font-mono tabular-nums">{timeLeft}</p>
+                ) : (
+                  <p className="text-sm font-bold text-orange-700">Check your Meta credentials and queue runner.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl p-4 border bg-green-50 border-green-200 flex items-center gap-4">
+              <div className="p-2.5 rounded-lg bg-green-100">
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-green-500">Status</p>
+                <p className="text-sm font-black text-green-700">Posted Successfully</p>
+                <p className="text-[10px] text-green-600 mt-0.5">{formattedDate} at {formattedTime}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Preview image */}
+          {post.imageUrl && (
+            <div className="rounded-xl overflow-hidden border border-slate-100 max-h-40">
+              <img src={post.imageUrl} alt="post preview" className="w-full h-full object-cover" />
+            </div>
+          )}
+
+          {/* Analytics section */}
+          {!isScheduled && (
+            <>
+              <div className="border-t border-slate-100 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <BarChart3 className="w-3.5 h-3.5 text-rose-500" /> Post Analytics
+                  </p>
+                  <button
+                    onClick={() => setShowAnalyticsPanel(!showAnalyticsPanel)}
+                    className="text-[9px] font-black text-rose-600 hover:text-rose-700 uppercase tracking-wider flex items-center gap-1 transition-colors"
+                  >
+                    {showAnalyticsPanel ? 'Hide' : 'View Analytics'} <ExternalLink className="w-3 h-3" />
+                  </button>
+                </div>
+
+                {analyticsLoading ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {[...Array(6)].map((_, i) => (
+                      <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />
+                    ))}
+                  </div>
+                ) : showAnalyticsPanel ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {statCards.map((s) => (
+                      <div key={s.label} className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col items-center text-center hover:border-slate-200 hover:shadow-sm transition-all">
+                        {s.icon}
+                        <p className={`text-lg font-black mt-1 ${s.color}`}>{(s.value as number).toLocaleString()}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex gap-4 flex-wrap">
+                    {statCards.slice(0, 3).map((s) => (
+                      <div key={s.label} className="flex items-center gap-1.5">
+                        {s.icon}
+                        <span className={`text-sm font-black ${s.color}`}>{(s.value as number).toLocaleString()}</span>
+                        <span className="text-[9px] text-slate-400 font-bold uppercase">{s.label}</span>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setShowAnalyticsPanel(true)}
+                      className="text-[9px] font-black text-slate-400 hover:text-rose-600 uppercase tracking-wider transition-colors"
+                    >
+                      +{statCards.length - 3} more
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Footer actions */}
+          <div className="flex gap-2 pt-1">
+            {post.permalink && (
+              <a
+                href={post.permalink}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs text-center hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> View Post
+              </a>
+            )}
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 transition-colors shadow-sm shadow-rose-600/15"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
