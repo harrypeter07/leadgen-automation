@@ -2,6 +2,20 @@
 
 import React, { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
+import { 
+  Upload, 
+  History, 
+  Folder, 
+  Cloud, 
+  Search, 
+  Sparkles, 
+  Send, 
+  Calendar, 
+  Check, 
+  AlertCircle, 
+  Inbox,
+  Image as ImageIcon
+} from 'lucide-react'
 
 interface PostJob {
   id: string
@@ -17,8 +31,30 @@ interface PostJob {
 }
 
 const PLATFORMS = [
-  { id: 'facebook',  label: 'Facebook Page',  icon: '📘', color: 'border-blue-200 text-blue-700 bg-blue-50/20 hover:bg-blue-50/50',  active: 'bg-blue-50 border-blue-600 text-blue-800 ring-2 ring-blue-600/10' },
-  { id: 'instagram', label: 'Instagram',       icon: '📸', color: 'border-rose-200 text-rose-700 bg-rose-50/20 hover:bg-rose-50/50',  active: 'bg-rose-50 border-rose-600 text-rose-800 ring-2 ring-rose-600/10' },
+  { 
+    id: 'facebook',  
+    label: 'Facebook Page',  
+    icon: (
+      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+      </svg>
+    ), 
+    color: 'border-blue-200 text-blue-700 bg-blue-50/20 hover:bg-blue-50/50',  
+    active: 'bg-blue-50 border-blue-600 text-blue-800 ring-2 ring-blue-600/10' 
+  },
+  { 
+    id: 'instagram', 
+    label: 'Instagram',       
+    icon: (
+      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+        <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+      </svg>
+    ), 
+    color: 'border-rose-200 text-rose-700 bg-rose-50/20 hover:bg-rose-50/50',  
+    active: 'bg-rose-50 border-rose-600 text-rose-800 ring-2 ring-rose-600/10' 
+  },
 ]
 
 export default function PublishComposerPage() {
@@ -273,13 +309,15 @@ export default function PublishComposerPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-900">📤 Content Publisher</h1>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
+            <Upload className="w-7 h-7 text-rose-600" /> Content Publisher
+          </h1>
           <p className="mt-1 text-sm text-slate-500">Publish directly to Facebook Page and Instagram Business account via the Graph API.</p>
         </div>
         {/* Tab switcher */}
         <div className="flex gap-1 bg-slate-100 border border-slate-200 rounded-xl p-1">
-          <button onClick={() => setActiveTab('compose')}  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'compose'  ? 'bg-white text-slate-800 border border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>✏️ Compose</button>
-          <button onClick={() => setActiveTab('history')}  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'history'  ? 'bg-white text-slate-800 border border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>📋 History {jobs.length > 0 ? `(${jobs.length})` : ''}</button>
+          <button onClick={() => setActiveTab('compose')}  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'compose'  ? 'bg-white text-slate-800 border border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>Compose</button>
+          <button onClick={() => setActiveTab('history')}  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'history'  ? 'bg-white text-slate-800 border border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>History {jobs.length > 0 ? `(${jobs.length})` : ''}</button>
         </div>
       </div>
 
@@ -288,7 +326,9 @@ export default function PublishComposerPage() {
           {/* Column 1: Media Library Browser Panel (Wider Layout: col-span-4) */}
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 space-y-4 lg:col-span-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">📁 Media Library</h3>
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Folder className="w-4 h-4 text-rose-600" /> Media Library
+              </h3>
               <div className="flex gap-1 bg-slate-100 border border-slate-200 rounded-lg p-0.5">
                 <button type="button" onClick={() => setMediaMode('supabase')}
                   className={`px-2 py-1 rounded text-[8px] font-bold uppercase transition-all ${mediaMode === 'supabase' ? 'bg-white text-slate-800 border border-slate-150 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}>
@@ -306,8 +346,8 @@ export default function PublishComposerPage() {
                 <div className="space-y-2">
                   <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('file')} />
                   <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors disabled:opacity-40 text-center">
-                    {uploading ? '⏳ Uploading…' : '📁 Upload Local File'}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5" /> {uploading ? 'Uploading…' : 'Upload Local File'}
                   </button>
                   <div className="text-center text-[10px] text-slate-400 font-bold uppercase">or</div>
                   <input
@@ -317,8 +357,8 @@ export default function PublishComposerPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors"
                   />
                   <button type="button" onClick={() => handleMediaUpload('drive')} disabled={uploading || !driveInput.trim()}
-                    className="w-full px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100/50 transition-colors disabled:opacity-40">
-                    ☁️ Upload Drive Link
+                    className="w-full px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100/50 transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5">
+                    <Cloud className="w-3.5 h-3.5" /> Upload Drive Link
                   </button>
                 </div>
               </div>
@@ -327,12 +367,12 @@ export default function PublishComposerPage() {
                 <div className="flex gap-2">
                   <input ref={cloudinaryFileRef} type="file" accept="image/*,video/*" className="hidden" onChange={() => handleMediaUpload('cloudinary_file')} />
                   <button type="button" onClick={() => cloudinaryFileRef.current?.click()} disabled={uploading}
-                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors disabled:opacity-40 text-center">
-                    {uploading ? '⏳' : '📤 Upload'}
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5">
+                    <Upload className="w-3 h-3" /> {uploading ? '⏳' : 'Upload'}
                   </button>
                   <button type="button" onClick={handleScanCloudinaryFolder} disabled={scanningFolder}
-                    className="px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100/50 transition-colors">
-                    {scanningFolder ? '⏳' : '🔍 Scan'}
+                    className="px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100/50 transition-colors flex items-center justify-center gap-1.5">
+                    <Search className="w-3 h-3" /> {scanningFolder ? '⏳' : 'Scan'}
                   </button>
                 </div>
                 <input
@@ -394,7 +434,7 @@ export default function PublishComposerPage() {
                     className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${selectedPlatforms.includes(p.id) ? p.active : `bg-slate-50 border-slate-200 ${p.color}`}`}
                   >
                     <span>{p.icon}</span>{p.label}
-                    {selectedPlatforms.includes(p.id) && <span className="ml-1 text-green-500 font-bold">✓</span>}
+                    {selectedPlatforms.includes(p.id) && <Check className="ml-1 w-3.5 h-3.5 text-green-600" />}
                   </button>
                 ))}
               </div>
@@ -403,8 +443,8 @@ export default function PublishComposerPage() {
             {/* Caption textarea */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">Post Caption</label>
-                <span className={`text-[10px] font-mono ${charCount > charLimit * 0.9 ? 'text-rose-500 font-bold' : 'text-slate-400'}`}>{charCount} / {charLimit.toLocaleString()}</span>
+                <label className="text-[10px] font-bold text-slate-455 uppercase tracking-widest">Post Caption</label>
+                <span className={`text-[10px] font-mono ${charCount > charLimit * 0.9 ? 'text-rose-500 font-bold' : 'text-slate-455'}`}>{charCount} / {charLimit.toLocaleString()}</span>
               </div>
               <textarea
                 value={content}
@@ -417,7 +457,7 @@ export default function PublishComposerPage() {
 
             {/* Schedule */}
             <div>
-              <label className="text-[10px] font-bold text-slate-450 uppercase tracking-widest block mb-2">Schedule (optional)</label>
+              <label className="text-[10px] font-bold text-slate-455 uppercase tracking-widest block mb-2">Schedule (optional)</label>
               <input
                 type="datetime-local"
                 value={scheduledFor}
@@ -429,22 +469,22 @@ export default function PublishComposerPage() {
             {/* Actions */}
             <div className="flex gap-3">
               <button type="button" onClick={handleGenerateAICaption} disabled={generatingCaption}
-                className="px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100/50 transition-colors disabled:opacity-40">
-                {generatingCaption ? '⏳ Generating…' : '✨ AI Caption'}
+                className="px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100/50 transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5">
+                {generatingCaption ? 'Generating…' : <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> AI Caption</span>}
               </button>
               <button type="submit" disabled={publishing || !content.trim() || selectedPlatforms.length === 0}
-                className="flex-1 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-rose-600/10">
-                {publishing ? '⏳ Publishing…' : scheduledFor ? '📅 Schedule Post' : '📤 Publish Now'}
+                className="flex-1 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-rose-600/10 flex items-center justify-center gap-1.5">
+                {publishing ? 'Publishing…' : scheduledFor ? <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Schedule Post</span> : <span className="flex items-center gap-1.5"><Send className="w-3.5 h-3.5" /> Publish Now</span>}
               </button>
             </div>
 
             {/* Publish Log */}
             {publishLog.length > 0 && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 max-h-40 overflow-y-auto">
-                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Publish Log</div>
+                <div className="text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">Publish Log</div>
                 {publishLog.map((line, i) => (
                   <div key={i} className={`text-[10px] font-mono ${
-                    line.includes('✅') ? 'text-green-600 font-bold' : line.includes('❌') ? 'text-rose-600 font-bold' : 'text-slate-500'
+                    line.includes('✅') || line.includes('Success') ? 'text-green-600 font-bold' : line.includes('❌') || line.includes('Error') ? 'text-rose-600 font-bold' : 'text-slate-500'
                   }`}>{line}</div>
                 ))}
               </div>
@@ -454,12 +494,14 @@ export default function PublishComposerPage() {
           {/* Column 4: Live Preview & Requirements Panel (Wider Layout: col-span-3) */}
           <div className="lg:col-span-3 space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 space-y-3">
-              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Preview</h3>
+              <h3 className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">Preview</h3>
               {content ? (
                 <div className="space-y-2">
                   <div className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">{content}</div>
                   {imageUrl && (
-                    <div className="text-[10px] font-mono text-rose-500 truncate">🖼 {imageUrl}</div>
+                    <div className="text-[10px] font-mono text-rose-500 truncate flex items-center gap-1">
+                      <ImageIcon className="w-3.5 h-3.5 text-rose-500" /> {imageUrl}
+                    </div>
                   )}
                 </div>
               ) : (
@@ -469,7 +511,7 @@ export default function PublishComposerPage() {
                 {selectedPlatforms.map(p => {
                   const pl = PLATFORMS.find(x => x.id === p)
                   return (
-                    <span key={p} className="text-[10px] font-bold bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full text-slate-600">
+                    <span key={p} className="text-[10px] font-bold bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full text-slate-600 flex items-center gap-1">
                       {pl?.icon} {pl?.label}
                     </span>
                   )
@@ -477,7 +519,7 @@ export default function PublishComposerPage() {
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 space-y-2">
-              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Requirements</h3>
+              <h3 className="text-[10px] font-bold text-slate-450 uppercase tracking-widest">Requirements</h3>
               <div className="space-y-1.5 text-[11px]">
                 {[
                   { label: 'Facebook: Page Access Token', ok: true },
@@ -485,8 +527,8 @@ export default function PublishComposerPage() {
                   { label: 'Instagram: Image URL required', ok: !selectedPlatforms.includes('instagram') || !!imageUrl },
                   { label: 'Caption not empty',            ok: content.trim().length > 0 },
                 ].map(r => (
-                  <div key={r.label} className={`flex items-center gap-2 ${r.ok ? 'text-green-600 font-bold' : 'text-rose-500 font-bold'}`}>
-                    <span>{r.ok ? '✓' : '!'}</span>
+                  <div key={r.label} className={`flex items-center gap-2 ${r.ok ? 'text-green-600 font-semibold' : 'text-rose-500 font-bold'}`}>
+                    {r.ok ? <Check className="w-3.5 h-3.5 text-green-650" /> : <AlertCircle className="w-3.5 h-3.5 text-rose-500" />}
                     <span>{r.label}</span>
                   </div>
                 ))}
@@ -500,8 +542,8 @@ export default function PublishComposerPage() {
         <div className="space-y-3">
           {jobs.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-12 text-center text-slate-400">
-              <div className="text-4xl mb-3">📭</div>
-              <div className="text-sm font-semibold">No posts published yet this session.</div>
+              <Inbox className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">No posts published yet this session</div>
             </div>
           ) : (
             jobs.map(job => (
@@ -516,7 +558,7 @@ export default function PublishComposerPage() {
                   }`}>{job.status}</span>
                 </div>
                 <div className="flex flex-wrap gap-2 text-[10px] text-slate-400 font-mono">
-                  {job.platforms.map(p => <span key={p}>{PLATFORMS.find(x => x.id === p)?.icon} {p}</span>)}
+                  {job.platforms.map(p => <span key={p} className="flex items-center gap-1">{PLATFORMS.find(x => x.id === p)?.icon} {p}</span>)}
                   {job.fbPostId && <span>FB: {job.fbPostId}</span>}
                   {job.igPostId && <span>IG: {job.igPostId}</span>}
                   {job.publishedAt && <span>at {new Date(job.publishedAt).toLocaleTimeString()}</span>}
