@@ -40,6 +40,7 @@ interface CalendarPost {
   reach?: number
   views?: number
   status?: string // 'scheduled', 'failed', 'published'
+  errorLog?: string
 }
 
 interface CloudinaryAsset {
@@ -138,7 +139,8 @@ export default function ContentCalendarPage() {
           time: item.scheduled_at,
           type: item.platform === 'instagram' ? 'ig' : 'fb',
           imageUrl: item.media_url,
-          status: item.status
+          status: item.status,
+          errorLog: item.error_log
         }))
       }
 
@@ -378,6 +380,22 @@ export default function ContentCalendarPage() {
     } catch (err: any) {
       console.error('Immediate publish failed:', err)
       toast.error(err.message || 'Immediate publish failed', { id: toastId })
+      
+      // Update database status to failed and save the error message
+      try {
+        await fetch('/api/backend-v3/automation/workflows/publish/queue/callback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: post.id,
+            status: 'failed',
+            error_log: err.message || 'Unknown immediate publishing error'
+          })
+        })
+        fetchCalendarPosts()
+      } catch (dbErr) {
+        console.error('Failed to write failure logs to database:', dbErr)
+      }
     } finally {
       setPublishingNow(false)
     }
@@ -781,35 +799,47 @@ function PostDetailModal({
 
           {/* Status block */}
           {isScheduled ? (
-            <div className={`rounded-xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-              timeLeft
-                ? 'bg-amber-50 border-amber-200'
-                : 'bg-orange-50 border-orange-200'
-            }`}>
-              <div className="flex items-center gap-4">
-                <div className={`p-2.5 rounded-lg ${timeLeft ? 'bg-amber-100' : 'bg-orange-100'}`}>
-                  <Timer className={`w-5 h-5 ${timeLeft ? 'text-amber-600' : 'text-orange-600'}`} />
+            <div className="space-y-3">
+              <div className={`rounded-xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                timeLeft
+                  ? 'bg-amber-50 border-amber-200'
+                  : 'bg-orange-50 border-orange-200'
+              }`}>
+                <div className="flex items-center gap-4">
+                  <div className={`p-2.5 rounded-lg ${timeLeft ? 'bg-amber-100' : 'bg-orange-100'}`}>
+                    <Timer className={`w-5 h-5 ${timeLeft ? 'text-amber-600' : 'text-orange-600'}`} />
+                  </div>
+                  <div>
+                    <p className={`text-[9px] font-black uppercase tracking-widest ${timeLeft ? 'text-amber-500' : 'text-orange-500'}`}>
+                      {timeLeft ? 'Publishing In' : 'Overdue — Not Yet Posted'}
+                    </p>
+                    {timeLeft ? (
+                      <p className="text-xl font-black text-amber-700 font-mono tabular-nums">{timeLeft}</p>
+                    ) : (
+                      <p className="text-sm font-bold text-orange-700">Check your Meta credentials and queue runner.</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <p className={`text-[9px] font-black uppercase tracking-widest ${timeLeft ? 'text-amber-500' : 'text-orange-500'}`}>
-                    {timeLeft ? 'Publishing In' : 'Overdue — Not Yet Posted'}
-                  </p>
-                  {timeLeft ? (
-                    <p className="text-xl font-black text-amber-700 font-mono tabular-nums">{timeLeft}</p>
-                  ) : (
-                    <p className="text-sm font-bold text-orange-700">Check your Meta credentials and queue runner.</p>
-                  )}
-                </div>
+                {!timeLeft && (
+                  <button
+                    onClick={() => onPublishNow(post)}
+                    disabled={publishingNow}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/10 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    {publishingNow ? 'Publishing...' : 'Publish Now'}
+                  </button>
+                )}
               </div>
-              {!timeLeft && (
-                <button
-                  onClick={() => onPublishNow(post)}
-                  disabled={publishingNow}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/10 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  {publishingNow ? 'Publishing...' : 'Publish Now'}
-                </button>
+              {post.errorLog && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-700 flex flex-col gap-1">
+                  <span className="font-extrabold text-[9px] uppercase tracking-wider text-red-500 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-500" /> Log Reason / Error Output
+                  </span>
+                  <p className="font-mono bg-white/60 border border-red-100/50 rounded-lg p-2 mt-1 leading-relaxed text-[10px] break-words max-h-24 overflow-y-auto">
+                    {post.errorLog}
+                  </p>
+                </div>
               )}
             </div>
           ) : (

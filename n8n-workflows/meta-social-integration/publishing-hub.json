@@ -203,6 +203,38 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [1700, 200]
+    },
+    {
+      "parameters": {},
+      "id": "e4f8a1b2-200b-4000-8000-000000000020",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [100, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/publish/queue/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "27pwgfjvq491aircy8lh6nz3eb5mkus0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"id\": \"{{ $('Split Queue Items').item.json.id }}\",\n  \"status\": \"failed\",\n  \"error_log\": \"Failed on node '{{ $json.execution.error.node.name }}': {{ $json.execution.error.message }}\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-200c-4000-8000-000000000021",
+      "name": "Mark Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [300, 500]
     }
   ],
   "connections": {
@@ -306,6 +338,17 @@
         [
           {
             "node": "Mark Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Mark Failed",
             "type": "main",
             "index": 0
           }
