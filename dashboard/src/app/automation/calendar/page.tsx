@@ -84,8 +84,20 @@ export default function ContentCalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
 
   // Time scheduling states
-  const [defaultTime, setDefaultTime] = useState('12:00')
-  const [useDefaultTime, setUseDefaultTime] = useState(true)
+  const [defaultTime, setDefaultTime] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const now = new Date()
+      return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    }
+    return '12:00'
+  })
+  const [useDefaultTime, setUseDefaultTime] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('useDefaultTime')
+      return saved !== null ? saved === 'true' : true
+    }
+    return true
+  })
 
   // Media Library states inside Calendar
   const [cloudinaryAssets, setCloudinaryAssets] = useState<CloudinaryAsset[]>([])
@@ -106,6 +118,7 @@ export default function ContentCalendarPage() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [analyticsData, setAnalyticsData] = useState<Partial<CalendarPost> | null>(null)
   const [showAnalyticsPanel, setShowAnalyticsPanel] = useState(false)
+  const [activeDayPosts, setActiveDayPosts] = useState<{ day: number; posts: CalendarPost[] } | null>(null)
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -228,7 +241,11 @@ export default function ContentCalendarPage() {
       // Open Modal for details customization
       setModalDate(droppedDate)
       setModalImageUrl(imageUrl)
-      setModalTime(defaultTime || '12:00')
+      
+      const now = new Date()
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      setModalTime(currentTime)
+      
       setModalCaption('Scheduled via Calendar Drag & Drop')
       setModalPlatforms(['facebook'])
       setIsModalOpen(true)
@@ -381,6 +398,8 @@ export default function ContentCalendarPage() {
       console.error('Immediate publish failed:', err)
       toast.error(err.message || 'Immediate publish failed', { id: toastId })
       
+      const errorMsg = err.message || 'Unknown immediate publishing error'
+      
       // Update database status to failed and save the error message
       try {
         await fetch('/api/backend-v3/automation/workflows/publish/queue/callback', {
@@ -389,9 +408,13 @@ export default function ContentCalendarPage() {
           body: JSON.stringify({
             id: post.id,
             status: 'failed',
-            error_log: err.message || 'Unknown immediate publishing error'
+            error_log: errorMsg
           })
         })
+        
+        // Update selectedPost state directly so the user sees the error log in the modal instantly!
+        setSelectedPost(prev => prev ? { ...prev, status: 'failed', errorLog: errorMsg } : null)
+        
         fetchCalendarPosts()
       } catch (dbErr) {
         console.error('Failed to write failure logs to database:', dbErr)
@@ -447,7 +470,11 @@ export default function ContentCalendarPage() {
               type="checkbox"
               id="chkDefaultTime"
               checked={useDefaultTime}
-              onChange={e => setUseDefaultTime(e.target.checked)}
+              onChange={e => {
+                const val = e.target.checked
+                setUseDefaultTime(val)
+                localStorage.setItem('useDefaultTime', String(val))
+              }}
               className="w-4 h-4 accent-rose-600 rounded border-slate-300 bg-slate-50 cursor-pointer"
             />
             <label htmlFor="chkDefaultTime" className="text-xs text-slate-500 font-medium cursor-pointer">Instant Schedule (No Dialog popup)</label>
@@ -550,35 +577,35 @@ export default function ContentCalendarPage() {
                   key={day}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDropMedia(e, day)}
-                  className="bg-white min-h-[120px] p-2.5 text-xs flex flex-col hover:bg-slate-50/50 transition-all border-r border-b border-slate-100 relative group/cell"
+                  onClick={() => {
+                    if (items.length > 0) {
+                      setActiveDayPosts({ day, posts: items })
+                    }
+                  }}
+                  className={`bg-white min-h-[100px] p-2 text-xs flex flex-col hover:bg-slate-50 transition-all border-r border-b border-slate-100 relative group/cell ${
+                    items.length > 0 ? 'cursor-pointer hover:border-slate-300' : ''
+                  }`}
                 >
                   <span className={`font-extrabold block mb-1 text-[10px] w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-rose-600 text-white' : 'text-slate-400'}`}>{day}</span>
                   
-                  <div className="space-y-1 flex-1 overflow-y-auto max-h-[85px] scrollbar-none">
+                  <div className="flex flex-wrap gap-1 mt-1.5 h-6 overflow-hidden">
                     {loading && items.length === 0 ? (
-                      <div className="h-4 bg-slate-100 rounded animate-pulse" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-slate-100 animate-pulse" />
                     ) : (
                       items.map((item) => {
-                        const formattedTime = new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                         const isScheduled = item.status === 'scheduled'
+                        const isFailed = item.status === 'failed'
+                        let dotColor = 'bg-blue-500' // Facebook published
+                        if (isScheduled) dotColor = 'bg-amber-500'
+                        else if (isFailed) dotColor = 'bg-red-500'
+                        else if (item.type === 'ig' || item.platform === 'instagram') dotColor = 'bg-purple-500' // Instagram published
 
                         return (
-                          <button
+                          <span
                             key={item.id}
-                            onClick={() => handlePostClick(item)}
-                            className={`w-full text-left block p-1 rounded border text-[9px] font-semibold tracking-wide leading-tight truncate transition-all hover:scale-[1.02] hover:shadow-sm cursor-pointer ${
-                              isScheduled
-                                ? 'bg-amber-50 text-amber-700 border-amber-200 border-dashed hover:bg-amber-100/80'
-                                : item.type === 'ig'
-                                ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100/80'
-                                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100/80'
-                            }`}
-                          >
-                            <span className="block text-[7px] font-black opacity-60 uppercase mb-0.5">
-                              {formattedTime} {isScheduled && '• SCHED'}
-                            </span>
-                            {item.title}
-                          </button>
+                            title={`${new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${item.title}`}
+                            className={`w-2.5 h-2.5 rounded-full ${dotColor} border border-white shadow-sm shrink-0 transition-transform hover:scale-125`}
+                          />
                         )
                       })
                     )}
@@ -678,6 +705,102 @@ export default function ContentCalendarPage() {
                   {savingPost ? 'Scheduling...' : 'Confirm Schedule'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Daily Posts List Modal */}
+      {activeDayPosts && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 select-none animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-lg space-y-4 shadow-2xl text-slate-800 animate-scaleIn">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base">
+                  Scheduled &amp; Published Posts
+                </h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                  {monthNames[month]} {activeDayPosts.day}, {year}
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveDayPosts(null)}
+                className="text-slate-400 hover:text-slate-900 transition-colors p-1 rounded-lg hover:bg-slate-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 overflow-y-auto max-h-[350px] pr-1">
+              {activeDayPosts.posts.map((post) => {
+                const formattedTime = new Date(post.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                const isScheduled = post.status === 'scheduled'
+                const isFailed = post.status === 'failed'
+                const isInstagram = post.platform === 'instagram' || post.type === 'ig'
+
+                return (
+                  <button
+                    key={post.id}
+                    onClick={() => {
+                      handlePostClick(post)
+                      setActiveDayPosts(null)
+                    }}
+                    className="w-full text-left flex gap-3 p-3 rounded-xl border border-slate-100 hover:border-slate-300 hover:bg-slate-50 transition-all group cursor-pointer"
+                  >
+                    {post.imageUrl && (
+                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-100 shrink-0 bg-slate-50">
+                        <img src={post.imageUrl} alt="post visual" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-rose-600 uppercase font-mono tracking-wider">
+                          {formattedTime}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {/* Platform badge */}
+                          {isInstagram ? (
+                            <span className="bg-purple-50 text-purple-600 border border-purple-100 rounded-md px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider">
+                              Instagram
+                            </span>
+                          ) : (
+                            <span className="bg-blue-50 text-blue-600 border border-blue-100 rounded-md px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider">
+                              Facebook
+                            </span>
+                          )}
+                          {/* Status badge */}
+                          {isScheduled ? (
+                            <span className="bg-amber-50 text-amber-600 border border-amber-100 rounded-md px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider">
+                              Scheduled
+                            </span>
+                          ) : isFailed ? (
+                            <span className="bg-red-50 text-red-600 border border-red-100 rounded-md px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider animate-pulse">
+                              Failed
+                            </span>
+                          ) : (
+                            <span className="bg-green-50 text-green-600 border border-green-100 rounded-md px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider">
+                              Published
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700 truncate group-hover:text-slate-900 transition-colors">
+                        {post.title}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+            
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveDayPosts(null)}
+                className="py-2 px-4 rounded-xl border border-slate-200 text-slate-500 font-bold hover:bg-slate-50 transition-colors text-xs"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
