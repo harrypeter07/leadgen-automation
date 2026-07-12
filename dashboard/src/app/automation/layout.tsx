@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { 
   Inbox, 
   MessageSquare, 
@@ -31,6 +31,7 @@ interface AutomationLayoutProps {
 
 export default function AutomationLayout({ children }: AutomationLayoutProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [activeWorkspace, setActiveWorkspace] = useState('Stratnent Workspace')
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -104,7 +105,7 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
       )}
             {/* Inner Sub-Sidebar for Social Automation modules */}
       <aside
-        className="border-r flex flex-col justify-between flex-shrink-0 relative transition-all duration-300 border-slate-200 bg-white"
+        className="hidden md:flex border-r flex-col justify-between flex-shrink-0 relative transition-all duration-300 border-slate-200 bg-white"
         style={{ width: sidebarCollapsed ? '56px' : '230px' }}
       >
         {/* Collapse inner toggle arrow */}
@@ -211,7 +212,7 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
       {/* Main Content Pane */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header navbar */}
-        <header className="h-14 border-b px-6 flex items-center justify-between transition-colors duration-300 border-slate-200 bg-white shadow-sm">
+        <header className="h-14 border-b px-6 flex items-center justify-between transition-colors duration-300 border-slate-200 bg-white shadow-sm flex-shrink-0">
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
             <Link href="/" className="hover:text-slate-700 text-slate-400">Root</Link>
             {breadcrumbs.map((b, i) => (
@@ -224,6 +225,41 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
                 )}
               </React.Fragment>
             ))}
+          </div>
+
+          {/* Mobile Sub-Navigation Selector */}
+          <div className="relative block md:hidden max-w-[160px]">
+            <select
+              value={pathname}
+              onChange={(e) => router.push(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-slate-800 text-[10px] font-bold uppercase tracking-wider rounded-xl pl-3 pr-8 py-1.5 focus:outline-none appearance-none cursor-pointer w-full text-ellipsis overflow-hidden whitespace-nowrap"
+            >
+              <option value="" disabled>Choose Module...</option>
+              <optgroup label="Communication">
+                <option value="/automation/inbox">Unified Inbox</option>
+                <option value="/automation/comments">Comment Manager</option>
+                <option value="/automation/crm">CRM Pipelines</option>
+                <option value="/automation/campaigns">Campaigns</option>
+                <option value="/automation/email-outreach">Email Outreach</option>
+              </optgroup>
+              <optgroup label="Publishing">
+                <option value="/automation/publish">Composer</option>
+                <option value="/automation/calendar">Calendar</option>
+                <option value="/automation/trending">Trending Research</option>
+                <option value="/automation/media">Media Library</option>
+              </optgroup>
+              <optgroup label="Operations">
+                <option value="/automation/accounts">Accounts</option>
+                <option value="/automation/settings/meta">Meta Settings</option>
+                <option value="/automation/workflows">Workflows</option>
+                <option value="/automation/health">Health</option>
+                <option value="/automation/testing">API Console</option>
+                <option value="/automation/logs">Logs</option>
+                <option value="/automation/docs">Docs</option>
+                <option value="/automation/settings">Module Settings</option>
+              </optgroup>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-slate-500 text-[9px]">▼</div>
           </div>
 
           <div className="flex items-center gap-3">
