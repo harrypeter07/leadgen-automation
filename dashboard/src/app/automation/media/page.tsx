@@ -45,6 +45,7 @@ export default function MediaLibraryPage() {
   const [uploadQueue, setUploadQueue] = useState<UploadItem[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [uploadFolder, setUploadFolder] = useState('')
+  const [previewAsset, setPreviewAsset] = useState<MediaAsset | null>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -516,7 +517,10 @@ export default function MediaLibraryPage() {
                       className="p-4 bg-[#141416] border border-[#2D2D30]/60 rounded-xl space-y-3 flex flex-col justify-between text-xs hover:border-gray-500 transition-all duration-300"
                     >
                       {/* Preview */}
-                      <div className="w-full h-32 bg-gray-900 border border-[#2D2D30]/60 rounded-lg overflow-hidden flex items-center justify-center relative group">
+                      <div
+                        onClick={() => setPreviewAsset(asset)}
+                        className="w-full h-32 bg-gray-900 border border-[#2D2D30]/60 rounded-lg overflow-hidden flex items-center justify-center relative group cursor-pointer"
+                      >
                         {isVideo ? (
                           <video
                             src={asset.url}
@@ -576,14 +580,12 @@ export default function MediaLibraryPage() {
                           >
                             Copy URL
                           </button>
-                          <a
-                            href={asset.url}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            onClick={() => setPreviewAsset(asset)}
                             className="px-2 py-1.5 rounded bg-gray-800 text-white hover:bg-gray-700 font-bold uppercase tracking-wider text-[9px]"
                           >
-                            Open
-                          </a>
+                            Preview
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -594,6 +596,109 @@ export default function MediaLibraryPage() {
           </div>
         </div>
       </div>
+
+      {/* Media Preview Modal */}
+      {previewAsset && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-[#18181A] border border-[#2D2D30] rounded-2xl w-full max-w-3xl shadow-2xl text-white overflow-hidden flex flex-col md:flex-row">
+            {/* Player / Lightbox */}
+            <div className="flex-1 bg-black min-h-[300px] md:min-h-[450px] flex items-center justify-center relative p-4 border-b md:border-b-0 md:border-r border-[#2D2D30]">
+              {previewAsset.resourceType === 'video' ? (
+                <video
+                  src={previewAsset.url}
+                  controls
+                  autoPlay
+                  className="w-full h-full max-h-[70vh] object-contain rounded-lg"
+                />
+              ) : (
+                <img
+                  src={previewAsset.url}
+                  alt={previewAsset.name}
+                  className="w-full h-full max-h-[70vh] object-contain rounded-lg"
+                />
+              )}
+            </div>
+
+            {/* Side Details */}
+            <div className="w-full md:w-80 p-6 flex flex-col justify-between gap-5 bg-[#141416]">
+              <div className="space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-[#E3B859] text-[#141416]">
+                      {previewAsset.resourceType === 'video' ? '🎬 Video' : '🖼️ Image'}
+                    </span>
+                    <h4 className="text-sm font-bold mt-2 break-all max-h-16 overflow-y-auto">
+                      {previewAsset.name.split('/').pop()}
+                    </h4>
+                  </div>
+                  <button
+                    onClick={() => setPreviewAsset(null)}
+                    className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-[#202022] transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between py-1.5 border-b border-[#2D2D30]/60">
+                    <span className="text-gray-500 font-bold uppercase text-[9px]">Source</span>
+                    <span className="font-semibold text-gray-300">{previewAsset.source}</span>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-[#2D2D30]/60">
+                    <span className="text-gray-500 font-bold uppercase text-[9px]">Size</span>
+                    <span className="font-semibold text-gray-300">{previewAsset.size}</span>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-[#2D2D30]/60">
+                    <span className="text-gray-500 font-bold uppercase text-[9px]">Date</span>
+                    <span className="font-semibold text-gray-300">{previewAsset.date}</span>
+                  </div>
+                  {previewAsset.format && (
+                    <div className="flex justify-between py-1.5 border-b border-[#2D2D30]/60">
+                      <span className="text-gray-500 font-bold uppercase text-[9px]">Format</span>
+                      <span className="font-semibold text-gray-300 uppercase">{previewAsset.format}</span>
+                    </div>
+                  )}
+                  {previewAsset.resourceType === 'video' && previewAsset.duration && (
+                    <div className="flex justify-between py-1.5 border-b border-[#2D2D30]/60">
+                      <span className="text-gray-500 font-bold uppercase text-[9px]">Duration</span>
+                      <span className="font-semibold text-gray-300 font-mono">
+                        {Math.floor(previewAsset.duration / 60)}:{String(Math.floor(previewAsset.duration % 60)).padStart(2, '0')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[9px] text-gray-500 font-black uppercase tracking-wider block">CDN URL</span>
+                  <textarea
+                    readOnly
+                    value={previewAsset.url}
+                    className="w-full bg-[#0E0E10] border border-[#2D2D30] rounded-xl p-2 text-[10px] text-green-300 font-mono h-20 resize-none focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(previewAsset.url)
+                    toast.success('URL copied!')
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs uppercase tracking-wider transition-colors text-center"
+                >
+                  Copy URL
+                </button>
+                <button
+                  onClick={() => setPreviewAsset(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] text-[#141416] font-bold text-xs uppercase tracking-wider transition-colors text-center"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
