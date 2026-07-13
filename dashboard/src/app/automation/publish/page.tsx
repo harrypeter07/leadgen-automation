@@ -249,6 +249,7 @@ export default function PublishComposerPage() {
         }
         try {
           addLog(`${platform}: Queuing scheduled post for ${new Date(scheduledFor).toLocaleString()}…`)
+          const isVideo = imageUrl && (imageUrl.toLowerCase().includes('/video/upload/') || imageUrl.toLowerCase().match(/\.(mp4|webm|mov|avi|mkv|ogg)($|\?)/));
           const res = await fetch('/api/backend-v3/automation/workflows/publish/queue', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -258,6 +259,10 @@ export default function PublishComposerPage() {
               content,
               media_url: imageUrl || null,
               scheduled_at: new Date(scheduledFor).toISOString(),
+              audio_id: platform === 'instagram' && selectedSong?.id ? selectedSong.id : null,
+              location_id: locationId || null,
+              user_tags: userTags ? userTags.split(',').map(u => u.trim()).filter(Boolean) : null,
+              media_type: platform === 'instagram' && isVideo ? 'reels' : 'image'
             }),
           })
           const data = await res.json()
