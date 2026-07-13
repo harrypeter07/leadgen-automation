@@ -1103,7 +1103,7 @@ function PostDetailModal({
               </svg>
             )}
             <span className={`text-xs font-black uppercase tracking-wider ${isPlatformIG ? 'text-purple-700' : 'text-blue-700'}`}>
-              {isPlatformIG ? 'Instagram' : 'Facebook'} Post
+              {isPlatformIG ? (post.media_type === 'reels' ? 'Instagram Reel' : 'Instagram Post') : 'Facebook Post'}
             </span>
             <span className={`ml-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
               currentStatus === 'scheduled'
