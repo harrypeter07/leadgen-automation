@@ -953,7 +953,11 @@ function PostDetailModal({
 }: PostDetailModalProps) {
   const [post, setLocalPost] = useState<CalendarPost>(initialPost)
   const [currentStatus, setCurrentStatus] = useState<string>(initialPost.status || 'scheduled')
-  const [secSinceOverdue, setSecSinceOverdue] = useState(0)
+  const [secSinceOverdue, setSecSinceOverdue] = useState(() => {
+    const releaseTime = new Date(initialPost.time).getTime()
+    const diff = Date.now() - releaseTime
+    return diff > 0 ? Math.floor(diff / 1000) : 0
+  })
 
   const isScheduled = currentStatus === 'scheduled'
   const postTime = post.time
@@ -1082,7 +1086,7 @@ function PostDetailModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
-      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl text-slate-800 overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl text-slate-800 overflow-hidden max-h-[90vh] flex flex-col">
         
         {/* Header banner */}
         <div className={`px-6 py-4 flex items-center justify-between ${isPlatformIG ? 'bg-gradient-to-r from-purple-50 to-pink-50 border-b border-purple-100' : 'bg-gradient-to-r from-blue-50 to-sky-50 border-b border-blue-100'}`}>
@@ -1116,7 +1120,7 @@ function PostDetailModal({
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-5 overflow-y-auto flex-1">
 
           {/* Caption */}
           <div>

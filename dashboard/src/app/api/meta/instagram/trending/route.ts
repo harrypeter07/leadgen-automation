@@ -38,6 +38,11 @@ Only return the JSON array, nothing else.`,
     if (cleaned.startsWith('```')) {
       cleaned = cleaned.replace(/^```(json)?/, '').replace(/```$/, '').trim()
     }
+    const firstBrace = cleaned.indexOf('[')
+    const lastBrace = cleaned.lastIndexOf(']')
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.substring(firstBrace, lastBrace + 1)
+    }
     const tags = JSON.parse(cleaned)
     return Array.isArray(tags) ? tags.slice(0, 5) : []
   } catch {
@@ -176,6 +181,11 @@ Only return raw JSON. No markdown. Ground everything in the real data above.`
   let cleaned = rawText.trim()
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(json)?/, '').replace(/```$/, '').trim()
+  }
+  const firstBrace = cleaned.indexOf('{')
+  const lastBrace = cleaned.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1)
   }
   const parsed = JSON.parse(cleaned)
   return { ...parsed, dataSource: 'meta_graph_api' }
