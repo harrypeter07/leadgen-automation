@@ -87,6 +87,7 @@ export default function PublishComposerPage() {
   const [locationId, setLocationId] = useState('')
   const [userTags, setUserTags] = useState('')
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
+  const [instagramMediaType, setInstagramMediaType] = useState<'post' | 'reels'>('reels')
   
   // Audio Search States
   const [songQuery, setSongQuery] = useState('')
@@ -249,7 +250,6 @@ export default function PublishComposerPage() {
         }
         try {
           addLog(`${platform}: Queuing scheduled post for ${new Date(scheduledFor).toLocaleString()}…`)
-          const isVideo = imageUrl && (imageUrl.toLowerCase().includes('/video/upload/') || imageUrl.toLowerCase().match(/\.(mp4|webm|mov|avi|mkv|ogg)($|\?)/));
           const res = await fetch('/api/backend-v3/automation/workflows/publish/queue', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -262,7 +262,7 @@ export default function PublishComposerPage() {
               audio_id: platform === 'instagram' && selectedSong?.id ? selectedSong.id : null,
               location_id: locationId || null,
               user_tags: userTags ? userTags.split(',').map(u => u.trim()).filter(Boolean) : null,
-              media_type: platform === 'instagram' && isVideo ? 'reels' : 'image'
+              media_type: platform === 'instagram' ? instagramMediaType : 'image'
             }),
           })
           const data = await res.json()
@@ -378,7 +378,8 @@ export default function PublishComposerPage() {
               caption: content,
               audio_id: selectedSong?.id || undefined,
               location_id: locationId || undefined,
-              user_tags: userTags ? userTags.split(',').map(u => u.trim()).filter(Boolean) : undefined
+              user_tags: userTags ? userTags.split(',').map(u => u.trim()).filter(Boolean) : undefined,
+              media_type: instagramMediaType
             }),
           })
           const data = await res.json()
@@ -583,6 +584,37 @@ export default function PublishComposerPage() {
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-500 transition-colors resize-none leading-relaxed"
               />
             </div>
+
+            {/* Instagram Post Type Selector */}
+            {selectedPlatforms.includes('instagram') && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Instagram Post Format</label>
+                <div className="flex gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setInstagramMediaType('reels')}
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all duration-300 flex items-center justify-center gap-2 ${
+                      instagramMediaType === 'reels'
+                        ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-sm shadow-rose-100/50'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/50'
+                    }`}
+                  >
+                    <span>🎬</span> Instagram Reels
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInstagramMediaType('post')}
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all duration-300 flex items-center justify-center gap-2 ${
+                      instagramMediaType === 'post'
+                        ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-sm shadow-rose-100/50'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/50'
+                    }`}
+                  >
+                    <span>🖼️</span> Feed Post
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Instagram Specific Advanced Options Accordion */}
             {selectedPlatforms.includes('instagram') && (
