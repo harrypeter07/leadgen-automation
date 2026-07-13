@@ -209,9 +209,19 @@ export default function ConnectedAccountsPage() {
   return (
     <div className="space-y-8 select-none text-white">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-black tracking-tight">Connected Accounts & Channels</h1>
-        <p className="mt-1 text-sm text-gray-500 font-medium">Link Meta endpoints, secure Graph API Access Tokens, and monitor real-time Webhook verification status.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">Connected Accounts & Channels</h1>
+          <p className="mt-1 text-sm text-gray-500 font-medium">Link Meta endpoints, secure Graph API Access Tokens, and monitor real-time Webhook verification status.</p>
+        </div>
+        <div>
+          <a
+            href="/automation/accounts/oauth-test"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-xs font-black tracking-wide text-white transition-all shadow-md shadow-rose-900/10 flex items-center gap-1.5"
+          >
+            🔐 OAuth Integration Tester
+          </a>
+        </div>
       </div>
 
       {/* Main Grid View */}
