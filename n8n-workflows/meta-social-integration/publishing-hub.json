@@ -117,21 +117,8 @@
     },
     {
       "parameters": {
-        "dataType": "string",
-        "value1": "={{ $json.platform }}",
-        "rules": {
-          "rules": [
-            {
-              "value2": "facebook",
-              "output": 0
-            },
-            {
-              "value2": "instagram",
-              "output": 1
-            }
-          ]
-        },
-        "fallbackOutput": 0
+        "mode": "expression",
+        "output": "={{ $json.platform === 'instagram' ? 1 : 0 }}"
       },
       "id": "e4f8a1b2-2005-4000-8000-000000000005",
       "name": "Route by Platform",
