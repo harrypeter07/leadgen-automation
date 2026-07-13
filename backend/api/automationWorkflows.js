@@ -21,7 +21,7 @@ function authenticateApiSecret(req, res, next) {
 // POST /api/automation/accounts/credentials - Fetch decrypted secrets securely for n8n execution
 router.post('/accounts/credentials', authenticateApiSecret, async (req, res) => {
   try {
-    const { platform, account_name, page_id, post_id, content, media_url } = req.body;
+    const { platform, account_name, page_id, post_id, content, media_url, audio_id, location_id, user_tags, media_type } = req.body;
 
     if (!platform) {
       return res.status(400).json({ error: 'Missing platform query parameter.' });
@@ -107,7 +107,11 @@ router.post('/accounts/credentials', authenticateApiSecret, async (req, res) => 
       post_id: post_id || '',
       platform: platform || '',
       content: content || '',
-      media_url: media_url || ''
+      media_url: media_url || '',
+      audio_id: audio_id || '',
+      location_id: location_id || '',
+      user_tags: user_tags || '',
+      media_type: media_type || ''
     });
   } catch (err) {
     logger.error(`[Workflows API] credentials fetch failed: ${err.message}`);
@@ -158,7 +162,7 @@ router.get('/publish/queue/:id', async (req, res) => {
 // POST /api/automation/publish/queue - Composing schedule posting item
 router.post('/publish/queue', async (req, res) => {
   try {
-    const { platform, account_name, content, media_url, scheduled_at } = req.body;
+    const { platform, account_name, content, media_url, scheduled_at, audio_id, location_id, user_tags, media_type } = req.body;
 
     if (!platform || !account_name || !content || !scheduled_at) {
       return res.status(400).json({ error: 'Missing required platform, account_name, content, or scheduled_at parameters.' });
@@ -172,7 +176,11 @@ router.post('/publish/queue', async (req, res) => {
         content,
         media_url: media_url || null,
         scheduled_at,
-        status: 'scheduled'
+        status: 'scheduled',
+        audio_id: audio_id || null,
+        location_id: location_id || null,
+        user_tags: user_tags || null,
+        media_type: media_type || null
       }])
       .select()
       .single();
@@ -201,7 +209,7 @@ router.post('/publish/queue', async (req, res) => {
 router.put('/publish/queue/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { platform, content, media_url, scheduled_at } = req.body;
+    const { platform, content, media_url, scheduled_at, audio_id, location_id, user_tags, media_type } = req.body;
 
     // Fetch the existing post to get the old QStash message ID
     const { data: existingPost } = await supabase
@@ -226,7 +234,11 @@ router.put('/publish/queue/:id', async (req, res) => {
         scheduled_at,
         status: 'scheduled',
         error_log: null,
-        qstash_message_id: newQstashId || null
+        qstash_message_id: newQstashId || null,
+        audio_id: audio_id || null,
+        location_id: location_id || null,
+        user_tags: user_tags || null,
+        media_type: media_type || null
       })
       .eq('id', id)
       .select()
