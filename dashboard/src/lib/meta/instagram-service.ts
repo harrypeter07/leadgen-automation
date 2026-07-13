@@ -73,15 +73,20 @@ export const InstagramService = {
   async getMedia(limit = 20) {
     return igGet<{ data: unknown[] }>(`/me/media?fields=id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count,thumbnail_url&limit=${limit}`)
   },
-  async publishPost(imageUrl: string, caption: string) {
+  async publishPost(imageUrl: string, caption: string, options?: { location_id?: string; user_tags?: any }) {
     const igId = await getIgBizId()
     if (!igId) {
       return { success: false, error: { message: 'INSTAGRAM_BUSINESS_ID is not configured in settings', type: 'OAuthException', code: 0 }, statusCode: 400, duration: 0, endpoint: '', requestId: '' }
     }
     // MUST use Page Access Token (EAA...) for graph.facebook.com publish endpoints
     const token = await getPageToken()
+    
+    const body: Record<string, any> = { image_url: imageUrl, caption }
+    if (options?.location_id) body.location_id = options.location_id
+    if (options?.user_tags) body.user_tags = options.user_tags
+
     // Step 1: Create media container via Facebook Graph API
-    const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, { image_url: imageUrl, caption }, { accessToken: token, source: SOURCE })
+    const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, body, { accessToken: token, source: SOURCE })
     if (!container.success || !container.data?.id) return container
 
     const containerId = container.data.id
@@ -109,15 +114,28 @@ export const InstagramService = {
     // Step 2: Publish
     return MetaClient.post<{ id: string }>(`/${igId}/media_publish`, { creation_id: containerId }, { accessToken: token, source: SOURCE })
   },
-  async publishReel(videoUrl: string, caption: string) {
+  async publishReel(videoUrl: string, caption: string, options?: { audio_id?: string; location_id?: string; share_to_feed?: boolean }) {
     const igId = await getIgBizId()
     if (!igId) {
       return { success: false, error: { message: 'INSTAGRAM_BUSINESS_ID is not configured in settings', type: 'OAuthException', code: 0 }, statusCode: 400, duration: 0, endpoint: '', requestId: '' }
     }
     // MUST use Page Access Token (EAA...) for graph.facebook.com publish endpoints
     const token = await getPageToken()
+    
+    const body: Record<string, any> = { video_url: videoUrl, caption, media_type: 'REELS' }
+    if (options?.location_id) body.location_id = options.location_id
+    if (options?.share_to_feed !== undefined) body.share_to_feed = options.share_to_feed
+    if (options?.audio_id) {
+      body.audio_configuration = {
+        audio_id: options.audio_id,
+        audio_volume: 100,
+        video_volume: 50,
+        should_loop_audio: false
+      }
+    }
+
     // Step 1: Create video/reel container via Facebook Graph API
-    const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, { video_url: videoUrl, caption, media_type: 'REELS' }, { accessToken: token, source: SOURCE })
+    const container = await MetaClient.post<{ id: string }>(`/${igId}/media`, body, { accessToken: token, source: SOURCE })
     if (!container.success || !container.data?.id) return container
 
     const containerId = container.data.id

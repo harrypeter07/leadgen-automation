@@ -53,6 +53,12 @@ interface CloudinaryAsset {
   url: string
   bytes?: number
   createdAt?: string
+  resourceType?: string
+}
+
+const isVideoUrl = (url: string) => {
+  if (!url) return false
+  return url.toLowerCase().includes('/video/upload/') || url.toLowerCase().match(/\.(mp4|webm|mov|avi|mkv|ogg)($|\?)/)
 }
 
 // Reusable countdown hook
@@ -577,7 +583,18 @@ export default function ContentCalendarPage() {
                     onDragStart={(e) => handleDragStart(e, asset.url)}
                     className="relative w-full h-24 rounded-lg overflow-hidden border border-slate-200 hover:border-rose-400 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group bg-slate-50"
                   >
-                    <img src={asset.url} alt="asset" className="w-full h-full object-cover select-none pointer-events-none" />
+                    {asset.resourceType === 'video' || isVideoUrl(asset.url) ? (
+                      <>
+                        <video src={asset.url} muted playsInline className="w-full h-full object-cover select-none pointer-events-none" />
+                        <div className="absolute top-1.5 right-1.5 p-1 bg-black/60 rounded text-white flex items-center justify-center pointer-events-none">
+                          <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
+                      </>
+                    ) : (
+                      <img src={asset.url} alt="asset" className="w-full h-full object-cover select-none pointer-events-none" />
+                    )}
                     <div className="absolute inset-0 bg-rose-950/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                       <span className="text-[8px] uppercase tracking-wider font-bold bg-rose-600 text-white px-2 py-0.5 rounded shadow-sm">DRAG</span>
                     </div>
@@ -746,8 +763,12 @@ export default function ContentCalendarPage() {
 
               {modalImageUrl && (
                 <div>
-                  <label className="block text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Selected Image</label>
-                  <img src={modalImageUrl} alt="dropped" className="rounded-xl max-h-32 object-cover border border-slate-200 w-full" />
+                  <label className="block text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1.5">Selected Visual Asset</label>
+                  {isVideoUrl(modalImageUrl) ? (
+                    <video src={modalImageUrl} controls className="rounded-xl max-h-32 object-cover border border-slate-200 w-full" />
+                  ) : (
+                    <img src={modalImageUrl} alt="dropped" className="rounded-xl max-h-32 object-cover border border-slate-200 w-full" />
+                  )}
                 </div>
               )}
 
@@ -814,8 +835,19 @@ export default function ContentCalendarPage() {
                     className="w-full text-left flex gap-3 p-3 rounded-xl border border-slate-100 hover:border-slate-300 hover:bg-slate-50 transition-all group cursor-pointer"
                   >
                     {post.imageUrl && (
-                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-100 shrink-0 bg-slate-50">
-                        <img src={post.imageUrl} alt="post visual" className="w-full h-full object-cover" />
+                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-100 shrink-0 bg-slate-50 relative">
+                        {isVideoUrl(post.imageUrl) ? (
+                          <>
+                            <video src={post.imageUrl} muted playsInline className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+                              <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                              </svg>
+                            </div>
+                          </>
+                        ) : (
+                          <img src={post.imageUrl} alt="post visual" className="w-full h-full object-cover" />
+                        )}
                       </div>
                     )}
                     <div className="flex-1 min-w-0 space-y-1">
@@ -1111,10 +1143,14 @@ function PostDetailModal({
             </div>
           )}
 
-          {/* Preview image */}
+          {/* Preview media */}
           {post.imageUrl && (
-            <div className="rounded-xl overflow-hidden border border-slate-100 max-h-40">
-              <img src={post.imageUrl} alt="post preview" className="w-full h-full object-cover" />
+            <div className="rounded-xl overflow-hidden border border-slate-100 max-h-40 w-full flex items-center justify-center bg-slate-50">
+              {isVideoUrl(post.imageUrl) ? (
+                <video src={post.imageUrl} controls className="w-full max-h-40 object-contain" />
+              ) : (
+                <img src={post.imageUrl} alt="post preview" className="w-full h-full object-cover" />
+              )}
             </div>
           )}
 
