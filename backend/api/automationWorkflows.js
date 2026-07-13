@@ -84,8 +84,8 @@ router.post('/accounts/credentials', authenticateApiSecret, async (req, res) => 
     let resolved_page_id = '';
 
     if (platform === 'instagram') {
-      access_token = configMap.META_PAGE_ACCESS_TOKEN || configMap.INSTAGRAM_ACCESS_TOKEN || '';
-      resolved_page_id = configMap.INSTAGRAM_BUSINESS_ID || configMap.META_PAGE_ID || '';
+      access_token = (match?.credentials && (match.credentials.instagram_access_token || match.credentials.access_token)) || configMap.META_PAGE_ACCESS_TOKEN || configMap.INSTAGRAM_ACCESS_TOKEN || '';
+      resolved_page_id = (match?.credentials && (match.credentials.instagram_business_id || match.credentials.instagram_id || match.credentials.page_id)) || configMap.INSTAGRAM_BUSINESS_ID || configMap.META_PAGE_ID || '';
     } else {
       access_token = (match?.credentials && match.credentials.access_token) || configMap.META_PAGE_ACCESS_TOKEN || '';
       resolved_page_id = (match?.credentials && match.credentials.page_id) || configMap.META_PAGE_ID || '';

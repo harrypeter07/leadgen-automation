@@ -5,6 +5,7 @@ const axios = require('axios');
 const connectedAccountsRepository = require('../repositories/connectedAccountsRepository');
 const auditLogRepository = require('../repositories/auditLogRepository');
 const logger = require('../worker/logger');
+const supabase = require('../database/connection');
 
 // GET /api/automation/accounts - Fetch all connected accounts (scrub secrets)
 router.get('/', async (req, res) => {
@@ -201,6 +202,140 @@ router.post('/:id/reconnect', async (req, res) => {
     res.json({ success: true, account: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/automation/accounts/oauth/config - Fetch Meta App ID for OAuth setup
+router.get('/oauth/config', async (req, res) => {
+  try {
+    const { data: configData, error: configError } = await supabase
+      .from('meta_config')
+      .select('key, value, encrypted');
+
+    const configMap = {};
+    if (!configError && configData) {
+      const crypto = require('crypto');
+      const getMetaConfigKey = () => {
+        const raw = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+        return Buffer.from(raw.slice(0, 32).padEnd(32, '0'));
+      };
+      const decryptMetaConfigValue = (val) => {
+        try {
+          if (!val || !val.startsWith('enc:')) return val;
+          const parts = val.split(':');
+          if (parts.length < 3) return val;
+          const iv = Buffer.from(parts[1], 'hex');
+          const encrypted = Buffer.from(parts[2], 'hex');
+          const decipher = crypto.createDecipheriv('aes-256-cbc', getMetaConfigKey(), iv);
+          return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+        } catch {
+          return val;
+        }
+      };
+
+      configData.forEach(row => {
+        configMap[row.key] = row.encrypted ? decryptMetaConfigValue(row.value) : row.value;
+      });
+    }
+
+    const appId = configMap.META_APP_ID || '';
+    res.json({ appId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/automation/accounts/oauth/exchange - Exchange code for Meta token and list profiles
+router.post('/oauth/exchange', async (req, res) => {
+  const { code, redirect_uri } = req.body;
+  if (!code || !redirect_uri) {
+    return res.status(400).json({ error: 'Missing code or redirect_uri parameters.' });
+  }
+
+  try {
+    // 1. Get client ID and Secret from DB config
+    const { data: configData, error: configError } = await supabase
+      .from('meta_config')
+      .select('key, value, encrypted');
+
+    const configMap = {};
+    if (!configError && configData) {
+      const crypto = require('crypto');
+      const getMetaConfigKey = () => {
+        const raw = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+        return Buffer.from(raw.slice(0, 32).padEnd(32, '0'));
+      };
+      const decryptMetaConfigValue = (val) => {
+        try {
+          if (!val || !val.startsWith('enc:')) return val;
+          const parts = val.split(':');
+          if (parts.length < 3) return val;
+          const iv = Buffer.from(parts[1], 'hex');
+          const encrypted = Buffer.from(parts[2], 'hex');
+          const decipher = crypto.createDecipheriv('aes-256-cbc', getMetaConfigKey(), iv);
+          return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+        } catch {
+          return val;
+        }
+      };
+
+      configData.forEach(row => {
+        configMap[row.key] = row.encrypted ? decryptMetaConfigValue(row.value) : row.value;
+      });
+    }
+
+    const appId = configMap.META_APP_ID || '';
+    const appSecret = configMap.META_APP_SECRET || '';
+
+    if (!appId || !appSecret) {
+      return res.status(500).json({ error: 'META_APP_ID or META_APP_SECRET is not configured in meta_config.' });
+    }
+
+    // 2. Exchange code for user access token
+    logger.info(`[OAuth Exchange] Exchanging code for user access token...`);
+    const tokenRes = await axios.get('https://graph.facebook.com/v20.0/oauth/access_token', {
+      params: {
+        client_id: appId,
+        client_secret: appSecret,
+        redirect_uri: redirect_uri,
+        code: code
+      }
+    });
+
+    const userAccessToken = tokenRes.data.access_token;
+    logger.info(`[OAuth Exchange] Successfully fetched user token. Fetching linked pages and Instagram accounts...`);
+
+    // 3. Query pages and linked Instagram accounts
+    const pagesRes = await axios.get('https://graph.facebook.com/v20.0/me/accounts', {
+      params: {
+        fields: 'name,access_token,id,category,instagram_business_account{id,username,name,profile_picture_url}',
+        access_token: userAccessToken
+      }
+    });
+
+    const pages = pagesRes.data.data || [];
+    res.json({
+      success: true,
+      appId,
+      userAccessToken,
+      pages: pages.map(p => ({
+        id: p.id,
+        name: p.name,
+        category: p.category,
+        hasInstagram: !!p.instagram_business_account,
+        instagram: p.instagram_business_account ? {
+          id: p.instagram_business_account.id,
+          username: p.instagram_business_account.username,
+          name: p.instagram_business_account.name,
+          profile_picture_url: p.instagram_business_account.profile_picture_url
+        } : null,
+        page_access_token: p.access_token
+      }))
+    });
+  } catch (err) {
+    const detail = err.response?.data?.error?.message || err.message;
+    logger.error(`[OAuth Exchange] Exchange failed: ${detail}`);
+    res.status(500).json({ error: detail });
   }
 });
 
