@@ -915,7 +915,12 @@ export default function ContentCalendarPage() {
           publishingNow={publishingNow}
           onPublishNow={handlePublishNow}
           onReschedule={handleRescheduleClick}
-          onClose={() => { setSelectedPost(null); setAnalyticsData(null); setShowAnalyticsPanel(false) }}
+          onClose={() => {
+            setSelectedPost(null)
+            setAnalyticsData(null)
+            setShowAnalyticsPanel(false)
+            fetchCalendarPosts()
+          }}
         />
       )}
     </div>
@@ -936,7 +941,7 @@ interface PostDetailModalProps {
 }
 
 function PostDetailModal({
-  post,
+  post: initialPost,
   analyticsLoading,
   analyticsData,
   showAnalyticsPanel,
@@ -946,7 +951,11 @@ function PostDetailModal({
   onReschedule,
   onClose
 }: PostDetailModalProps) {
-  const isScheduled = post.status === 'scheduled'
+  const [post, setLocalPost] = useState<CalendarPost>(initialPost)
+  const [currentStatus, setCurrentStatus] = useState<string>(initialPost.status || 'scheduled')
+  const [secSinceOverdue, setSecSinceOverdue] = useState(0)
+
+  const isScheduled = currentStatus === 'scheduled'
   const postTime = post.time
   const { timeLeft, isPast } = useCountdown(isScheduled ? postTime : null)
 
@@ -955,6 +964,49 @@ function PostDetailModal({
   const formattedTime = postDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
   const isPlatformIG = post.type === 'ig' || post.platform === 'instagram'
+
+  // Poll status when scheduled and overdue
+  useEffect(() => {
+    if (currentStatus !== 'scheduled') return
+
+    const releaseTime = new Date(post.time).getTime()
+    
+    const intervalId = setInterval(async () => {
+      const diff = releaseTime - Date.now()
+      
+      // Track seconds passed after scheduled time
+      if (diff <= 0) {
+        setSecSinceOverdue(prev => prev + 2)
+      }
+      
+      // Start polling when we are within 5 seconds of the post time, or past it
+      if (diff <= 5000) {
+        try {
+          const res = await fetch(`/api/backend-v3/automation/workflows/publish/queue/${post.id}`)
+          if (res.ok) {
+            const data = await res.json()
+            if (data.queue && data.queue.length > 0) {
+              const item = data.queue[0]
+              if (item.status !== 'scheduled') {
+                setCurrentStatus(item.status)
+                setLocalPost(prev => ({
+                  ...prev,
+                  status: item.status,
+                  published_id: item.published_id,
+                  published_at: item.published_at,
+                  errorLog: item.error_log
+                }))
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Failed to poll queue status:', err)
+        }
+      }
+    }, 2000)
+
+    return () => clearInterval(intervalId)
+  }, [post.id, post.time, currentStatus])
 
   const statCards = [
     { label: 'Likes', value: analyticsData?.likes ?? 0, icon: <Heart className="w-4 h-4 text-rose-500" />, color: 'text-rose-600' },
@@ -987,13 +1039,13 @@ function PostDetailModal({
   }
 
   // 3. Status transitions
-  if (post.status === 'published') {
+  if (currentStatus === 'published') {
     logs.push({
       time: post.published_at ? new Date(post.published_at) : new Date(post.time),
       label: 'Published Successfully',
       desc: `Posted live! Meta ID: ${post.published_id || 'N/A'}`
     });
-  } else if (post.status === 'failed') {
+  } else if (currentStatus === 'failed') {
     logs.push({
       time: new Date(),
       label: 'Publishing Failed',
@@ -1003,11 +1055,19 @@ function PostDetailModal({
     // scheduled
     const isOverdue = !timeLeft;
     if (isOverdue) {
-      logs.push({
-        time: new Date(post.time),
-        label: 'Awaiting Queue Execution',
-        desc: 'Scheduled time reached. Queue runner is processing...'
-      });
+      if (secSinceOverdue < 45) {
+        logs.push({
+          time: new Date(post.time),
+          label: 'n8n Workflow Triggered',
+          desc: 'Trigger signal received. Dispatching API call...'
+        });
+      } else {
+        logs.push({
+          time: new Date(post.time),
+          label: 'Awaiting Queue Execution',
+          desc: 'Scheduled time reached. Queue runner is processing...'
+        });
+      }
     } else {
       logs.push({
         time: new Date(post.time),
@@ -1042,13 +1102,13 @@ function PostDetailModal({
               {isPlatformIG ? 'Instagram' : 'Facebook'} Post
             </span>
             <span className={`ml-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-              isScheduled
+              currentStatus === 'scheduled'
                 ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                : isPast
-                ? 'bg-green-100 text-green-700 border border-green-200'
-                : 'bg-rose-100 text-rose-700 border border-rose-200'
+                : currentStatus === 'failed'
+                ? 'bg-red-105 text-red-700 border border-red-200'
+                : 'bg-green-100 text-green-700 border border-green-200'
             }`}>
-              {isScheduled ? 'Scheduled' : 'Published'}
+              {currentStatus === 'scheduled' ? 'Scheduled' : currentStatus === 'failed' ? 'Failed' : 'Published'}
             </span>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-900 transition-colors p-1 rounded-lg hover:bg-white/60">
@@ -1077,48 +1137,65 @@ function PostDetailModal({
           </div>
 
           {/* Status block */}
-          {isScheduled ? (
+          {currentStatus === 'scheduled' ? (
             <div className="space-y-3">
-              <div className={`rounded-xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                timeLeft
-                  ? 'bg-amber-50 border-amber-200'
-                  : 'bg-orange-50 border-orange-200'
-              }`}>
-                <div className="flex items-center gap-4">
-                  <div className={`p-2.5 rounded-lg ${timeLeft ? 'bg-amber-100' : 'bg-orange-100'}`}>
-                    <Timer className={`w-5 h-5 ${timeLeft ? 'text-amber-600' : 'text-orange-600'}`} />
+              {(!timeLeft && secSinceOverdue < 45) ? (
+                <div className="rounded-xl p-4 border bg-blue-50 border-blue-200 flex items-center justify-between gap-4 animate-pulse">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2.5 rounded-lg bg-blue-100">
+                      <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-blue-500">
+                        Status
+                      </p>
+                      <p className="text-sm font-black text-blue-700">Publishing...</p>
+                      <p className="text-[10px] text-blue-500 mt-0.5">n8n workflow is executing. Please wait...</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className={`text-[9px] font-black uppercase tracking-widest ${timeLeft ? 'text-amber-500' : 'text-orange-500'}`}>
-                      {timeLeft ? 'Publishing In' : 'Overdue — Not Yet Posted'}
-                    </p>
-                    {timeLeft ? (
-                      <p className="text-xl font-black text-amber-700 font-mono tabular-nums">{timeLeft}</p>
-                    ) : (
-                      <p className="text-sm font-bold text-orange-700">Check your Meta credentials and queue runner.</p>
+                </div>
+              ) : (
+                <div className={`rounded-xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                  timeLeft
+                    ? 'bg-amber-50 border-amber-200'
+                    : 'bg-orange-50 border-orange-200'
+                }`}>
+                  <div className="flex items-center gap-4">
+                    <div className={`p-2.5 rounded-lg ${timeLeft ? 'bg-amber-100' : 'bg-orange-100'}`}>
+                      <Timer className={`w-5 h-5 ${timeLeft ? 'text-amber-600' : 'text-orange-600'}`} />
+                    </div>
+                    <div>
+                      <p className={`text-[9px] font-black uppercase tracking-widest ${timeLeft ? 'text-amber-500' : 'text-orange-500'}`}>
+                        {timeLeft ? 'Publishing In' : 'Overdue — Not Yet Posted'}
+                      </p>
+                      {timeLeft ? (
+                        <p className="text-xl font-black text-amber-700 font-mono tabular-nums">{timeLeft}</p>
+                      ) : (
+                        <p className="text-sm font-bold text-orange-700">Check your Meta credentials and queue runner.</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 shrink-0">
+                    <button
+                      onClick={() => onReschedule(post)}
+                      className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-slate-500" />
+                      Reschedule
+                    </button>
+                    {!timeLeft && (
+                      <button
+                        onClick={() => onPublishNow(post)}
+                        disabled={publishingNow}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/10 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        {publishingNow ? 'Publishing...' : 'Publish Now'}
+                      </button>
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2 shrink-0">
-                  <button
-                    onClick={() => onReschedule(post)}
-                    className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <Clock className="w-3.5 h-3.5 text-slate-500" />
-                    Reschedule
-                  </button>
-                  {!timeLeft && (
-                    <button
-                      onClick={() => onPublishNow(post)}
-                      disabled={publishingNow}
-                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-600/10 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      {publishingNow ? 'Publishing...' : 'Publish Now'}
-                    </button>
-                  )}
-                </div>
-              </div>
+              )}
               {post.errorLog && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-700 flex flex-col gap-1">
                   <span className="font-extrabold text-[9px] uppercase tracking-wider text-red-500 flex items-center gap-1">
@@ -1129,6 +1206,34 @@ function PostDetailModal({
                   </p>
                 </div>
               )}
+            </div>
+          ) : currentStatus === 'failed' ? (
+            <div className="space-y-3">
+              <div className="rounded-xl p-4 border bg-red-50 border-red-200 flex items-center gap-4">
+                <div className="p-2.5 rounded-lg bg-red-105">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-red-500">Status</p>
+                  <p className="text-sm font-black text-red-700">Publishing Failed</p>
+                  <p className="text-[10px] text-red-600 mt-0.5">{post.errorLog || 'Unknown Meta API error'}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onReschedule(post)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <Clock className="w-3.5 h-3.5 text-slate-500" /> Reschedule Post
+                </button>
+                <button
+                  onClick={() => onPublishNow(post)}
+                  disabled={publishingNow}
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" /> {publishingNow ? 'Publishing...' : 'Retry Publish'}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="rounded-xl p-4 border bg-green-50 border-green-200 flex items-center gap-4">
@@ -1155,7 +1260,7 @@ function PostDetailModal({
           )}
 
           {/* Analytics section */}
-          {!isScheduled && (
+          {currentStatus === 'published' && (
             <>
               <div className="border-t border-slate-100 pt-4">
                 <div className="flex items-center justify-between mb-3">
