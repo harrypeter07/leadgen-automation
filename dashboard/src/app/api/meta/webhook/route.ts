@@ -8,6 +8,9 @@ import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'FLOWFYP_VERIFY_TOKEN'
 const APP_SECRET   = process.env.META_APP_SECRET || ''
 
+// Memory cache to prevent duplicate webhook message processing
+const processedMids = new Set<string>()
+
 // GET /api/meta/webhook — Challenge verification
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -128,11 +131,11 @@ async function handleAutoReply(
     // 3. Delays override
     const firstReplyDelay = threadConfig.firstReplyDelay !== undefined
       ? Number(threadConfig.firstReplyDelay)
-      : (settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 5)
+      : (settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 8)
 
     const conversationDelay = threadConfig.conversationDelay !== undefined
       ? Number(threadConfig.conversationDelay)
-      : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 2)
+      : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 4)
 
     // 4. Static test reply override
     const staticReplyEnabled = threadConfig.staticReplyEnabled !== undefined
@@ -143,8 +146,8 @@ async function handleAutoReply(
       ? threadConfig.staticReply
       : (settings.AI_STATIC_REPLY_OVERRIDE || '')
 
-    // Response length → token limits
-    const responseLength: 'short' | 'medium' | 'long' = threadConfig.responseLength || 'medium'
+    // Response length → token limits (default to short for concise responses)
+    const responseLength: 'short' | 'medium' | 'long' = threadConfig.responseLength || 'short'
     const maxTokensMap = { short: 60, medium: 150, long: 350 }
 
     const textLower = messageText.toLowerCase()
@@ -420,9 +423,34 @@ export async function POST(req: NextRequest) {
           for (const msgEvent of entry.messaging) {
             const senderId = msgEvent.sender?.id
             const text = msgEvent.message?.text
+
+            // Skip echos (messages sent by our own bot/page)
+            if (msgEvent.message?.is_echo) {
+              console.log('[Meta Webhook] Skipping message echo event from ourselves.')
+              continue
+            }
+
+            // Deduplicate message processing using message mid
+            const mid = msgEvent.message?.mid
+            if (mid) {
+              if (processedMids.has(mid)) {
+                console.log(`[Meta Webhook] Already processed message ID: ${mid}. Skipping duplicate.`)
+                continue
+              }
+              processedMids.add(mid)
+              // Keep cache size small
+              if (processedMids.size > 500) {
+                const firstItem = processedMids.values().next().value
+                if (firstItem) processedMids.delete(firstItem)
+              }
+            }
+
             if (senderId && text) {
-              // Await execution so Node runtime does not freeze the request context midway
-              await handleAutoReply(platform, senderId, text)
+              // Trigger asynchronously to avoid blocking the HTTP response, 
+              // which completely prevents Meta webhook retries/duplicates.
+              handleAutoReply(platform, senderId, text).catch(err => {
+                console.error('[Meta Webhook] handleAutoReply failed:', err.message)
+              })
             }
           }
         }
