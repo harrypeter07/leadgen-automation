@@ -84,7 +84,7 @@ router.post('/accounts/credentials', authenticateApiSecret, async (req, res) => 
     let resolved_page_id = '';
 
     if (platform === 'instagram') {
-      access_token = configMap.INSTAGRAM_ACCESS_TOKEN || configMap.META_PAGE_ACCESS_TOKEN || '';
+      access_token = configMap.META_PAGE_ACCESS_TOKEN || configMap.INSTAGRAM_ACCESS_TOKEN || '';
       resolved_page_id = configMap.INSTAGRAM_BUSINESS_ID || configMap.META_PAGE_ID || '';
     } else {
       access_token = (match?.credentials && match.credentials.access_token) || configMap.META_PAGE_ACCESS_TOKEN || '';
