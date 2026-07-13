@@ -230,6 +230,83 @@ export default function PublishComposerPage() {
     if (selectedPlatforms.length === 0) { toast.error('Select at least one platform.'); return }
     if (!content.trim())                { toast.error('Post content cannot be empty.');  return }
 
+    // If scheduled, queue both platforms via backend queue (QStash → n8n)
+    if (scheduledFor) {
+      setPublishing(true)
+      setPublishLog([])
+      const toastId = toast.loading('Scheduling post…')
+      addLog('Scheduling post to queue…')
+
+      let anySuccess = false
+      let anyFail    = false
+
+      for (const platform of selectedPlatforms) {
+        if (platform === 'instagram' && !imageUrl) {
+          addLog('Instagram: ❌ No image URL — upload an image first')
+          toast.error('Instagram requires an image.')
+          anyFail = true
+          continue
+        }
+        try {
+          addLog(`${platform}: Queuing scheduled post for ${new Date(scheduledFor).toLocaleString()}…`)
+          const res = await fetch('/api/backend-v3/automation/workflows/publish/queue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              platform,
+              account_name: platform === 'instagram' ? 'Instagram Business' : 'Meta Page',
+              content,
+              media_url: imageUrl || null,
+              scheduled_at: new Date(scheduledFor).toISOString(),
+            }),
+          })
+          const data = await res.json()
+          if (res.ok && data.success) {
+            anySuccess = true
+            addLog(`${platform}: ✅ Scheduled! Queue ID: ${data.post?.id || 'ok'} — Will publish at ${new Date(scheduledFor).toLocaleString()}`)
+          } else {
+            anyFail = true
+            const errMsg = data.error || 'Failed to queue'
+            addLog(`${platform}: ❌ Queue failed — ${errMsg}`)
+            toast.error(`${platform}: ${errMsg}`)
+          }
+        } catch (err) {
+          anyFail = true
+          addLog(`${platform}: ❌ Network error — ${err}`)
+          toast.error(`${platform} scheduling error`)
+        }
+      }
+
+      const results: PostJob = {
+        id:           String(Date.now()),
+        content,
+        platforms:    selectedPlatforms,
+        imageUrl:     imageUrl || undefined,
+        scheduledFor: scheduledFor,
+        status:       anySuccess ? 'scheduled' : 'failed',
+        logs:         publishLog,
+      }
+      setJobs(prev => [results, ...prev])
+      setPublishing(false)
+
+      if (anySuccess) {
+        toast.success('Post scheduled! Will publish via n8n at the set time.', { id: toastId })
+        setContent('')
+        setImageUrl('')
+        setScheduledFor('')
+        setLocationId('')
+        setUserTags('')
+        setSelectedSong(null)
+        setSongs([])
+        setSongQuery('')
+        setActiveTab('history')
+      } else {
+        toast.error('Scheduling failed. See log below.', { id: toastId })
+      }
+      return
+    }
+
+    // Immediate publish (no scheduledFor)
     setPublishing(true)
     setPublishLog([])
     const toastId = toast.loading('Publishing post…')
@@ -259,7 +336,6 @@ export default function PublishComposerPage() {
             action:  'publish',
             message: content,
             ...(imageUrl ? { image_url: imageUrl } : {}),
-            ...(scheduledFor ? { scheduled_time: Math.floor(new Date(scheduledFor).getTime() / 1000) } : {}),
           }),
         })
         const data = await res.json()

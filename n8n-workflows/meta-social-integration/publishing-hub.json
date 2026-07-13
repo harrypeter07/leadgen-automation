@@ -3,6 +3,7 @@
   "nodes": [
     {
       "parameters": {
+        "httpMethod": "POST",
         "path": "publishing-hub",
         "options": {}
       },
@@ -10,12 +11,15 @@
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [100, 300]
+      "position": [
+        100,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/publish/queue/{{ $json.id || $json.body?.id }}",
+        "url": "={{ 'https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/publish/queue/' + ($json.body && $json.body.id ? $json.body.id : ($json.id || '')) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -30,10 +34,13 @@
         }
       },
       "id": "e4f8a1b2-2002-4000-8000-000000000002",
-      "name": "Get Scheduled Posts",
+      "name": "Get Scheduled Post",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [300, 300]
+      "position": [
+        300,
+        300
+      ]
     },
     {
       "parameters": {
@@ -45,7 +52,7 @@
           "conditions": [
             {
               "id": "has-queue",
-              "leftValue": "={{ $json.queue?.length }}",
+              "leftValue": "={{ $json.queue && $json.queue.length ? $json.queue.length : 0 }}",
               "rightValue": 0,
               "operator": {
                 "type": "number",
@@ -60,7 +67,10 @@
       "name": "Has Items?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [500, 300]
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
@@ -71,7 +81,10 @@
       "name": "Split Queue Items",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [700, 200]
+      "position": [
+        700,
+        200
+      ]
     },
     {
       "parameters": {
@@ -88,7 +101,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"platform\": \"{{ $json.platform }}\",\n  \"account_name\": \"{{ $json.platform === 'instagram' ? 'Instagram Business' : 'Meta Page' }}\",\n  \"page_id\": \"{{ $json.platform === 'instagram' ? $json.instagram_business_id : $json.page_id }}\",\n  \"post_id\": \"{{ $json.id }}\",\n  \"content\": \"{{ $json.content }}\",\n  \"media_url\": \"{{ $json.media_url }}\"\n}",
+        "jsonBody": "={\n  \"platform\": \"{{ $json.platform }}\",\n  \"account_name\": \"{{ $json.account_name }}\",\n  \"post_id\": \"{{ $json.id }}\",\n  \"content\": \"{{ $json.content }}\",\n  \"media_url\": \"{{ $json.media_url }}\"\n}",
         "options": {
           "timeout": 10000
         }
@@ -97,7 +110,10 @@
       "name": "Fetch Page Credentials",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [900, 200]
+      "position": [
+        900,
+        200
+      ]
     },
     {
       "parameters": {
@@ -121,12 +137,15 @@
       "name": "Route by Platform",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [1100, 200]
+      "position": [
+        1100,
+        200
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $json.page_id }}/feed",
+        "url": "={{ 'https://graph.facebook.com/v23.0/' + $json.page_id + '/feed' }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"message\": \"{{ $json.content }}\",\n  \"access_token\": \"{{ $json.access_token }}\"\n}",
@@ -138,12 +157,15 @@
       "name": "Post Facebook Feed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1300, 100]
+      "position": [
+        1300,
+        100
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $json.page_id }}/media",
+        "url": "={{ 'https://graph.facebook.com/v23.0/' + $json.page_id + '/media' }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"image_url\": \"{{ $json.media_url }}\",\n  \"caption\": \"{{ $json.content }}\",\n  \"access_token\": \"{{ $json.access_token }}\"\n}",
@@ -155,12 +177,15 @@
       "name": "Create IG Container",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1300, 300]
+      "position": [
+        1300,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/{{ $env.META_GRAPH_API_VERSION || 'v23.0' }}/{{ $('Fetch Page Credentials').item.json.page_id }}/media_publish",
+        "url": "={{ 'https://graph.facebook.com/v23.0/' + $('Fetch Page Credentials').item.json.page_id + '/media_publish' }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"creation_id\": \"{{ $json.id }}\",\n  \"access_token\": \"{{ $('Fetch Page Credentials').item.json.access_token }}\"\n}",
@@ -172,7 +197,10 @@
       "name": "Publish IG Post",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1500, 300]
+      "position": [
+        1500,
+        300
+      ]
     },
     {
       "parameters": {
@@ -196,15 +224,10 @@
       "name": "Mark Published",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1700, 200]
-    },
-    {
-      "parameters": {},
-      "id": "e4f8a1b2-200b-4000-8000-000000000020",
-      "name": "Error Trigger",
-      "type": "n8n-nodes-base.errorTrigger",
-      "typeVersion": 1,
-      "position": [100, 500]
+      "position": [
+        1700,
+        200
+      ]
     },
     {
       "parameters": {
@@ -221,14 +244,55 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"id\": \"{{ $('Fetch Page Credentials').item.json.post_id }}\",\n  \"status\": \"failed\",\n  \"error_log\": \"Failed on node '{{ $json.execution.error.node.name }}': {{ $json.execution.error.message }}\"\n}",
+        "jsonBody": "={\n  \"id\": \"\",\n  \"status\": \"failed\",\n  \"error_log\": \"No queue item found for this post ID\"\n}",
+        "options": {}
+      },
+      "id": "e4f8a1b2-200d-4000-8000-000000000022",
+      "name": "Mark Not Found",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        700,
+        420
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e4f8a1b2-200b-4000-8000-000000000020",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        100,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leadgen-automation-production-12c6.up.railway.app/api/automation/workflows/publish/queue/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-secret",
+              "value": "27pwgfjvq491aircy8lh6nz3eb5mkus0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"id\": \"{{ $('Fetch Page Credentials').item.json.post_id }}\",\n  \"status\": \"failed\",\n  \"error_log\": \"Execution failed: {{ $json.execution.error.message }}\"\n}",
         "options": {}
       },
       "id": "e4f8a1b2-200c-4000-8000-000000000021",
       "name": "Mark Failed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [300, 500]
+      "position": [
+        300,
+        500
+      ]
     }
   ],
   "connections": {
@@ -236,14 +300,14 @@
       "main": [
         [
           {
-            "node": "Get Scheduled Posts",
+            "node": "Get Scheduled Post",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get Scheduled Posts": {
+    "Get Scheduled Post": {
       "main": [
         [
           {
@@ -259,6 +323,13 @@
         [
           {
             "node": "Split Queue Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Not Found",
             "type": "main",
             "index": 0
           }
@@ -356,13 +427,19 @@
     "saveManualExecutions": true,
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "e4f8a1b2-2000-4000-8001-000000000000",
+  "versionId": "e4f8a1b2-2000-4000-8002-000000000000",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "flowfyp-production"
   },
   "tags": [
-    { "id": "meta-integration", "name": "Meta Integration" },
-    { "id": "publishing", "name": "Publishing" }
+    {
+      "id": "meta-integration",
+      "name": "Meta Integration"
+    },
+    {
+      "id": "publishing",
+      "name": "Publishing"
+    }
   ]
 }
