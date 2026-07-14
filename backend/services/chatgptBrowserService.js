@@ -106,16 +106,37 @@ class ChatgptBrowserService {
 
         // Set ChatGPT authorization session cookie
         logCallback('Injecting ChatGPT authentication session token...');
-        await context.addCookies([
-          {
-            name: '__Secure-next-auth.session-token',
-            value: sessionToken,
-            domain: '.chatgpt.com',
-            path: '/',
-            secure: true,
-            httpOnly: true
+        if (sessionToken.includes('=')) {
+          const cookiePairs = sessionToken.split(';');
+          const cookiesToAdd = [];
+          for (const pair of cookiePairs) {
+            const parts = pair.split('=');
+            if (parts.length >= 2) {
+              const name = parts[0].trim();
+              const value = parts.slice(1).join('=').trim();
+              cookiesToAdd.push({
+                name,
+                value,
+                domain: '.chatgpt.com',
+                path: '/',
+                secure: true,
+                httpOnly: true
+              });
+            }
           }
-        ]);
+          await context.addCookies(cookiesToAdd);
+        } else {
+          await context.addCookies([
+            {
+              name: '__Secure-next-auth.session-token',
+              value: sessionToken,
+              domain: '.chatgpt.com',
+              path: '/',
+              secure: true,
+              httpOnly: true
+            }
+          ]);
+        }
 
         const pageRes = await browserManager.newPage(ctxRes.contextId, context);
         page = pageRes.page;
