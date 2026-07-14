@@ -57,9 +57,9 @@ class ChatgptBrowserService {
 
     // Default OpenAI selectors
     const selectors = {
-      textarea: 'textarea#prompt-textarea',
+      textarea: 'textarea[placeholder="Ask anything"], textarea#prompt-textarea',
       fileInput: 'input[type="file"]',
-      sendButton: 'button[data-testid="send-button"]',
+      sendButton: 'button[data-testid="send-button"], button#composer-submit-button',
       stopButton: 'button[data-testid="stop-button"]',
       assistantBubble: 'div[data-message-author-role="assistant"]',
       markdownText: 'div.markdown',
@@ -138,6 +138,13 @@ class ChatgptBrowserService {
           ]);
         }
 
+        // Add stealth script to bypass Turnstile browser detection
+        await context.addInitScript(() => {
+          Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined
+          });
+        });
+
         const pageRes = await browserManager.newPage(ctxRes.contextId, context);
         page = pageRes.page;
 
@@ -187,10 +194,14 @@ class ChatgptBrowserService {
 
       // 6. Enter prompt & submit
       logCallback(`Typing prompt: "${prompt.slice(0, 100)}${prompt.length > 100 ? '...' : ''}"`);
-      await page.fill(selectors.textarea, prompt);
+      const inputLocator = page.locator(selectors.textarea).first();
+      await inputLocator.evaluate((el, val) => {
+        el.value = val;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }, prompt);
       
       logCallback('Submitting message to ChatGPT...');
-      const sendBtn = page.locator(selectors.sendButton);
+      const sendBtn = page.locator(selectors.sendButton).first();
       await sendBtn.click();
 
       // 7. Wait for generation to start and complete
