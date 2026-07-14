@@ -22,7 +22,8 @@ import {
   FileText, 
   BookOpen, 
   Search, 
-  Bell 
+  Bell,
+  Sparkles
 } from 'lucide-react'
 
 interface AutomationLayoutProps {
@@ -156,6 +157,7 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
                 { name: 'Content Calendar', href: '/automation/calendar', icon: <Calendar className="w-3.5 h-3.5" /> },
                 { name: 'Trending Research', href: '/automation/trending', icon: <Flame className="w-3.5 h-3.5" /> },
                 { name: 'Media Library', href: '/automation/media', icon: <ImageIcon className="w-3.5 h-3.5" /> },
+                { name: 'ChatGPT Images', href: '/automation/chatgpt-images', icon: <Sparkles className="w-3.5 h-3.5" /> },
               ]},
               { label: 'System Operations', items: [
                 { name: 'Connected Accounts', href: '/automation/accounts', icon: <Key className="w-3.5 h-3.5" /> },
@@ -247,6 +249,7 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
                 <option value="/automation/calendar">Calendar</option>
                 <option value="/automation/trending">Trending Research</option>
                 <option value="/automation/media">Media Library</option>
+                <option value="/automation/chatgpt-images">ChatGPT Images</option>
               </optgroup>
               <optgroup label="Operations">
                 <option value="/automation/accounts">Accounts</option>

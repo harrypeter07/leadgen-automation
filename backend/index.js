@@ -39,6 +39,7 @@ app.use('/api/analytics', require('./api/analytics'));
 app.use('/api/workflows', require('./api/workflows'));
 app.use('/api/automation/accounts', require('./api/automationAccounts'));
 app.use('/api/automation/workflows', require('./api/automationWorkflows'));
+app.use('/api/automation/chatgpt', require('./api/chatgpt'));
 
 // System diagnostic health endpoints
 app.get('/health', (_req, res) => {
