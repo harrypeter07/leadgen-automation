@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 
+export const dynamic = 'force-dynamic'
+
 // ─────────────────────────────────────────────
 // PHASE 1: Ask Gemini to generate relevant hashtags for the niche
 // ─────────────────────────────────────────────
