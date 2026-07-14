@@ -4,13 +4,17 @@ const { sleep } = require('../utils/httpClient');
 
 const { supabase } = require('../db/queries');
 
-const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 const CALL_TIMEOUT_MS = Number(process.env.GEMINI_CALL_TIMEOUT_MS || 25000);
 
 const MODELS_TO_TRY = [
-  process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+  process.env.GEMINI_MODEL || 'gemini-3.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.5-flash',
+  'gemini-3.1-flash-lite',
   'gemini-2.5-flash-lite',
-  'gemini-2.0-flash-lite'
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
 ];
 
 /**

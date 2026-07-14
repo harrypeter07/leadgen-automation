@@ -42,7 +42,7 @@ const ALL_TOOLS = [
   { id: 'google_maps_scrape',        label: 'Google Maps',      icon: '🗺️', color: '#22c55e', isPaid: false },
 ]
 
-type TabId = 'control' | 'leads' | 'tools' | 'architecture'
+type TabId = 'control' | 'leads' | 'tools' | 'keys' | 'architecture'
 type LeadStatus = 'enriched' | 'exhausted' | 'enriching'
 
 export default function AgentBrainPage() {
@@ -61,6 +61,23 @@ export default function AgentBrainPage() {
   const [hoveredTool, setHoveredTool] = useState<string | null>(null)
   const [logFilter, setLogFilter] = useState<'all' | 'error' | 'success'>('all')
   const logRef = useRef<HTMLDivElement>(null)
+
+  // Gemini keys state
+  const [geminiKeys, setGeminiKeys] = useState<string[]>([''])
+  const [keyStatuses, setKeyStatuses] = useState<Record<number, { loading: boolean; status?: string; error?: string; models?: string[] }>>({})
+  const [savingKeys, setSavingKeys] = useState(false)
+
+  const fetchGeminiKeys = useCallback(async () => {
+    try {
+      const res = await fetch('/api/meta/settings')
+      const data = await res.json()
+      if (data.settings?.SAVED_GEMINI_API_KEYS) {
+        const parsed = JSON.parse(data.settings.SAVED_GEMINI_API_KEYS)
+        setGeminiKeys(parsed.length > 0 ? parsed : [''])
+      }
+    } catch {}
+  }, [])
+
 
   const fetchProgress = useCallback(async () => {
     try {
@@ -86,7 +103,7 @@ export default function AgentBrainPage() {
     }
   }, [selectedStatus, selectedLead])
 
-  useEffect(() => { fetchProgress(); fetchLeads() }, [fetchProgress, fetchLeads])
+  useEffect(() => { fetchProgress(); fetchLeads(); fetchGeminiKeys() }, [fetchProgress, fetchLeads, fetchGeminiKeys])
   useEffect(() => { const t = setInterval(fetchProgress, 8000); return () => clearInterval(t) }, [fetchProgress])
 
   useEffect(() => {
@@ -169,6 +186,7 @@ export default function AgentBrainPage() {
           { id: 'control',      label: '🚀 Autopilot' },
           { id: 'leads',        label: '⬡ Pipeline Flow' },
           { id: 'tools',        label: '🛠 Tool Registry' },
+          { id: 'keys',         label: '🔑 Gemini Keys' },
           { id: 'architecture', label: '🧬 Architecture' },
         ] as const).map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
@@ -457,13 +475,173 @@ export default function AgentBrainPage() {
             </div>
           </div>
           <div className="p-5 rounded-xl border border-green-200 bg-green-50 space-y-2">
-            <h3 className="text-sm font-bold text-slate-900">🔑 Gemini Key Rotation — Fixed</h3>
+            <h3 className="text-sm font-bold text-slate-900">🔑 Gemini Key Rotation — Active</h3>
             <p className="text-[10px] text-slate-600">
-              The 135 exhausted leads previously failed because a single free-tier Gemini key hit its quota.
-              The agent-brain now dynamically fetches all saved Gemini keys from <strong>meta_config</strong> and rotates through them automatically.
-              Add more keys in Settings to increase throughput.
+              The iterative ReAct loop rotates through all keys saved on the <strong>Gemini Keys</strong> tab, automatically cascading to fallback models (e.g. flash-lite) if one hits limit/unauthorized errors.
             </p>
-            <div className="text-[10px] text-green-700 font-bold">✓ Key rotation across all saved keys + model fallback (flash → flash-lite) enabled</div>
+            <div className="text-[10px] text-green-700 font-bold">✓ Rotation & model fallback cascade fully configured</div>
+          </div>
+        </div>
+      )}
+
+      {/* ════ TAB: GEMINI KEYS ════ */}
+      {activeTab === 'keys' && (
+        <div className="anim-slide space-y-4">
+          <div className="p-5 rounded-xl border border-slate-200 bg-white space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">🔑 Gemini API Key Rotation & Quota Cascade</h3>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Configure your Gemini API keys here. The ReAct Agent rotates through these keys automatically to prevent quota failures (429), switching to fallback models if needed.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {geminiKeys.map((key, index) => {
+                const status = keyStatuses[index]
+                const isMasked = key.includes('•') || (key.length > 20 && key.startsWith('AIza'))
+                return (
+                  <div key={index} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block font-mono">API Key #{index + 1}</label>
+                        {status && (
+                          <span className={`text-[8px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                            status.status === 'active'
+                              ? 'bg-green-50 border-green-200 text-green-700'
+                              : status.status === 'error'
+                              ? 'bg-red-50 border-red-200 text-red-600'
+                              : 'bg-slate-100 border-slate-200 text-slate-500 animate-pulse'
+                          }`}>
+                            {status.loading ? 'Checking...' : status.status === 'active' ? 'Active' : status.error || 'Inactive'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          value={key}
+                          onChange={e => {
+                            const updated = [...geminiKeys]
+                            updated[index] = e.target.value
+                            setGeminiKeys(updated)
+                          }}
+                          placeholder={isMasked ? '(stored — type to update)' : 'AIzaSy...'}
+                          className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-end gap-2 md:pt-4">
+                      <button
+                        type="button"
+                        disabled={status?.loading || !key.trim() || key.includes('•')}
+                        onClick={() => {
+                          const keyToTest = key.trim()
+                          if (keyToTest.includes('•')) {
+                            toast.error('Stored keys cannot be re-tested. Enter a new key to check status.')
+                            return
+                          }
+                          setKeyStatuses(prev => ({ ...prev, [index]: { loading: true } }))
+                          fetch('/api/meta/gemini-status', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ apiKey: keyToTest }),
+                          })
+                            .then(r => r.json())
+                            .then(data => {
+                              setKeyStatuses(prev => ({
+                                ...prev,
+                                [index]: {
+                                  loading: false,
+                                  status: data.status,
+                                  error: data.error,
+                                  models: data.models,
+                                }
+                              }))
+                              if (data.status === 'active') {
+                                toast.success(`Key #${index + 1} is Active!`)
+                              } else {
+                                toast.error(`Key #${index + 1} status: ${data.error || 'inactive'}`)
+                              }
+                            })
+                            .catch(err => {
+                              setKeyStatuses(prev => ({
+                                ...prev,
+                                [index]: { loading: false, status: 'error', error: err.message }
+                              }))
+                              toast.error(err.message)
+                            })
+                        }}
+                        className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] font-bold text-slate-600 transition-colors"
+                      >
+                        ⚡ Check Key
+                      </button>
+
+                      {geminiKeys.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = geminiKeys.filter((_, i) => i !== index)
+                            setGeminiKeys(updated)
+                            const updatedStatuses = { ...keyStatuses }
+                            delete updatedStatuses[index]
+                            setKeyStatuses(updatedStatuses)
+                          }}
+                          className="px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-[10px] font-bold text-red-600 transition-colors"
+                        >
+                          🗑 Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setGeminiKeys([...geminiKeys, ''])}
+                className="px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 text-[11px] font-bold text-slate-600 transition-colors"
+              >
+                + Add Another Key
+              </button>
+
+              <button
+                type="button"
+                disabled={savingKeys}
+                onClick={async () => {
+                  setSavingKeys(true)
+                  const toastId = toast.loading('Saving Gemini keys...')
+                  try {
+                    const cleanKeys = geminiKeys.filter(Boolean)
+                    const payload = {
+                      SAVED_GEMINI_API_KEYS: JSON.stringify(cleanKeys),
+                      GEMINI_API_KEY: cleanKeys[0] || '',
+                    }
+                    const res = await fetch('/api/meta/settings', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ settings: payload }),
+                    })
+                    if (res.ok) {
+                      toast.success('Gemini API keys updated successfully!', { id: toastId })
+                      fetchGeminiKeys()
+                    } else {
+                      const data = await res.json()
+                      throw new Error(data.error || 'Failed to save')
+                    }
+                  } catch (err: any) {
+                    toast.error(err.message || 'Save failed', { id: toastId })
+                  } finally {
+                    setSavingKeys(false)
+                  }
+                }}
+                className="px-5 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40"
+              >
+                {savingKeys ? 'Saving...' : '💾 Save Gemini Keys'}
+              </button>
+            </div>
           </div>
         </div>
       )}
