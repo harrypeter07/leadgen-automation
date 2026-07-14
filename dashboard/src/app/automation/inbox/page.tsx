@@ -273,7 +273,22 @@ export default function SocialInboxPage() {
   const [showThreadSettings, setShowThreadSettings] = useState(false)
   const [isTyping, setIsTyping]             = useState(false)
 
-  // Webhook Logs Panel
+  // Active connected account
+  const [activeAccountIgBizId, setActiveAccountIgBizId] = useState<string>('17841411718913026')
+  const [activeAccountDisplayName, setActiveAccountDisplayName] = useState<string>('smritifyp')
+
+  useEffect(() => {
+    fetch('/api/meta/active-account')
+      .then(r => r.json())
+      .then(data => {
+        if (data.found) {
+          if (data.instagramBusinessId) setActiveAccountIgBizId(data.instagramBusinessId)
+          if (data.displayName) setActiveAccountDisplayName(data.displayName)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   const [showLogsPanel, setShowLogsPanel]   = useState(false)
   const [logs, setLogs]                     = useState<any[]>([])
 
@@ -455,8 +470,9 @@ export default function SocialInboxPage() {
           const last = msgs[0]
           const otherParticipant = conv.participants?.data?.find(
             (p: { id: string; name?: string; username?: string }) =>
-              p.username !== 'smritifyp' && p.id !== '17841411718913026'
+              p.id !== activeAccountIgBizId && p.username !== activeAccountDisplayName
           ) || conv.participants?.data?.[0]
+
           const displayName = otherParticipant?.name || (otherParticipant?.username ? `@${otherParticipant.username}` : 'Instagram User')
           fetched.push({
             id: `ig_${conv.id}`,

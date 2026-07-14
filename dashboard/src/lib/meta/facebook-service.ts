@@ -1,22 +1,28 @@
 // lib/meta/facebook-service.ts
 import { MetaClient, MetaApiResponse } from './meta-client'
 import { MetaLogger } from './meta-logger'
-import { ensureMetaConfig } from './runtime-config'
+import { ensureMetaConfig, getActiveConnectedAccount } from './runtime-config'
+
 
 const SOURCE = 'FacebookService'
 
 async function getPageId() {
+  const active = await getActiveConnectedAccount('messenger')
+  if (active?.pageId) return active.pageId
   await ensureMetaConfig()
   // META_PAGE_ID from config, fallback to the Smriti page linked to Instagram
   return process.env.META_PAGE_ID || '1165738093294228'
 }
 
 async function getPageToken() {
+  const active = await getActiveConnectedAccount('messenger')
+  if (active?.pageAccessToken) return active.pageAccessToken
   await ensureMetaConfig()
   // MESSENGER_PAGE_TOKEN = Smriti page token from Instagram Messaging API section
   // Falls back to META_PAGE_ACCESS_TOKEN if not separately configured
   return process.env.MESSENGER_PAGE_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''
 }
+
 
 export const FacebookService = {
   async getPage(fields = 'id,name,fan_count,link,category,about,website,phone,picture') {

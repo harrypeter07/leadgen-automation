@@ -2,18 +2,23 @@
 // Uses graph.instagram.com (new Instagram API) with the INSTAGRAM_ACCESS_TOKEN
 import { MetaClient, MetaApiResponse } from './meta-client'
 import { MetaLogger } from './meta-logger'
-import { ensureMetaConfig } from './runtime-config'
+import { ensureMetaConfig, getActiveConnectedAccount } from './runtime-config'
+
 
 const SOURCE = 'InstagramService'
 // New Instagram API base URL - different from Facebook Graph API
 const IG_BASE = 'https://graph.instagram.com/v25.0'
 
 async function getIgBizId() {
+  const active = await getActiveConnectedAccount('instagram')
+  if (active?.instagramBusinessId) return active.instagramBusinessId
   await ensureMetaConfig()
   return process.env.INSTAGRAM_BUSINESS_ID || ''
 }
 
 async function getIgToken() {
+  const active = await getActiveConnectedAccount('instagram')
+  if (active?.instagramToken) return active.instagramToken
   await ensureMetaConfig()
   // For graph.instagram.com endpoints (profile, media read) use Instagram user token
   return process.env.INSTAGRAM_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''
@@ -22,9 +27,12 @@ async function getIgToken() {
 // Publishing to /{igId}/media on graph.facebook.com REQUIRES a Page Access Token (EAA...)
 // NOT the Instagram user token (IGAAo...) — that causes "Cannot parse access token"
 async function getPageToken() {
+  const active = await getActiveConnectedAccount('instagram')
+  if (active?.pageAccessToken) return active.pageAccessToken
   await ensureMetaConfig()
   return process.env.META_PAGE_ACCESS_TOKEN || process.env.INSTAGRAM_ACCESS_TOKEN || ''
 }
+
 
 async function igGet<T>(path: string): Promise<{ success: boolean; data?: T; error?: MetaApiResponse['error']; statusCode: number; duration: number }> {
   const token = await getIgToken()
