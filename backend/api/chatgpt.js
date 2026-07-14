@@ -92,6 +92,80 @@ router.get('/logs', (req, res) => {
   res.json({ logs: activeLogs, isRunning });
 });
 
+// GET /api/automation/chatgpt/debug-screenshot - Diagnostic: take a live screenshot on the server
+// Returns a PNG image showing exactly what the Railway browser sees (Cloudflare block, login page, etc.)
+router.get('/debug-screenshot', async (req, res) => {
+  const browserManager = require('../worker/browserManager');
+  const encryptionService = require('../services/encryptionService');
+  let page = null;
+  let context = null;
+  let contextId = null;
+  try {
+    // Fetch session token from DB
+    const { data } = await supabase
+      .from('meta_config')
+      .select('key, value')
+      .eq('key', 'CHATGPT_SESSION_TOKEN')
+      .single();
+    const sessionToken = data ? encryptionService.decrypt(data.value) : '';
+
+    const browser = await browserManager.launch();
+    const ctxRes = await browserManager.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 800 }
+    });
+    context = ctxRes.context;
+    contextId = ctxRes.contextId;
+
+    // Inject session cookie on both domains
+    if (sessionToken) {
+      await context.addCookies([
+        { name: '__Secure-next-auth.session-token', value: sessionToken, domain: '.chatgpt.com', path: '/', secure: true, httpOnly: true },
+        { name: '__Secure-next-auth.session-token', value: sessionToken, domain: '.openai.com', path: '/', secure: true, httpOnly: true }
+      ]);
+    }
+
+    // Stealth init
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+      if (!window.chrome) window.chrome = { runtime: {} };
+    });
+
+    const pageRes = await browserManager.newPage(contextId, context);
+    page = pageRes.page;
+
+    await page.goto('https://chatgpt.com/', { waitUntil: 'load', timeout: 45000 });
+    // Wait a bit for JS to settle
+    await page.waitForTimeout(3000);
+
+    const pageTitle = await page.title();
+    const pageUrl = page.url();
+
+    // Take screenshot
+    const screenshotBuffer = await page.screenshot({ fullPage: false });
+
+    // Cleanup
+    await page.close();
+    await context.close();
+
+    // Return as PNG with diagnostic headers
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('X-Page-Title', encodeURIComponent(pageTitle));
+    res.setHeader('X-Page-URL', encodeURIComponent(pageUrl));
+    res.setHeader('X-Token-Present', sessionToken ? 'yes' : 'no');
+    res.send(screenshotBuffer);
+  } catch (err) {
+    try { if (page) await page.close(); } catch (_) {}
+    try { if (context) await context.close(); } catch (_) {}
+    res.status(500).json({ error: err.message, hint: 'Check X-Page-Title / X-Page-URL headers in successful cases.' });
+  }
+});
+
+
+
 // POST /api/automation/chatgpt/generate - Automate ChatGPT generation
 router.post('/generate', async (req, res) => {
   const { prompt, imageUrls = [], tabMode: overrideTabMode } = req.body;

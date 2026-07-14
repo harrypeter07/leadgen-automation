@@ -114,18 +114,22 @@ class ChatgptBrowserService {
             if (parts.length >= 2) {
               const name = parts[0].trim();
               const value = parts.slice(1).join('=').trim();
-              cookiesToAdd.push({
-                name,
-                value,
-                domain: '.chatgpt.com',
-                path: '/',
-                secure: true,
-                httpOnly: true
-              });
+              // Add cookie for both chatgpt.com and openai.com
+              for (const domain of ['.chatgpt.com', '.openai.com']) {
+                cookiesToAdd.push({
+                  name,
+                  value,
+                  domain,
+                  path: '/',
+                  secure: true,
+                  httpOnly: true
+                });
+              }
             }
           }
           await context.addCookies(cookiesToAdd);
         } else {
+          // Add token cookie for both chatgpt.com and openai.com
           await context.addCookies([
             {
               name: '__Secure-next-auth.session-token',
@@ -134,15 +138,38 @@ class ChatgptBrowserService {
               path: '/',
               secure: true,
               httpOnly: true
+            },
+            {
+              name: '__Secure-next-auth.session-token',
+              value: sessionToken,
+              domain: '.openai.com',
+              path: '/',
+              secure: true,
+              httpOnly: true
             }
           ]);
         }
 
-        // Add stealth script to bypass Turnstile browser detection
+        // Add comprehensive stealth script to bypass Cloudflare Turnstile browser detection
         await context.addInitScript(() => {
-          Object.defineProperty(navigator, 'webdriver', {
-            get: () => undefined
-          });
+          // Hide webdriver flag
+          Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+          // Spoof plugins list (headless has none by default)
+          Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+          // Spoof languages
+          Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+          // Spoof platform
+          Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+          // Spoof chrome object (missing in headless)
+          if (!window.chrome) {
+            window.chrome = { runtime: {} };
+          }
+          // Remove automation-related properties from permissions
+          const originalQuery = window.navigator.permissions.query;
+          window.navigator.permissions.query = (parameters) =>
+            parameters.name === 'notifications'
+              ? Promise.resolve({ state: Notification.permission })
+              : originalQuery(parameters);
         });
 
         const pageRes = await browserManager.newPage(ctxRes.contextId, context);
