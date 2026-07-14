@@ -6,6 +6,30 @@ const playwright = require('playwright');
 const browserManager = require('../worker/browserManager');
 const logger = require('../worker/logger');
 
+/**
+ * Parse a raw cookie string into Playwright-compatible cookie objects.
+ * Skips directive tokens (path, domain, expires, samesite, httponly, secure).
+ */
+function parseCookiesForPlaywright(rawCookieString, domain) {
+  const SKIP = new Set(['path', 'domain', 'expires', 'max-age', 'samesite', 'httponly', 'secure', 'priority', 'version']);
+
+  if (!rawCookieString || !rawCookieString.includes('=')) {
+    return [{ name: '__Secure-next-auth.session-token', value: rawCookieString.trim(), domain, path: '/', secure: true, httpOnly: true, sameSite: 'None' }];
+  }
+
+  return rawCookieString.split(';').reduce((acc, part) => {
+    const trimmed = part.trim();
+    if (!trimmed) return acc;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) return acc;
+    const name = trimmed.slice(0, eqIdx).trim();
+    const value = trimmed.slice(eqIdx + 1).trim();
+    if (!name || SKIP.has(name.toLowerCase())) return acc;
+    acc.push({ name, value, domain, path: '/', secure: true, httpOnly: true, sameSite: 'None' });
+    return acc;
+  }, []);
+}
+
 class ChatgptBrowserService {
   constructor() {
     this.activeContext = null;
@@ -104,50 +128,15 @@ class ChatgptBrowserService {
         });
         context = ctxRes.context;
 
-        // Set ChatGPT authorization session cookie
+        // Safe per-cookie injection (skips invalid entries, handles raw token or full Set-Cookie strings)
         logCallback('Injecting ChatGPT authentication session token...');
-        if (sessionToken.includes('=')) {
-          const cookiePairs = sessionToken.split(';');
-          const cookiesToAdd = [];
-          for (const pair of cookiePairs) {
-            const parts = pair.split('=');
-            if (parts.length >= 2) {
-              const name = parts[0].trim();
-              const value = parts.slice(1).join('=').trim();
-              // Add cookie for both chatgpt.com and openai.com
-              for (const domain of ['.chatgpt.com', '.openai.com']) {
-                cookiesToAdd.push({
-                  name,
-                  value,
-                  domain,
-                  path: '/',
-                  secure: true,
-                  httpOnly: true
-                });
-              }
-            }
+        const cookiesToAdd = parseCookiesForPlaywright(sessionToken, '.chatgpt.com');
+        for (const cookie of cookiesToAdd) {
+          try {
+            await context.addCookies([cookie]);
+          } catch (cookieErr) {
+            logger.warn(`[ChatGPT Service] Skipping invalid cookie "${cookie.name}": ${cookieErr.message}`);
           }
-          await context.addCookies(cookiesToAdd);
-        } else {
-          // Add token cookie for both chatgpt.com and openai.com
-          await context.addCookies([
-            {
-              name: '__Secure-next-auth.session-token',
-              value: sessionToken,
-              domain: '.chatgpt.com',
-              path: '/',
-              secure: true,
-              httpOnly: true
-            },
-            {
-              name: '__Secure-next-auth.session-token',
-              value: sessionToken,
-              domain: '.openai.com',
-              path: '/',
-              secure: true,
-              httpOnly: true
-            }
-          ]);
         }
 
         // Add comprehensive stealth script to bypass Cloudflare Turnstile browser detection

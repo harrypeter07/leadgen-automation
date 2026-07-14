@@ -9,6 +9,59 @@ const logger = require('../worker/logger');
 let activeLogs = [];
 let isRunning = false;
 
+/**
+ * Safely parse a raw cookie string (semicolon-separated key=value pairs)
+ * into a Playwright-compatible cookie array for a given domain.
+ * Skips cookie-directive tokens (path, domain, expires, samesite, httponly, secure).
+ */
+function parseCookiesForPlaywright(rawCookieString, domain) {
+  if (!rawCookieString || !rawCookieString.includes('=')) {
+    // Treat the whole string as the value of the main session token
+    return [
+      {
+        name: '__Secure-next-auth.session-token',
+        value: rawCookieString.trim(),
+        domain,
+        path: '/',
+        secure: true,
+        httpOnly: true,
+        sameSite: 'None'
+      }
+    ];
+  }
+
+  const SKIP_DIRECTIVES = new Set(['path', 'domain', 'expires', 'max-age', 'samesite', 'httponly', 'secure', 'priority', 'version']);
+  const cookies = [];
+  const parts = rawCookieString.split(';');
+
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue; // skip bare directives like "HttpOnly"
+
+    const name = trimmed.slice(0, eqIdx).trim();
+    const value = trimmed.slice(eqIdx + 1).trim();
+
+    // Skip cookie attribute directives
+    if (SKIP_DIRECTIVES.has(name.toLowerCase())) continue;
+    // Skip empty names or values
+    if (!name || value === undefined) continue;
+
+    cookies.push({
+      name,
+      value,
+      domain,
+      path: '/',
+      secure: true,
+      httpOnly: true,
+      sameSite: 'None'
+    });
+  }
+
+  return cookies;
+}
+
 // GET /api/automation/chatgpt/config - Fetch ChatGPT config settings
 router.get('/config', async (req, res) => {
   try {
@@ -117,12 +170,16 @@ router.get('/debug-screenshot', async (req, res) => {
     context = ctxRes.context;
     contextId = ctxRes.contextId;
 
-    // Inject session cookie on both domains
+    // Inject session cookie safely (handles both raw token and full cookie header strings)
     if (sessionToken) {
-      await context.addCookies([
-        { name: '__Secure-next-auth.session-token', value: sessionToken, domain: '.chatgpt.com', path: '/', secure: true, httpOnly: true },
-        { name: '__Secure-next-auth.session-token', value: sessionToken, domain: '.openai.com', path: '/', secure: true, httpOnly: true }
-      ]);
+      const cookiesToInject = parseCookiesForPlaywright(sessionToken, '.chatgpt.com');
+      for (const cookie of cookiesToInject) {
+        try {
+          await context.addCookies([cookie]);
+        } catch (cookieErr) {
+          logger.warn(`[Debug Screenshot] Skipping invalid cookie "${cookie.name}": ${cookieErr.message}`);
+        }
+      }
     }
 
     // Stealth init
