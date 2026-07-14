@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { InstagramService } from '@/lib/meta/instagram-service'
 import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 
+export const dynamic = 'force-dynamic'
+
 const LAST_POLL_KEY = 'IG_POLL_LAST_TIMESTAMP'
 const AUTO_REPLY_LOGS_KEY = 'AUTO_REPLY_LOGS'
 

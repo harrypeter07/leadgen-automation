@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 const GRAPH_BASE = 'https://graph.facebook.com'
 const API_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
 

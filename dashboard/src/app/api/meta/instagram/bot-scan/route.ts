@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 
+export const dynamic = 'force-dynamic'
+
 const IG_BASE = 'https://graph.instagram.com/v25.0'
 const MY_IG_ID = '17841411718913026'
 

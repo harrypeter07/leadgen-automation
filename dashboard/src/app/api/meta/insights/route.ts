@@ -3,6 +3,8 @@ import { InstagramService } from '@/lib/meta/instagram-service'
 import { FacebookService } from '@/lib/meta/facebook-service'
 import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/meta/insights
 // Fetches both Facebook and Instagram profiles + reach insights and aggregates them
 export async function GET() {

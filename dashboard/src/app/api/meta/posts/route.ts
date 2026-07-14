@@ -3,6 +3,8 @@ import { InstagramService } from '@/lib/meta/instagram-service'
 import { FacebookService } from '@/lib/meta/facebook-service'
 import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/meta/posts
 // Fetches both Facebook and Instagram posts to populate the content calendar in real-time
 export async function GET(req: NextRequest) {

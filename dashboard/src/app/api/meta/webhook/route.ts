@@ -5,6 +5,8 @@ import { InstagramService } from '@/lib/meta/instagram-service'
 import { FacebookService } from '@/lib/meta/facebook-service'
 import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 
+export const dynamic = 'force-dynamic'
+
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'FLOWFYP_VERIFY_TOKEN'
 const APP_SECRET   = process.env.META_APP_SECRET || ''
 
