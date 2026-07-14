@@ -89,11 +89,7 @@ export function invalidateMetaConfig(): void {
 }
 
 // ─── Active Connected Account helper ─────────────────────────────────────────
-
-function getEncKey(): Buffer {
-  const raw = process.env.SUPABASE_SERVICE_ROLE_KEY || 'fallback-key-32-bytes-padded-123'
-  return Buffer.from(raw.slice(0, 32).padEnd(32, '0'))
-}
+// Note: getEncKey() is already defined above — reused here for credential decryption.
 
 function decryptCredValue(value: string): string {
   try {
