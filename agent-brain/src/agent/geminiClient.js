@@ -2,22 +2,11 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const logger = require('../utils/logger');
 const { sleep } = require('../utils/httpClient');
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const { supabase } = require('../db/queries');
+
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 const CALL_TIMEOUT_MS = Number(process.env.GEMINI_CALL_TIMEOUT_MS || 25000);
 
-/**
- * Calls Gemini with function-calling enabled and returns a normalized result.
- * NEVER throws for "the model didn't call a function" or "returned odd JSON" —
- * those are expected outcomes, not exceptions. Only throws after retries are
- * exhausted on genuine API/network failure.
- *
- * Returns: {
- *   functionCalls: [{ name, args }],   // may be empty array
- *   text: string,                       // any plain text the model returned
- *   raw: <original response>,
- * }
- */
 const MODELS_TO_TRY = [
   process.env.GEMINI_MODEL || 'gemini-2.0-flash',
   'gemini-2.5-flash-lite',
@@ -25,58 +14,98 @@ const MODELS_TO_TRY = [
 ];
 
 /**
+ * Fetch rotated Gemini keys list from Supabase meta_config table
+ */
+async function getGeminiApiKeys() {
+  try {
+    const { data } = await supabase
+      .from('meta_config')
+      .select('value')
+      .eq('key', 'SAVED_GEMINI_API_KEYS')
+      .single();
+
+    if (data?.value) {
+      const parsed = JSON.parse(data.value);
+      if (Array.isArray(parsed)) {
+        const clean = parsed.filter(Boolean);
+        if (clean.length > 0) return clean;
+      }
+    }
+  } catch (err) {
+    logger.warn(`Failed to load Gemini keys from DB, using fallback: ${err.message}`);
+  }
+  return [process.env.GEMINI_API_KEY].filter(Boolean);
+}
+
+/**
  * Calls Gemini with function-calling enabled and returns a normalized result.
- * Retries across a list of models sequentially if it hits rate limits (429) or model issues.
+ * Retries across a list of database-defined API keys AND models sequentially if it hits rate limits (429) or quota limits.
  */
 async function callGeminiWithTools({ systemInstruction, userContent, toolDeclarations, retries = 2 }) {
   let lastError;
 
-  for (const modelName of MODELS_TO_TRY) {
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction,
-      tools: toolDeclarations.length ? [{ functionDeclarations: toolDeclarations }] : undefined,
-    });
+  // 1. Fetch live rotated API keys
+  const keys = await getGeminiApiKeys();
+  if (keys.length === 0) {
+    throw new Error('No Gemini API keys are configured in settings or environment.');
+  }
 
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        const result = await withTimeout(
-          model.generateContent(userContent),
-          CALL_TIMEOUT_MS,
-          'Gemini call timed out'
-        );
+  // 2. Loop through each key to find one that succeeds or has quota
+  for (let keyIdx = 0; keyIdx < keys.length; keyIdx++) {
+    const currentKey = keys[keyIdx];
+    const client = new GoogleGenerativeAI(currentKey);
 
-        return normalizeGeminiResponse(result);
-      } catch (err) {
-        lastError = err;
-        const retryable = isRetryableGeminiError(err);
+    // 3. For the selected key, try each model sequentially
+    for (const modelName of MODELS_TO_TRY) {
+      const model = client.getGenerativeModel({
+        model: modelName,
+        systemInstruction,
+        tools: toolDeclarations.length ? [{ functionDeclarations: toolDeclarations }] : undefined,
+      });
 
-        // Fail-over immediately to next model if quota exceeded (429) or model not supported (404)
-        const isQuotaOrNotFound = 
-          err.message.includes('429') || 
-          err.message.includes('quota') || 
-          err.message.includes('404') || 
-          err.message.includes('not found') ||
-          err.message.includes('unsupported');
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const result = await withTimeout(
+            model.generateContent(userContent),
+            CALL_TIMEOUT_MS,
+            'Gemini call timed out'
+          );
 
-        if (isQuotaOrNotFound) {
-          logger.warn({ model: modelName, error: err.message }, 'Gemini model hit limit or unsupported, trying fallback model');
-          break; // Break inner loop, fallback to next modelName
+          return normalizeGeminiResponse(result);
+        } catch (err) {
+          lastError = err;
+          const retryable = isRetryableGeminiError(err);
+
+          // If quota exceeded (429) or model is not supported (404)
+          const isQuotaOrNotFound = 
+            err.message.includes('429') || 
+            err.message.includes('quota') || 
+            err.message.includes('404') || 
+            err.message.includes('not found') ||
+            err.message.includes('unsupported') ||
+            err.message.includes('Too Many Requests');
+
+          if (isQuotaOrNotFound) {
+            logger.warn({ keyIndex: keyIdx, model: modelName, error: err.message }, 'Gemini key or model hit limit/unsupported');
+            
+            // If we have more models for this key, try them; otherwise cascade immediately to the next API key!
+            break; // Break inner loop, fallback to next modelName
+          }
+
+          if (retryable && attempt < retries) {
+            const delay = 500 * 2 ** attempt + Math.random() * 300;
+            logger.warn({ model: modelName, attempt, delay, error: err.message }, 'Retrying Gemini call after transient failure');
+            await sleep(delay);
+            continue;
+          }
+          break;
         }
-
-        if (retryable && attempt < retries) {
-          const delay = 500 * 2 ** attempt + Math.random() * 300;
-          logger.warn({ model: modelName, attempt, delay, error: err.message }, 'Retrying Gemini call after transient failure');
-          await sleep(delay);
-          continue;
-        }
-        break;
       }
     }
   }
 
-  // Exhausted all models and retries
-  logger.error({ error: lastError?.message }, 'Gemini call failed after trying all fallback models');
+  // Exhausted all keys, models, and retries
+  logger.error({ error: lastError?.message }, 'Gemini call failed after trying all rotated API keys and fallback models');
   throw new Error(`Gemini call failed: ${lastError?.message || 'unknown error'}`);
 }
 
