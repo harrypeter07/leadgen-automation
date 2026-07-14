@@ -21,6 +21,7 @@ export default function WebhookDebuggerPage() {
   // Settings info for copy-pasting
   const [verifyToken, setVerifyToken] = useState('FLOWFYP_VERIFY_TOKEN')
   const [callbackUrl, setCallbackUrl] = useState('')
+  const [pollingEnabled, setPollingEnabled] = useState(true)
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -54,11 +55,13 @@ export default function WebhookDebuggerPage() {
     }
     fetchLogs()
     fetchSettings()
-    
-    // Poll every 3 seconds for real-time debugging updates!
+  }, [fetchLogs, fetchSettings])
+
+  useEffect(() => {
+    if (!pollingEnabled) return
     const timer = setInterval(fetchLogs, 3000)
     return () => clearInterval(timer)
-  }, [fetchLogs, fetchSettings])
+  }, [pollingEnabled, fetchLogs])
 
   const handleClearLogs = async () => {
     if (!confirm('Are you sure you want to clear the webhook event logs?')) return
@@ -137,7 +140,30 @@ export default function WebhookDebuggerPage() {
           <p className="mt-1 text-sm text-gray-500 font-medium">Verify verification handshakes, inspect real-time payloads, and diagnose Meta messaging events.</p>
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPollingEnabled(!pollingEnabled)}
+            className={`px-4 py-3 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
+              pollingEnabled
+                ? 'bg-green-950/40 hover:bg-green-900/30 text-green-300 border-green-800/40'
+                : 'bg-[#222225] hover:bg-[#2D2D30] text-gray-400 border-[#2D2D30]'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${pollingEnabled ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`}></span>
+            {pollingEnabled ? '⏸️ Auto-Refresh: ON' : '▶️ Auto-Refresh: OFF'}
+          </button>
+
+          {!pollingEnabled && (
+            <button
+              type="button"
+              onClick={fetchLogs}
+              className="px-4 py-3 rounded-xl bg-[#222225] border border-[#2D2D30] hover:bg-[#2D2D30] text-gray-300 text-xs font-bold uppercase tracking-wider transition-colors"
+            >
+              🔄 Fetch Logs
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleSimulateWebhook}
