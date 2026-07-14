@@ -47,36 +47,52 @@ router.get('/logs', async (req, res) => {
 // POST /api/automation/accounts - Create or update account connection settings
 router.post('/', async (req, res) => {
   try {
-    const { id, platform, account_name, app_id, credentials, workspace_id } = req.body;
+    const { 
+      id, platform, account_name, app_id, credentials, workspace_id,
+      chatbot_enabled, chatbot_persona, auto_reply_rules,
+      first_reply_delay, conversation_delay,
+      static_reply_enabled, static_reply_override, is_active
+    } = req.body;
 
     if (!platform || !account_name || !credentials) {
       return res.status(400).json({ error: 'Missing required platform, account_name, or credentials.' });
     }
 
+    // If making this account active, deactivate other accounts on this platform
+    if (is_active === true && id) {
+      await supabase
+        .from('connected_accounts')
+        .update({ is_active: false })
+        .eq('platform', platform)
+        .neq('id', id);
+    }
+
+    const accountFields = {
+      platform,
+      account_name,
+      app_id: app_id || null,
+      credentials,
+      workspace_id: workspace_id || null,
+      oauth_status: 'connected',
+      health_status: 'healthy',
+      chatbot_enabled: chatbot_enabled ?? false,
+      chatbot_persona: chatbot_persona || 'You are a helpful, professional assistant.',
+      auto_reply_rules: auto_reply_rules || [],
+      first_reply_delay: first_reply_delay ?? 8,
+      conversation_delay: conversation_delay ?? 4,
+      static_reply_enabled: static_reply_enabled ?? false,
+      static_reply_override: static_reply_override || '',
+      is_active: is_active ?? false
+    };
+
     let result;
     if (id) {
       // Update account
-      result = await connectedAccountsRepository.update(id, {
-        platform,
-        account_name,
-        app_id: app_id || null,
-        credentials,
-        workspace_id: workspace_id || null,
-        oauth_status: 'connected',
-        health_status: 'healthy'
-      });
+      result = await connectedAccountsRepository.update(id, accountFields);
       await auditLogRepository.log('ACCOUNT_UPDATED', `Settings updated for account ${account_name} (${platform})`);
     } else {
       // Create new account
-      result = await connectedAccountsRepository.create({
-        platform,
-        account_name,
-        app_id: app_id || null,
-        credentials,
-        workspace_id: workspace_id || null,
-        oauth_status: 'connected',
-        health_status: 'healthy'
-      });
+      result = await connectedAccountsRepository.create(accountFields);
       await auditLogRepository.log('ACCOUNT_CONNECTED', `Connected new platform account: ${account_name} (${platform})`);
     }
 

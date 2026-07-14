@@ -8,6 +8,37 @@ import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'FLOWFYP_VERIFY_TOKEN'
 const APP_SECRET   = process.env.META_APP_SECRET || ''
 
+function getEncKey(): Buffer {
+  const raw = process.env.SUPABASE_SERVICE_ROLE_KEY || 'fallback-key-32-bytes-padded-123'
+  return Buffer.from(raw.slice(0, 32).padEnd(32, '0'))
+}
+
+function decrypt(value: string): string {
+  try {
+    if (!value) return ''
+    if (!value.startsWith('enc:')) {
+      const parts = value.split(':')
+      if (parts.length >= 2) {
+        const iv = Buffer.from(parts.shift() || '', 'hex')
+        const encrypted = Buffer.from(parts.join(':'), 'hex')
+        const rawKey = process.env.WHATSAPP_API_SECRET || 'antigravity_fallback_encryption_key_32_bytes_long'
+        const derivedKey = crypto.createHash('sha256').update(rawKey).digest()
+        const decipher = crypto.createDecipheriv('aes-256-cbc', derivedKey, iv)
+        return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8')
+      }
+      return value
+    }
+    const parts = value.split(':')
+    if (parts.length < 3) return value
+    const iv        = Buffer.from(parts[1], 'hex')
+    const encrypted = Buffer.from(parts[2], 'hex')
+    const decipher  = crypto.createDecipheriv('aes-256-cbc', getEncKey(), iv)
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8')
+  } catch {
+    return value
+  }
+}
+
 // Memory cache to prevent duplicate webhook message processing
 const processedMids = new Set<string>()
 
@@ -69,21 +100,56 @@ async function logAutoReplyEvent(event: {
   }
 }
 
-// Helper to check rules and send AI/Keyword replies
+// Helper to check rules and send AI/Keyword r// Helper to check rules and send AI/Keyword replies
 async function handleAutoReply(
   platform: 'instagram' | 'messenger',
   senderId: string,
-  messageText: string
+  messageText: string,
+  recipientId: string
 ) {
   try {
     await ensureMetaConfig()
-    const pageId = process.env.META_PAGE_ID || '1165738093294228'
-    const igId = process.env.INSTAGRAM_BUSINESS_ID || '17841411718913026'
 
+    // 1. Query connected_accounts table to find the record matching platform and recipientId
+    const { data: accounts } = await supabaseAdmin
+      .from('connected_accounts')
+      .select('*')
+      .eq('platform', platform === 'instagram' ? 'instagram' : 'messenger')
+
+    let matchedAccount: any = null
+    for (const acc of accounts || []) {
+      if (acc.encrypted_credentials) {
+        try {
+          const decryptedStr = decrypt(acc.encrypted_credentials)
+          const creds = JSON.parse(decryptedStr)
+          if (creds && String(creds.page_id) === String(recipientId)) {
+            matchedAccount = { ...acc, credentials: creds }
+            break
+          }
+        } catch {}
+      }
+    }
+
+    // 2. Fallback: if not matched by recipientId, search for the active account on this platform
+    if (!matchedAccount) {
+      const activeAcc = (accounts || []).find(a => a.is_active)
+      if (activeAcc && activeAcc.encrypted_credentials) {
+        try {
+          const decryptedStr = decrypt(activeAcc.encrypted_credentials)
+          const creds = JSON.parse(decryptedStr)
+          matchedAccount = { ...activeAcc, credentials: creds }
+        } catch {}
+      }
+    }
+
+    // 3. Resolve the config options: prefer account-specific fields, fall back to global config
+    const pageId = matchedAccount?.credentials?.page_id || process.env.META_PAGE_ID || '1165738093294228'
+    const igId = matchedAccount?.credentials?.page_id || process.env.INSTAGRAM_BUSINESS_ID || '17841411718913026'
+    
     // Skip if sender is ourselves
     if (senderId === pageId || senderId === igId) return
 
-    // Fetch config
+    // Load global settings for fallback
     const { data: configRows } = await supabaseAdmin
       .from('meta_config')
       .select('key, value')
@@ -104,8 +170,23 @@ async function handleAutoReply(
       settings[r.key] = r.value || ''
     }
 
-    const rules = settings.AUTO_REPLY_RULES ? JSON.parse(settings.AUTO_REPLY_RULES) : []
-    const globalChatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
+    // Resolve rules: account-specific or fallback to global
+    let rules = []
+    if (matchedAccount && matchedAccount.auto_reply_rules) {
+      rules = Array.isArray(matchedAccount.auto_reply_rules) 
+        ? matchedAccount.auto_reply_rules 
+        : JSON.parse(JSON.stringify(matchedAccount.auto_reply_rules))
+    } else {
+      rules = settings.AUTO_REPLY_RULES ? JSON.parse(settings.AUTO_REPLY_RULES) : []
+    }
+
+    // Resolve chatbot enabled status
+    let globalChatbotEnabled = false
+    if (matchedAccount && matchedAccount.chatbot_enabled !== undefined && matchedAccount.chatbot_enabled !== null) {
+      globalChatbotEnabled = !!matchedAccount.chatbot_enabled
+    } else {
+      globalChatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
+    }
 
     // Thread-level configurations override
     let threadConfigs: Record<string, any> = {}
@@ -126,25 +207,41 @@ async function handleAutoReply(
       : (overrides[senderId] !== undefined ? overrides[senderId] : globalChatbotEnabled)
 
     // 2. Persona override
-    const chatbotPersona = threadConfig.persona || settings.AI_CHATBOT_PERSONA || 'You are a helpful, professional business assistant.'
+    let chatbotPersona = 'You are a helpful, professional business assistant.'
+    if (matchedAccount && matchedAccount.chatbot_persona) {
+      chatbotPersona = matchedAccount.chatbot_persona
+    } else {
+      chatbotPersona = settings.AI_CHATBOT_PERSONA || chatbotPersona
+    }
+    if (threadConfig.persona) {
+      chatbotPersona = threadConfig.persona
+    }
 
     // 3. Delays override
     const firstReplyDelay = threadConfig.firstReplyDelay !== undefined
       ? Number(threadConfig.firstReplyDelay)
-      : (settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 8)
+      : (matchedAccount && matchedAccount.first_reply_delay !== undefined && matchedAccount.first_reply_delay !== null
+          ? Number(matchedAccount.first_reply_delay)
+          : (settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 8))
 
     const conversationDelay = threadConfig.conversationDelay !== undefined
       ? Number(threadConfig.conversationDelay)
-      : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 4)
+      : (matchedAccount && matchedAccount.conversation_delay !== undefined && matchedAccount.conversation_delay !== null
+          ? Number(matchedAccount.conversation_delay)
+          : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 4))
 
     // 4. Static test reply override
     const staticReplyEnabled = threadConfig.staticReplyEnabled !== undefined
       ? !!threadConfig.staticReplyEnabled
-      : (settings.AI_STATIC_REPLY_ENABLED === 'true')
+      : (matchedAccount && matchedAccount.static_reply_enabled !== undefined && matchedAccount.static_reply_enabled !== null
+          ? !!matchedAccount.static_reply_enabled
+          : (settings.AI_STATIC_REPLY_ENABLED === 'true'))
 
     const staticReply = threadConfig.staticReply !== undefined
       ? threadConfig.staticReply
-      : (settings.AI_STATIC_REPLY_OVERRIDE || '')
+      : (matchedAccount && matchedAccount.static_reply_override !== undefined && matchedAccount.static_reply_override !== null
+          ? matchedAccount.static_reply_override
+          : (settings.AI_STATIC_REPLY_OVERRIDE || ''))
 
     // Response length → token limits (default to short for concise responses)
     const responseLength: 'short' | 'medium' | 'long' = threadConfig.responseLength || 'short'
@@ -190,7 +287,7 @@ async function handleAutoReply(
         ? 'Reply in 4-5 sentences. Be expressive and detailed.'
         : 'Reply in 2-3 sentences. Be natural and conversational.'
       const systemPrompt = `${chatbotPersona}
-
+ 
 CRITICAL RULES (never break these):
 - ${lengthInstruction}
 - You are replying to an Instagram DM.
@@ -258,9 +355,11 @@ CRITICAL RULES (never break these):
 
       const delaySec = isFirstReply ? firstReplyDelay : conversationDelay
 
+      const tokenOverride = matchedAccount?.credentials?.access_token || undefined
+
       // Show typing indicator to recipient (gives real-time "typing..." bubble)
       if (platform === 'instagram') {
-        await InstagramService.sendTypingIndicator(senderId, 'typing_on').catch(() => {})
+        await InstagramService.sendTypingIndicator(senderId, 'typing_on', tokenOverride).catch(() => {})
       }
 
       if (delaySec > 0) {
@@ -272,11 +371,12 @@ CRITICAL RULES (never break these):
       let sendSuccess = false
       let sendError = ''
       if (platform === 'instagram') {
-        const sendRes = await InstagramService.sendDM(senderId, replyContent)
+        const sendRes = await InstagramService.sendDM(senderId, replyContent, tokenOverride)
         sendSuccess = sendRes.success
         sendError = sendRes.error?.message || ''
       } else {
-        const sendRes = await FacebookService.sendMessage(senderId, replyContent)
+        const pageIdOverride = matchedAccount?.credentials?.page_id || undefined
+        const sendRes = await FacebookService.sendMessage(senderId, replyContent, tokenOverride, pageIdOverride)
         sendSuccess = sendRes.success
         sendError = sendRes.error?.message || ''
       }
@@ -445,10 +545,11 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            if (senderId && text) {
+            const recipientId = msgEvent.recipient?.id || entry.id
+            if (senderId && text && recipientId) {
               // Trigger asynchronously to avoid blocking the HTTP response, 
               // which completely prevents Meta webhook retries/duplicates.
-              handleAutoReply(platform, senderId, text).catch(err => {
+              handleAutoReply(platform, senderId, text, recipientId).catch(err => {
                 console.error('[Meta Webhook] handleAutoReply failed:', err.message)
               })
             }

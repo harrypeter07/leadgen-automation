@@ -20,6 +20,10 @@ interface FieldConfig {
 
 const SECTIONS: Array<{ title: string; icon: string; fields: FieldConfig[] }> = [
   {
+    title: 'AI Chatbot & Rules', icon: '🤖',
+    fields: []
+  },
+  {
     title: 'Meta App', icon: '🔵',
     fields: [
       { key: 'META_APP_ID',      label: 'App ID',      description: 'Your Meta Developer App ID', required: true },
@@ -155,7 +159,7 @@ export default function MetaSettingsPage() {
   const [seeding, setSeeding]         = useState(false)
   const [testResults, setTestResults] = useState<Record<string, { status: string; ms: number; detail: string }>>({})
   const [testing, setTesting]         = useState<string | null>(null)
-  const [activeSection, setActiveSection] = useState('Meta App')
+  const [activeSection, setActiveSection] = useState('AI Chatbot & Rules')
   const [configured, setConfigured]   = useState(false)
   const [missing, setMissing]         = useState<string[]>([])
   const [lastSaved, setLastSaved]     = useState<string | null>(null)
@@ -164,6 +168,42 @@ export default function MetaSettingsPage() {
   const [geminiKeys, setGeminiKeys] = useState<string[]>([''])
   const [keyStatuses, setKeyStatuses] = useState<Record<number, { loading: boolean; status?: string; error?: string; models?: string[] }>>({})
 
+  // Connected Accounts state
+  const [accounts, setAccounts] = useState<any[]>([])
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('')
+
+  // Account-specific Settings states
+  const [chatbotEnabled, setChatbotEnabled] = useState(false)
+  const [chatbotPersona, setChatbotPersona] = useState('')
+  const [autoReplyRules, setAutoReplyRules] = useState<any[]>([])
+  const [firstReplyDelay, setFirstReplyDelay] = useState(8)
+  const [conversationDelay, setConversationDelay] = useState(4)
+  const [staticReplyEnabled, setStaticReplyEnabled] = useState(false)
+  const [staticReplyOverride, setStaticReplyOverride] = useState('')
+  const [isActive, setIsActive] = useState(false)
+
+  // ── Load connected accounts ───────────────────────────────────────────────
+  const fetchAccounts = useCallback(async (selectId?: string) => {
+    try {
+      const res = await fetch('/api/automation/accounts')
+      const data = await res.json()
+      if (data.accounts) {
+        setAccounts(data.accounts)
+        // Auto-select active account or requested id
+        const active = data.accounts.find((a: any) => a.is_active)
+        if (selectId) {
+          setSelectedAccountId(selectId)
+        } else if (active) {
+          setSelectedAccountId(active.id)
+        } else if (data.accounts.length > 0 && !selectedAccountId) {
+          setSelectedAccountId(data.accounts[0].id)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load accounts:', err)
+    }
+  }, [selectedAccountId])
+
   // ── Load settings from DB on mount ─────────────────────────────────────────
   const loadSettings = useCallback(async () => {
     setLoading(true)
@@ -171,7 +211,6 @@ export default function MetaSettingsPage() {
       const res  = await fetch('/api/meta/settings')
       const data = await res.json()
       if (data.settings) {
-        // Separate masked values from set-flags
         const vals: Record<string, string>  = {}
         const flags: Record<string, boolean> = {}
         for (const [k, v] of Object.entries(data.settings)) {
@@ -195,18 +234,45 @@ export default function MetaSettingsPage() {
           setGeminiKeys([''])
         }
       }
+      await fetchAccounts()
     } catch {
       toast.error('Failed to load config from DB.')
     }
     setLoading(false)
-  }, [])
+  }, [fetchAccounts])
 
-  useEffect(() => { loadSettings() }, [loadSettings])
+  useEffect(() => { loadSettings() }, [])
+
+  // Sync settings with selected account settings when it changes
+  useEffect(() => {
+    if (!selectedAccountId) return
+    const acc = accounts.find(a => a.id === selectedAccountId)
+    if (acc) {
+      setChatbotEnabled(acc.chatbot_enabled ?? false)
+      setChatbotPersona(acc.chatbot_persona || 'You are a helpful, professional assistant.')
+      setAutoReplyRules(Array.isArray(acc.auto_reply_rules) ? acc.auto_reply_rules : [])
+      setFirstReplyDelay(acc.first_reply_delay ?? 8)
+      setConversationDelay(acc.conversation_delay ?? 4)
+      setStaticReplyEnabled(acc.static_reply_enabled ?? false)
+      setStaticReplyOverride(acc.static_reply_override || '')
+      setIsActive(acc.is_active ?? false)
+
+      // Also set the specific settings values so the test sections can query them
+      if (acc.credentials) {
+        setSettings(prev => ({
+          ...prev,
+          META_PAGE_ID: acc.credentials.page_id || '',
+          INSTAGRAM_BUSINESS_ID: acc.platform === 'instagram' ? acc.credentials.page_id : '',
+          META_PAGE_ACCESS_TOKEN: acc.credentials.access_token || '',
+          INSTAGRAM_USERNAME: acc.credentials.ig_username || acc.account_name || ''
+        }))
+      }
+    }
+  }, [selectedAccountId, accounts])
 
   // ── Auto-seed from env if DB is empty ────────────────────────────────────────
   useEffect(() => {
     if (!loading && Object.values(settings).every(v => !v)) {
-      // DB is empty — trigger seed
       fetch('/api/meta/config/seed', { method: 'POST' })
         .then(r => r.json())
         .then(d => { if (d.seeded) { toast.success('Config seeded from environment!'); loadSettings() } })
@@ -218,21 +284,19 @@ export default function MetaSettingsPage() {
     setSettings(prev => ({ ...prev, [key]: val }))
   }
 
-  async function handleSave() {
+  // Save global configurations
+  async function handleSaveGlobal() {
     setSaving(true)
-    const toastId = toast.loading('Saving Meta configuration…')
+    const toastId = toast.loading('Saving global configurations…')
     try {
-      // Only send non-empty, non-masked values
       const toSave: Record<string, string> = {}
       for (const [k, v] of Object.entries(settings)) {
         if (v && !v.includes('•')) toSave[k] = v
       }
 
-      // Serialize multiple Gemini keys
       const cleanKeys = geminiKeys.filter(Boolean)
       toSave.SAVED_GEMINI_API_KEYS = JSON.stringify(cleanKeys)
 
-      // Sync the first active key to legacy GEMINI_API_KEY
       const activeKeys = cleanKeys.filter(k => k && !k.includes('•'))
       if (activeKeys.length > 0) {
         toSave.GEMINI_API_KEY = activeKeys[0]
@@ -257,7 +321,90 @@ export default function MetaSettingsPage() {
     setSaving(false)
   }
 
-  // Gemini keys list action handlers
+  // Save account-specific chatbot / reply settings
+  async function handleSaveAccountSettings() {
+    if (!selectedAccountId) {
+      toast.error('No account selected.')
+      return
+    }
+    setSaving(true)
+    const toastId = toast.loading('Saving account configuration...')
+    try {
+      const acc = accounts.find(a => a.id === selectedAccountId)
+      if (!acc) throw new Error('Account record not found.')
+
+      const payload = {
+        id: selectedAccountId,
+        platform: acc.platform,
+        account_name: acc.account_name,
+        app_id: acc.app_id,
+        credentials: acc.credentials,
+        chatbot_enabled: chatbotEnabled,
+        chatbot_persona: chatbotPersona,
+        auto_reply_rules: autoReplyRules,
+        first_reply_delay: firstReplyDelay,
+        conversation_delay: conversationDelay,
+        static_reply_enabled: staticReplyEnabled,
+        static_reply_override: staticReplyOverride,
+        is_active: isActive
+      }
+
+      const res = await fetch('/api/automation/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success('Account configuration saved successfully!', { id: toastId })
+        setLastSaved(new Date().toLocaleTimeString())
+        await fetchAccounts(selectedAccountId)
+      } else {
+        throw new Error(data.error || 'Save failed.')
+      }
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId })
+    }
+    setSaving(false)
+  }
+
+  // Make selected account the active platform connection
+  async function handleActivateAccount() {
+    if (!selectedAccountId) return
+    const toastId = toast.loading('Activating account...')
+    try {
+      const acc = accounts.find(a => a.id === selectedAccountId)
+      if (!acc) throw new Error('Account not found.')
+
+      const payload = {
+        id: selectedAccountId,
+        platform: acc.platform,
+        account_name: acc.account_name,
+        app_id: acc.app_id,
+        credentials: acc.credentials,
+        is_active: true
+      }
+
+      const res = await fetch('/api/automation/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(`${acc.account_name} is now active!`, { id: toastId })
+        await fetchAccounts(selectedAccountId)
+      } else {
+        throw new Error(data.error || 'Activation failed.')
+      }
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId })
+    }
+  }
+
+  // Gemini keys list handlers
   function updateGeminiKey(index: number, val: string) {
     const updated = [...geminiKeys]
     updated[index] = val
@@ -279,8 +426,6 @@ export default function MetaSettingsPage() {
       toast.error('Please enter an API key to check.')
       return
     }
-
-    // If key is masked and we have flags, pull the masked value fallback warning
     if (keyToTest.includes('•')) {
       toast.error('Masked keys cannot be tested. Enter a new key to check status.')
       return
@@ -321,24 +466,7 @@ export default function MetaSettingsPage() {
     }
   }
 
-  async function handleSeedFromEnv() {
-    setSeeding(true)
-    const toastId = toast.loading('Seeding from environment…')
-    try {
-      const res  = await fetch('/api/meta/config/seed', { method: 'POST' })
-      const data = await res.json()
-      if (res.ok) {
-        toast.success(data.message || 'Seeded!', { id: toastId })
-        loadSettings()
-      } else {
-        throw new Error(data.error || data.hint || 'Seed failed')
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Seed failed', { id: toastId })
-    }
-    setSeeding(false)
-  }
-
+  // Connection testing helper
   async function handleTest(target: string, endpoint: string) {
     setTesting(target)
     const start = Date.now()
@@ -361,14 +489,34 @@ export default function MetaSettingsPage() {
 
   const currentSection = SECTIONS.find(s => s.title === activeSection) ?? SECTIONS[0]
 
+  // Add a new auto reply keyword rule
+  function addRule() {
+    setAutoReplyRules([...autoReplyRules, { keywords: '', reply: '' }])
+  }
+
+  // Update rule keywords or reply content
+  function updateRule(index: number, fieldName: 'keywords' | 'reply', value: string) {
+    const updated = [...autoReplyRules]
+    updated[index] = { ...updated[index], [fieldName]: value }
+    setAutoReplyRules(updated)
+  }
+
+  // Remove rule
+  function removeRule(index: number) {
+    const updated = autoReplyRules.filter((_, i) => i !== index)
+    setAutoReplyRules(updated)
+  }
+
   return (
     <div className="space-y-6 text-white select-none">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#2D2D30] pb-6">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">⚙️ Meta Configuration</h1>
+          <h1 className="text-3xl font-black tracking-tight flex items-center gap-2">
+            ⚙️ Meta & Chatbot Config
+          </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Credentials stored encrypted in Supabase.
+            Configure Meta Developers, Rotate Gemini Keys, and manage separate chatbot profiles.
             {lastSaved && <span className="ml-2 text-green-400 text-[11px]">✓ Saved at {lastSaved}</span>}
           </p>
         </div>
@@ -378,34 +526,88 @@ export default function MetaSettingsPage() {
             <span className={`w-1.5 h-1.5 rounded-full ${configured ? 'bg-green-400' : 'bg-red-400 animate-pulse'}`}></span>
             {configured ? 'Configured' : `Missing ${missing.length}`}
           </div>
-          <button onClick={handleSeedFromEnv} disabled={seeding} className="px-3 py-2 rounded-xl bg-[#222225] border border-[#2D2D30] text-xs font-bold text-gray-300 hover:text-white transition-colors disabled:opacity-40">
-            {seeding ? '⏳ Seeding…' : '🌱 Seed from Env'}
-          </button>
           <Link href="/automation/testing" className="px-3 py-2 rounded-xl bg-[#222225] border border-[#2D2D30] text-xs font-bold text-gray-300 hover:text-white transition-colors">
             🧪 Test Console
           </Link>
-          <button onClick={handleSave} disabled={saving || loading} className="px-5 py-2 rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] disabled:opacity-40 text-[#141416] text-xs font-bold uppercase tracking-wider transition-colors">
-            {saving ? 'Saving…' : '💾 Save All'}
-          </button>
+          
+          {activeSection === 'AI Chatbot & Rules' ? (
+            <button 
+              onClick={handleSaveAccountSettings} 
+              disabled={saving || loading || !selectedAccountId} 
+              className="px-5 py-2 rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] disabled:opacity-40 text-[#141416] text-xs font-bold uppercase tracking-wider transition-colors"
+            >
+              {saving ? 'Saving…' : '💾 Save Account Settings'}
+            </button>
+          ) : (
+            <button 
+              onClick={handleSaveGlobal} 
+              disabled={saving || loading} 
+              className="px-5 py-2 rounded-xl bg-[#E3B859] hover:bg-[#d4ac50] disabled:opacity-40 text-[#141416] text-xs font-bold uppercase tracking-wider transition-colors"
+            >
+              {saving ? 'Saving…' : '💾 Save Global Settings'}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Missing fields warning */}
-      {missing.length > 0 && (
-        <div className="p-4 rounded-xl bg-red-950/30 border border-red-800/30 text-red-300 text-xs">
-          ⚠️ Missing required fields: <span className="font-mono font-bold">{missing.join(', ')}</span>
+      {/* Persistent Account Switcher Section */}
+      <div className="p-5 bg-[#141416] border border-[#2D2D30]/80 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="space-y-1 flex-1">
+          <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block font-bold">Active Connected Account Switcher</span>
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedAccountId}
+              onChange={e => setSelectedAccountId(e.target.value)}
+              className="bg-[#0E0E10] border border-[#2D2D30] rounded-xl px-4 py-2.5 text-sm text-white font-medium focus:outline-none focus:border-gray-500 transition-colors min-w-[280px]"
+            >
+              {accounts.length === 0 ? (
+                <option value="">No Accounts Connected</option>
+              ) : (
+                accounts.map(acc => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.platform === 'instagram' ? '📸' : acc.platform === 'messenger' ? '💬' : '📘'} {acc.account_name} {acc.is_active ? '(ACTIVE)' : ''}
+                  </option>
+                ))
+              )}
+            </select>
+            <button
+              onClick={handleActivateAccount}
+              disabled={!selectedAccountId || isActive}
+              className="px-4 py-2.5 rounded-xl bg-purple-950/40 border border-purple-900/30 hover:bg-purple-900/40 text-purple-300 text-xs font-bold disabled:opacity-40 transition-colors whitespace-nowrap"
+            >
+              {isActive ? '✓ Selected Account Active' : '⚡ Set Selected Account as Active'}
+            </button>
+          </div>
         </div>
-      )}
+        
+        {/* Selected Account Info Summary */}
+        {selectedAccountId && (() => {
+          const acc = accounts.find(a => a.id === selectedAccountId)
+          if (!acc) return null
+          return (
+            <div className="px-4 py-3 bg-[#0E0E10] border border-[#2D2D30] rounded-xl text-xs space-y-1 font-mono min-w-[280px]">
+              <div><span className="text-gray-500 uppercase tracking-wider text-[9px]">Account ID:</span> {acc.id.slice(0, 8)}...</div>
+              <div><span className="text-gray-500 uppercase tracking-wider text-[9px]">Page / Biz ID:</span> {acc.credentials?.page_id || 'Not configured'}</div>
+              <div>
+                <span className="text-gray-500 uppercase tracking-wider text-[9px]">Platform:</span> 
+                <span className="text-purple-400 font-bold ml-1 uppercase">{acc.platform}</span>
+              </div>
+            </div>
+          )
+        })()}
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-40 text-gray-500 animate-pulse text-sm">Loading configuration…</div>
       ) : (
         <div className="flex gap-6">
-          {/* Left nav */}
-          <aside className="w-44 flex-shrink-0 space-y-1">
+          {/* Left Navigation Menu */}
+          <aside className="w-52 flex-shrink-0 space-y-1">
             {SECTIONS.map(s => {
               const hasValue = s.title === 'Gemini Keys'
                 ? geminiKeys.some(k => k && !k.includes('•'))
+                : s.title === 'AI Chatbot & Rules'
+                ? chatbotEnabled
                 : s.fields.some(f => settings[f.key] || setFlags[f.key])
               return (
                 <button
@@ -427,15 +629,15 @@ export default function MetaSettingsPage() {
             })}
           </aside>
 
-          {/* Right panel */}
+          {/* Right Content Panel */}
           <div className="flex-1 space-y-4">
-            {/* Section header */}
+            {/* Section Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[#2D2D30]">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <span className="text-lg">{currentSection.icon}</span>
                 {currentSection.title} Settings
               </h2>
-              {currentSection.title !== 'Gemini Keys' && (
+              {currentSection.title !== 'Gemini Keys' && currentSection.title !== 'AI Chatbot & Rules' && (
                 <button
                   onClick={() => handleTest(currentSection.title, `/api/meta/test?target=${currentSection.title.toLowerCase().replace(/\s+/g, '_')}`)}
                   disabled={testing === currentSection.title}
@@ -444,8 +646,8 @@ export default function MetaSettingsPage() {
               )}
             </div>
 
-            {/* Test result */}
-            {currentSection.title !== 'Gemini Keys' && testResults[currentSection.title] && (
+            {/* Test result log summary */}
+            {currentSection.title !== 'Gemini Keys' && currentSection.title !== 'AI Chatbot & Rules' && testResults[currentSection.title] && (
               <div className={`p-3 rounded-xl border text-xs font-mono flex items-center gap-3 ${
                 testResults[currentSection.title].status === 'success'
                   ? 'bg-green-950/30 border-green-900/40 text-green-400'
@@ -457,8 +659,164 @@ export default function MetaSettingsPage() {
               </div>
             )}
 
-            {/* Fields / Content Panel */}
-            {activeSection === 'Gemini Keys' ? (
+            {/* AI Chatbot & Rules custom section rendering */}
+            {activeSection === 'AI Chatbot & Rules' ? (
+              <div className="space-y-5">
+                {!selectedAccountId ? (
+                  <div className="p-8 text-center bg-[#141416]/40 border border-[#2D2D30]/60 rounded-xl text-gray-500 text-xs">
+                    Please select a connected account above to configure chatbot rules.
+                  </div>
+                ) : (
+                  <>
+                    {/* Chatbot General Config Card */}
+                    <div className="p-5 bg-[#141416] border border-[#2D2D30]/80 rounded-xl space-y-4">
+                      <div className="flex items-center justify-between border-b border-[#2D2D30]/60 pb-3">
+                        <div>
+                          <h4 className="text-xs font-bold text-white uppercase tracking-wider">🤖 AI Autopilot Chatbot</h4>
+                          <p className="text-[10px] text-gray-500 mt-0.5">Toggle and customize AI automated responses for this account.</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={chatbotEnabled}
+                            onChange={e => setChatbotEnabled(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#E3B859]"></div>
+                          <span className="ml-2 text-xs font-medium text-gray-300 select-none">
+                            {chatbotEnabled ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </label>
+                      </div>
+
+                      {/* Chatbot Persona Prompt */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block font-bold">AI Chatbot Persona Prompt</label>
+                        <textarea
+                          value={chatbotPersona}
+                          onChange={e => setChatbotPersona(e.target.value)}
+                          placeholder="Configure how the AI agent acts, behaves, and describes your business..."
+                          rows={4}
+                          className="w-full bg-[#0E0E10] border border-[#2D2D30] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors leading-relaxed font-sans"
+                        />
+                        <p className="text-[10px] text-gray-500 leading-normal">
+                          Define your chatbot's core role, services, pricing structure, and conversation rules. This prompt will be passed directly to Gemini for automated auto-replies.
+                        </p>
+                      </div>
+
+                      {/* Response Delays */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block font-bold">First Reply Delay (Seconds)</label>
+                          <input
+                            type="number"
+                            value={firstReplyDelay}
+                            onChange={e => setFirstReplyDelay(parseInt(e.target.value, 10) || 0)}
+                            className="w-full bg-[#0E0E10] border border-[#2D2D30] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors"
+                          />
+                          <p className="text-[9px] text-gray-500">Wait time before replying to the first message in a thread.</p>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block font-bold">Conversation Delay (Seconds)</label>
+                          <input
+                            type="number"
+                            value={conversationDelay}
+                            onChange={e => setConversationDelay(parseInt(e.target.value, 10) || 0)}
+                            className="w-full bg-[#0E0E10] border border-[#2D2D30] rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors"
+                          />
+                          <p className="text-[9px] text-gray-500">Wait time before replying to subsequent messages in an active conversation.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Static Reply Override Card */}
+                    <div className="p-5 bg-[#141416] border border-[#2D2D30]/80 rounded-xl space-y-4">
+                      <div className="flex items-center justify-between border-b border-[#2D2D30]/60 pb-3">
+                        <div>
+                          <h4 className="text-xs font-bold text-white uppercase tracking-wider">🔕 Static Response Override</h4>
+                          <p className="text-[10px] text-gray-500 mt-0.5">Overrides AI responses with a fixed static reply for testing or out-of-office rules.</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={staticReplyEnabled}
+                            onChange={e => setStaticReplyEnabled(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#E3B859]"></div>
+                          <span className="ml-2 text-xs font-medium text-gray-300 select-none">
+                            {staticReplyEnabled ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </label>
+                      </div>
+
+                      {staticReplyEnabled && (
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block font-bold">Static Response Text</label>
+                          <input
+                            type="text"
+                            value={staticReplyOverride}
+                            onChange={e => setStaticReplyOverride(e.target.value)}
+                            placeholder="Enter the static message..."
+                            className="w-full bg-[#0E0E10] border border-[#2D2D30] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Auto-Reply Keyword Rules Card */}
+                    <div className="p-5 bg-[#141416] border border-[#2D2D30]/80 rounded-xl space-y-4">
+                      <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">📝 Keyword Auto-Reply Rules</h4>
+                        <p className="text-[10px] text-gray-500 mt-0.5">Match specific keywords in incoming messages to instantly send fixed responses (takes priority over AI).</p>
+                      </div>
+
+                      <div className="space-y-3">
+                        {autoReplyRules.map((rule, idx) => (
+                          <div key={idx} className="p-4 bg-[#0E0E10] border border-[#2D2D30] rounded-xl flex flex-col md:flex-row gap-3 items-end md:items-center">
+                            <div className="flex-1 space-y-1.5 w-full">
+                              <label className="text-[9px] font-mono text-gray-500 uppercase tracking-widest block font-bold">Trigger Keywords (comma separated)</label>
+                              <input
+                                type="text"
+                                value={rule.keywords}
+                                onChange={e => updateRule(idx, 'keywords', e.target.value)}
+                                placeholder="hello, hi, price, contact"
+                                className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-gray-500 transition-colors"
+                              />
+                            </div>
+                            <div className="flex-[2] space-y-1.5 w-full">
+                              <label className="text-[9px] font-mono text-gray-500 uppercase tracking-widest block font-bold">Auto-Reply Content</label>
+                              <input
+                                type="text"
+                                value={rule.reply}
+                                onChange={e => updateRule(idx, 'reply', e.target.value)}
+                                placeholder="Hi there! Thanks for reaching out. We will get back to you shortly."
+                                className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-gray-500 transition-colors"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeRule(idx)}
+                              className="px-3 py-2 bg-red-950/40 border border-red-900/30 hover:bg-red-900/40 text-red-400 text-xs rounded-xl font-bold uppercase transition-colors whitespace-nowrap mb-0.5"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+
+                        <button
+                          type="button"
+                          onClick={addRule}
+                          className="w-full py-2 border border-dashed border-[#2D2D30] hover:border-gray-500 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-all bg-[#0E0E10]/40"
+                        >
+                          ➕ Add Keyword Rule
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : activeSection === 'Gemini Keys' ? (
               <div className="space-y-4">
                 <div className="p-4 bg-purple-950/10 border border-purple-900/20 rounded-xl text-xs text-purple-300">
                   <p className="font-bold flex items-center gap-1.5">⚡ Gemini API Key Rotation & Fault-Tolerance</p>
@@ -505,7 +863,6 @@ export default function MetaSettingsPage() {
                           </button>
                         </div>
 
-                        {/* Status feedback info */}
                         {statusInfo && !statusInfo.loading && (
                           <div className={`p-2.5 rounded-lg border text-[10px] font-mono leading-relaxed ${
                             statusInfo.status === 'active'

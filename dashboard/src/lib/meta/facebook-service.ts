@@ -84,8 +84,9 @@ export const FacebookService = {
     const endpoint = `/${conversationId}/messages?fields=id,message,from,created_time,attachments&limit=${limit}&access_token=${token}`
     return MetaClient.get<{ data: unknown[]; paging?: unknown }>(endpoint, { source: SOURCE })
   },
-  async sendMessage(recipientId: string, text: string) {
-    const pageId = await getPageId(); const token = await getPageToken()
+  async sendMessage(recipientId: string, text: string, tokenOverride?: string, pageIdOverride?: string) {
+    const pageId = pageIdOverride || await getPageId();
+    const token = tokenOverride || await getPageToken()
     MetaLogger.request(SOURCE, 'POST', `/${pageId}/messages`, { recipientId, text })
     const res = await MetaClient.post<{ message_id: string }>(`/${pageId}/messages`, { recipient: { id: recipientId }, message: { text }, access_token: token }, { source: SOURCE })
     MetaLogger.response(SOURCE, `/${pageId}/messages`, res.statusCode, res.duration, res.error as MetaApiResponse['error'])
