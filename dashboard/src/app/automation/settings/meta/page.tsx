@@ -370,39 +370,43 @@ export default function MetaSettingsPage() {
   }
 
   // Make selected account the active platform connection
+  // Also activates ALL rows with the same account_name (covers both IG + Messenger for one user)
   async function handleActivateAccount() {
     if (!selectedAccountId) return
     const toastId = toast.loading('Activating account...')
     try {
-      const acc = accounts.find(a => a.id === selectedAccountId)
+      const acc = accounts.find((a: any) => a.id === selectedAccountId)
       if (!acc) throw new Error('Account not found.')
 
-      const payload = {
-        id: selectedAccountId,
-        platform: acc.platform,
-        account_name: acc.account_name,
-        app_id: acc.app_id,
-        credentials: acc.credentials,
-        is_active: true
-      }
+      // Find all rows for this account_name (e.g. both IG + Messenger for Kashi Singh)
+      const sameNameAccounts = accounts.filter((a: any) => a.account_name === acc.account_name)
 
-      const res = await fetch('/api/automation/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
+      // Activate all of them
+      await Promise.all(sameNameAccounts.map(async (a: any) => {
+        const payload = {
+          id: a.id,
+          platform: a.platform,
+          account_name: a.account_name,
+          is_active: true
+        }
+        const res = await fetch('/api/automation/accounts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        if (!res.ok) {
+          const d = await res.json()
+          throw new Error(d.error || 'Activation failed')
+        }
+      }))
 
-      const data = await res.json()
-      if (res.ok && data.success) {
-        toast.success(`${acc.account_name} is now active!`, { id: toastId })
-        await fetchAccounts(selectedAccountId)
-      } else {
-        throw new Error(data.error || 'Activation failed.')
-      }
+      toast.success(`${acc.account_name} is now active for all platforms!`, { id: toastId })
+      await fetchAccounts(selectedAccountId)
     } catch (err: any) {
       toast.error(err.message, { id: toastId })
     }
   }
+
 
   // Gemini keys list handlers
   function updateGeminiKey(index: number, val: string) {
@@ -551,51 +555,78 @@ export default function MetaSettingsPage() {
       </div>
 
       {/* Persistent Account Switcher Section */}
-      <div className="p-5 bg-[#141416] border border-[#2D2D30]/80 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="space-y-1 flex-1">
-          <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block font-bold">Active Connected Account Switcher</span>
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedAccountId}
-              onChange={e => setSelectedAccountId(e.target.value)}
-              className="bg-[#0E0E10] border border-[#2D2D30] rounded-xl px-4 py-2.5 text-sm text-white font-medium focus:outline-none focus:border-gray-500 transition-colors min-w-[280px]"
-            >
-              {accounts.length === 0 ? (
-                <option value="">No Accounts Connected</option>
-              ) : (
-                accounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.platform === 'instagram' ? '📸' : acc.platform === 'messenger' ? '💬' : '📘'} {acc.account_name} {acc.is_active ? '(ACTIVE)' : ''}
-                  </option>
-                ))
-              )}
-            </select>
-            <button
-              onClick={handleActivateAccount}
-              disabled={!selectedAccountId || isActive}
-              className="px-4 py-2.5 rounded-xl bg-purple-950/40 border border-purple-900/30 hover:bg-purple-900/40 text-purple-300 text-xs font-bold disabled:opacity-40 transition-colors whitespace-nowrap"
-            >
-              {isActive ? '✓ Selected Account Active' : '⚡ Set Selected Account as Active'}
-            </button>
-          </div>
-        </div>
-        
-        {/* Selected Account Info Summary */}
-        {selectedAccountId && (() => {
-          const acc = accounts.find(a => a.id === selectedAccountId)
-          if (!acc) return null
+      <div className="p-5 bg-[#141416] border border-[#2D2D30]/80 rounded-xl space-y-3">
+        <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block font-bold">Active Connected Account</span>
+        {accounts.length === 0 ? (
+          <div className="text-xs text-gray-500">No accounts connected. Go to Connected Accounts to add one.</div>
+        ) : (() => {
+          // Group accounts by account_name — one card per logical user
+          const grouped: Record<string, any[]> = {}
+          accounts.forEach((acc: any) => {
+            const key = acc.account_name || acc.id
+            if (!grouped[key]) grouped[key] = []
+            grouped[key].push(acc)
+          })
           return (
-            <div className="px-4 py-3 bg-[#0E0E10] border border-[#2D2D30] rounded-xl text-xs space-y-1 font-mono min-w-[280px]">
-              <div><span className="text-gray-500 uppercase tracking-wider text-[9px]">Account ID:</span> {acc.id.slice(0, 8)}...</div>
-              <div><span className="text-gray-500 uppercase tracking-wider text-[9px]">Page / Biz ID:</span> {acc.credentials?.page_id || 'Not configured'}</div>
-              <div>
-                <span className="text-gray-500 uppercase tracking-wider text-[9px]">Platform:</span> 
-                <span className="text-purple-400 font-bold ml-1 uppercase">{acc.platform}</span>
-              </div>
+            <div className="flex flex-wrap gap-3">
+              {Object.entries(grouped).map(([name, accs]) => {
+                const isGroupActive = accs.some(a => a.is_active)
+                const platforms = accs.map((a: any) => a.platform)
+                // Use the first account's id as the representative for activation
+                const primaryAcc = accs[0]
+                return (
+                  <div key={name}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all ${
+                      isGroupActive
+                        ? 'bg-purple-900/30 border-purple-700/50 text-white'
+                        : 'bg-[#0E0E10] border-[#2D2D30] text-gray-400 hover:border-gray-500 hover:text-white'
+                    }`}
+                    onClick={() => setSelectedAccountId(primaryAcc.id)}
+                  >
+                    <div>
+                      <div className="text-sm font-bold flex items-center gap-2">
+                        {name}
+                        {isGroupActive && <span className="text-[9px] font-mono text-green-400 bg-green-900/30 border border-green-800/30 px-1.5 py-0.5 rounded-full">ACTIVE</span>}
+                      </div>
+                      <div className="flex gap-1 mt-1">
+                        {platforms.map((p: string) => (
+                          <span key={p} className="text-[9px] font-mono text-gray-500">
+                            {p === 'instagram' ? '📸 IG' : p === 'messenger' ? '💬 MSG' : '📘 FB'}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    {selectedAccountId === primaryAcc.id && !isGroupActive && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleActivateAccount() }}
+                        className="ml-auto px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-bold transition-colors"
+                      >
+                        Set Active
+                      </button>
+                    )}
+                    {selectedAccountId === primaryAcc.id && !isGroupActive && (
+                      <span className="text-[9px] text-purple-400">Selected</span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )
         })()}
+        {selectedAccountId && (() => {
+          const acc = accounts.find((a: any) => a.id === selectedAccountId)
+          if (!acc || acc.is_active) return null
+          return (
+            <button
+              onClick={handleActivateAccount}
+              className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-colors"
+            >
+              ⚡ Activate {acc.account_name}
+            </button>
+          )
+        })()}
       </div>
+
 
       {loading ? (
         <div className="flex items-center justify-center h-40 text-gray-500 animate-pulse text-sm">Loading configuration…</div>
