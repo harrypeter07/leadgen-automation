@@ -61,7 +61,7 @@ class ChatgptBrowserService {
       fileInput: 'input[type="file"]',
       sendButton: 'button[data-testid="send-button"], button#composer-submit-button',
       stopButton: 'button[data-testid="stop-button"]',
-      assistantBubble: 'div[data-message-author-role="assistant"]',
+      assistantBubble: 'div[role="assistant"], div[data-message-author-role="assistant"]',
       markdownText: 'div.markdown',
       generatedImage: 'img[src*="oaiusercontent.com"]',
       ...customSelectors
@@ -195,28 +195,45 @@ class ChatgptBrowserService {
       // 6. Enter prompt & submit
       logCallback(`Typing prompt: "${prompt.slice(0, 100)}${prompt.length > 100 ? '...' : ''}"`);
       const inputLocator = page.locator(selectors.textarea).first();
-      await inputLocator.evaluate((el, val) => {
-        el.value = val;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      }, prompt);
+      await inputLocator.focus({ force: true });
+      await page.waitForTimeout(500);
+      await page.keyboard.type(prompt, { delay: 5 });
       
       logCallback('Submitting message to ChatGPT...');
       const sendBtn = page.locator(selectors.sendButton).first();
       await sendBtn.click();
 
       // 7. Wait for generation to start and complete
-      logCallback('Waiting for ChatGPT response generation to finish...');
-      
-      // Wait for stop generating button to appear, or wait a brief moment
+      logCallback('Waiting for ChatGPT response generation to start...');
       try {
-        await page.waitForSelector(selectors.stopButton, { state: 'visible', timeout: 5000 });
+        await page.waitForSelector(selectors.assistantBubble, { state: 'visible', timeout: 15000 });
         logCallback('Generation in progress (Typing/DALL-E rendering)...');
-      } catch (_) {
-        // May generate too fast or button selector slightly different, proceed to wait completion
+      } catch (err) {
+        throw new Error('Response bubble did not appear. Verification failed.');
       }
 
-      // Wait for stop button to disappear / send button to become visible again
-      await page.waitForSelector(selectors.sendButton, { state: 'visible', timeout: 90000 });
+      // Wait for stop button to disappear
+      await page.waitForSelector(selectors.stopButton, { state: 'detached', timeout: 60000 }).catch(() => {});
+
+      // Adaptive streaming stabilization loop
+      logCallback('Waiting for response stream to stabilize...');
+      let prevLength = 0;
+      let stableCount = 0;
+      for (let i = 0; i < 30; i++) {
+        await page.waitForTimeout(1000);
+        const bubbles = page.locator(selectors.assistantBubble);
+        const count = await bubbles.count();
+        if (count > 0) {
+          const lastText = await bubbles.nth(count - 1).innerText();
+          if (lastText.length > 0 && lastText.length === prevLength) {
+            stableCount++;
+            if (stableCount >= 2) break;
+          } else {
+            stableCount = 0;
+            prevLength = lastText.length;
+          }
+        }
+      }
       logCallback('✓ Response generation finalized.');
 
       // 8. Analyze and extract the output (Image vs Text)
