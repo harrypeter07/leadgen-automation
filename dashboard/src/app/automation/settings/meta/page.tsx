@@ -600,9 +600,9 @@ export default function MetaSettingsPage() {
       {loading ? (
         <div className="flex items-center justify-center h-40 text-gray-500 animate-pulse text-sm">Loading configuration…</div>
       ) : (
-        <div className="flex gap-6">
-          {/* Left Navigation Menu */}
-          <aside className="w-52 flex-shrink-0 space-y-1">
+        <div className="space-y-4">
+          {/* ── Horizontal Section Tabs (replaces the left sidebar) ── */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b border-[#2D2D30]">
             {SECTIONS.map(s => {
               const hasValue = s.title === 'Gemini Keys'
                 ? geminiKeys.some(k => k && !k.includes('•'))
@@ -613,26 +613,24 @@ export default function MetaSettingsPage() {
                 <button
                   key={s.title}
                   onClick={() => setActiveSection(s.title)}
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors text-left ${
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all flex-shrink-0 relative ${
                     activeSection === s.title
                       ? 'bg-[#222225] text-white border border-[#2D2D30]'
                       : 'text-gray-500 hover:text-white hover:bg-[#1A1A1C]'
                   }`}
                 >
-                  <span className="flex items-center gap-2">
-                    <span>{s.icon}</span>
-                    <span>{s.title}</span>
-                  </span>
-                  {hasValue && <span className="text-[8px] text-green-400">●</span>}
+                  <span>{s.icon}</span>
+                  <span>{s.title}</span>
+                  {hasValue && <span className="w-1 h-1 rounded-full bg-green-400 flex-shrink-0" />}
                 </button>
               )
             })}
-          </aside>
+          </div>
 
-          {/* Right Content Panel */}
-          <div className="flex-1 space-y-4">
+          {/* ── Content Panel (full width, no sidebar) ── */}
+          <div className="space-y-4">
             {/* Section Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#2D2D30]">
+            <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <span className="text-lg">{currentSection.icon}</span>
                 {currentSection.title} Settings
@@ -645,6 +643,7 @@ export default function MetaSettingsPage() {
                 >{testing === currentSection.title ? 'Testing…' : '⚡ Test Section'}</button>
               )}
             </div>
+
 
             {/* Test result log summary */}
             {currentSection.title !== 'Gemini Keys' && currentSection.title !== 'AI Chatbot & Rules' && testResults[currentSection.title] && (
