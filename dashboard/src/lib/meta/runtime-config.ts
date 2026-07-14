@@ -91,30 +91,25 @@ export function invalidateMetaConfig(): void {
 // ─── Active Connected Account helper ─────────────────────────────────────────
 // Note: getEncKey() is already defined above — reused here for credential decryption.
 
-function decryptCredValue(value: string): string {
+/**
+ * Decrypts backend-encrypted credentials.
+ * Backend stores credentials as: iv_hex:ciphertext_hex
+ * Key derivation: SHA-256(ENCRYPTION_KEY || WHATSAPP_API_SECRET || fallback)
+ */
+function decryptBackendCreds(encryptedText: string): string {
   try {
-    if (!value) return ''
-    if (value.startsWith('enc:')) {
-      const parts = value.split(':')
-      if (parts.length < 3) return value
-      const iv        = Buffer.from(parts[1], 'hex')
-      const encrypted = Buffer.from(parts[2], 'hex')
-      const decipher  = crypto.createDecipheriv('aes-256-cbc', getEncKey(), iv)
-      return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8')
-    }
-    // Backend-encrypted format: iv:ciphertext (no 'enc:' prefix)
-    const parts = value.split(':')
-    if (parts.length >= 2) {
-      const iv        = Buffer.from(parts.shift() || '', 'hex')
-      const encrypted = Buffer.from(parts.join(':'), 'hex')
-      const rawKey    = process.env.WHATSAPP_API_SECRET || 'antigravity_fallback_encryption_key_32_bytes_long'
-      const derivedKey = crypto.createHash('sha256').update(rawKey).digest()
-      const decipher  = crypto.createDecipheriv('aes-256-cbc', derivedKey, iv)
-      return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8')
-    }
-    return value
+    if (!encryptedText || !encryptedText.includes(':')) return ''
+    const rawKey = process.env.ENCRYPTION_KEY
+      || process.env.WHATSAPP_API_SECRET
+      || 'antigravity_fallback_encryption_key_32_bytes_long'
+    const derivedKey = crypto.createHash('sha256').update(rawKey).digest()
+    const parts      = encryptedText.split(':')
+    const iv         = Buffer.from(parts.shift() || '', 'hex')
+    const ciphertext = Buffer.from(parts.join(':'), 'hex')
+    const decipher   = crypto.createDecipheriv('aes-256-cbc', derivedKey, iv)
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8')
   } catch {
-    return value
+    return ''
   }
 }
 
@@ -123,7 +118,7 @@ export interface ActiveAccountCredentials {
   instagramToken: string
   pageId: string
   instagramBusinessId: string
-  displayName: string
+  accountName: string
   platform: string
 }
 
@@ -131,6 +126,12 @@ export interface ActiveAccountCredentials {
  * Returns the credentials for the currently-active connected account.
  * Falls back to null if no active account is found (caller should then
  * use meta_config / process.env as before).
+ *
+ * DB schema: connected_accounts
+ *   - account_name        (text)
+ *   - platform            (text: 'instagram' | 'messenger' | 'facebook')
+ *   - encrypted_credentials (text: iv_hex:ciphertext_hex of JSON string)
+ *   - is_active           (boolean)
  */
 export async function getActiveConnectedAccount(
   preferPlatform?: 'instagram' | 'messenger' | 'facebook'
@@ -138,7 +139,7 @@ export async function getActiveConnectedAccount(
   try {
     let query = supabaseAdmin
       .from('connected_accounts')
-      .select('display_name, platform, credentials, is_active')
+      .select('account_name, platform, encrypted_credentials, is_active')
       .eq('is_active', true)
     if (preferPlatform) {
       query = query.eq('platform', preferPlatform)
@@ -146,25 +147,33 @@ export async function getActiveConnectedAccount(
     const { data, error } = await query.limit(1).single()
     if (error || !data) return null
 
+    // Decrypt the backend-encrypted credentials JSON
     let creds: Record<string, string> = {}
     try {
-      const raw = decryptCredValue(data.credentials as string)
-      creds = JSON.parse(raw)
+      const encRaw = data.encrypted_credentials as string
+      if (encRaw) {
+        const decrypted = decryptBackendCreds(encRaw)
+        if (decrypted) creds = JSON.parse(decrypted)
+      }
     } catch {
+      console.warn('[RuntimeConfig] Failed to decrypt connected account credentials')
       return null
     }
 
+    console.log(`[RuntimeConfig] Active account: ${data.account_name} (${data.platform}), creds keys: ${Object.keys(creds).join(', ')}`)
+
     return {
-      pageAccessToken:      creds.page_access_token || creds.META_PAGE_ACCESS_TOKEN || creds.MESSENGER_PAGE_TOKEN || '',
-      instagramToken:       creds.instagram_access_token || creds.INSTAGRAM_ACCESS_TOKEN || creds.page_access_token || '',
-      pageId:               creds.page_id || creds.META_PAGE_ID || '',
-      instagramBusinessId:  creds.instagram_business_id || creds.INSTAGRAM_BUSINESS_ID || '',
-      displayName:          data.display_name as string || '',
-      platform:             data.platform as string || '',
+      pageAccessToken:     creds.page_access_token || creds.META_PAGE_ACCESS_TOKEN || creds.MESSENGER_PAGE_TOKEN || '',
+      instagramToken:      creds.instagram_access_token || creds.INSTAGRAM_ACCESS_TOKEN || creds.page_access_token || '',
+      pageId:              creds.page_id || creds.META_PAGE_ID || '',
+      instagramBusinessId: creds.instagram_business_id || creds.INSTAGRAM_BUSINESS_ID || '',
+      accountName:         data.account_name as string || '',
+      platform:            data.platform as string || '',
     }
   } catch (err) {
     console.warn('[RuntimeConfig] getActiveConnectedAccount failed:', err)
     return null
   }
 }
+
 
