@@ -21,6 +21,7 @@ export default function WebhookDebuggerPage() {
   // Settings info for copy-pasting
   const [verifyToken, setVerifyToken] = useState('FLOWFYP_VERIFY_TOKEN')
   const [callbackUrl, setCallbackUrl] = useState('')
+  const [pollingEnabled, setPollingEnabled] = useState(true)
 
   const fetchLogs = useCallback(async () => {
     try {
