@@ -71,7 +71,8 @@ router.get('/config', async (req, res) => {
       .in('key', [
         'CHATGPT_SESSION_TOKEN',
         'CHATGPT_TAB_MODE',
-        'CHATGPT_CUSTOM_SELECTORS'
+        'CHATGPT_CUSTOM_SELECTORS',
+        'CHATGPT_PROXY_URL'
       ]);
 
     if (error) throw error;
@@ -91,16 +92,18 @@ router.get('/config', async (req, res) => {
       sessionToken: sessionToken ? `${sessionToken.slice(0, 8)}...${sessionToken.slice(-8)}` : '',
       hasToken: !!sessionToken,
       tabMode: config.CHATGPT_TAB_MODE || 'reuse',
-      customSelectors: config.CHATGPT_CUSTOM_SELECTORS ? JSON.parse(config.CHATGPT_CUSTOM_SELECTORS) : {}
+      customSelectors: config.CHATGPT_CUSTOM_SELECTORS ? JSON.parse(config.CHATGPT_CUSTOM_SELECTORS) : {},
+      proxyUrl: config.CHATGPT_PROXY_URL || ''
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+
 // POST /api/automation/chatgpt/config - Update ChatGPT settings
 router.post('/config', async (req, res) => {
-  const { sessionToken, tabMode, customSelectors } = req.body;
+  const { sessionToken, tabMode, customSelectors, proxyUrl } = req.body;
 
   try {
     const payload = [];
@@ -117,6 +120,11 @@ router.post('/config', async (req, res) => {
 
     if (customSelectors) {
       payload.push({ key: 'CHATGPT_CUSTOM_SELECTORS', value: JSON.stringify(customSelectors), encrypted: false });
+    }
+
+    // Save proxy URL (plain, not encrypted — it's a server-side URL only)
+    if (proxyUrl !== undefined) {
+      payload.push({ key: 'CHATGPT_PROXY_URL', value: proxyUrl.trim(), encrypted: false });
     }
 
     if (payload.length > 0) {

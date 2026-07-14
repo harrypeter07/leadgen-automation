@@ -44,8 +44,8 @@ async function igGet<T>(path: string): Promise<{ success: boolean; data?: T; err
   }
 }
 
-async function igPost<T>(path: string, body: Record<string, unknown>): Promise<{ success: boolean; data?: T; error?: MetaApiResponse['error']; statusCode: number; duration: number }> {
-  const token = await getIgToken()
+async function igPost<T>(path: string, body: Record<string, unknown>, tokenOverride?: string): Promise<{ success: boolean; data?: T; error?: MetaApiResponse['error']; statusCode: number; duration: number }> {
+  const token = tokenOverride || await getIgToken()
   const url = `${IG_BASE}${path}`
   MetaLogger.request(SOURCE, 'POST', url, body)
   const start = Date.now()
@@ -180,20 +180,20 @@ export const InstagramService = {
       `/${conversationId}/messages?fields=id,message,from,created_time,attachments{id,mime_type,file_url,name,image_data}&limit=${limit}`
     )
   },
-  async sendDM(recipientId: string, text: string) {
+  async sendDM(recipientId: string, text: string, tokenOverride?: string) {
     MetaLogger.request(SOURCE, 'POST', `${IG_BASE}/me/messages`, { recipientId, text })
     // Instagram Messaging API — graph.instagram.com with IG user token
     return igPost<{ message_id: string }>('/me/messages', {
       recipient: { id: recipientId },
       message: { text }
-    })
+    }, tokenOverride)
   },
-  async sendTypingIndicator(recipientId: string, action: 'typing_on' | 'typing_off' = 'typing_on') {
+  async sendTypingIndicator(recipientId: string, action: 'typing_on' | 'typing_off' = 'typing_on', tokenOverride?: string) {
     // Shows typing bubble to the recipient before sending the actual reply
     return igPost<{ recipient_id: string }>('/me/messages', {
       recipient: { id: recipientId },
       sender_action: action
-    })
+    }, tokenOverride)
   },
   async getInsights(metric = 'reach,profile_views,follower_count', period = 'day') {
     const igId = await getIgBizId()

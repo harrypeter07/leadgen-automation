@@ -106,8 +106,32 @@ class ChatgptBrowserService {
         }
       }
 
-      // 2. Initialize Browser Context & Page
-      const browser = await browserManager.launch();
+      // 2. Initialize Dedicated Browser for ChatGPT (isolated from shared browser pool)
+      // Using a fresh dedicated browser prevents fingerprint contamination from other
+      // browser tasks (WhatsApp, Instagram) that run in the shared browser manager.
+      let dedicatedBrowser = this.dedicatedBrowser;
+      if (!dedicatedBrowser || !dedicatedBrowser.isConnected()) {
+        logCallback('Launching dedicated ChatGPT browser...');
+        dedicatedBrowser = await playwright.chromium.launch({
+          headless: true,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--no-zygote',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--window-size=1280,800',
+            '--lang=en-US,en',
+            '--disable-infobars',
+            '--no-first-run',
+            '--ignore-certificate-errors'
+          ]
+        });
+        this.dedicatedBrowser = dedicatedBrowser;
+        logCallback('✓ Dedicated ChatGPT browser ready.');
+      }
 
       if (tabMode === 'reuse' && this.activeContext && this.activePage) {
         logCallback('Reusing existing ChatGPT browser context and tab...');
@@ -121,12 +145,11 @@ class ChatgptBrowserService {
 
         logCallback('Creating a fresh browser context and tab for ChatGPT...');
         
-        // Launch a persistent or new context
-        const ctxRes = await browserManager.newContext({
+        // Create context directly on dedicated browser (not shared browser manager)
+        context = await dedicatedBrowser.newContext({
           userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
           viewport: { width: 1280, height: 800 }
         });
-        context = ctxRes.context;
 
         // Safe per-cookie injection (skips invalid entries, handles raw token or full Set-Cookie strings)
         logCallback('Injecting ChatGPT authentication session token...');
@@ -161,8 +184,8 @@ class ChatgptBrowserService {
               : originalQuery(parameters);
         });
 
-        const pageRes = await browserManager.newPage(ctxRes.contextId, context);
-        page = pageRes.page;
+        // Create page directly on the dedicated browser context
+        page = await context.newPage();
 
         if (tabMode === 'reuse') {
           this.activeContext = context;
