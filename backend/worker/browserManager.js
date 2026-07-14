@@ -50,7 +50,26 @@ class BrowserManager {
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-gpu',
-          '--no-zygote'
+          '--no-zygote',
+          // Stealth / Cloudflare Turnstile bypass args
+          '--disable-blink-features=AutomationControlled',
+          '--disable-features=IsolateOrigins,site-per-process',
+          '--disable-site-isolation-trials',
+          '--disable-web-security',
+          '--flag-switches-begin',
+          '--disable-extensions-http-throttling',
+          '--flag-switches-end',
+          '--window-size=1280,800',
+          '--lang=en-US,en',
+          '--disable-infobars',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--metrics-recording-only',
+          '--no-first-run',
+          '--safebrowsing-disable-auto-update',
+          '--ignore-certificate-errors',
+          '--allow-running-insecure-content'
         ]
       });
       
