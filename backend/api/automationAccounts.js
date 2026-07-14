@@ -54,7 +54,9 @@ router.post('/', async (req, res) => {
       static_reply_enabled, static_reply_override, is_active
     } = req.body;
 
-    if (!platform || !account_name || !credentials) {
+    // For NEW accounts, all three fields are required.
+    // For UPDATES (id present), we only need the id — credentials are already stored.
+    if (!id && (!platform || !account_name || !credentials)) {
       return res.status(400).json({ error: 'Missing required platform, account_name, or credentials.' });
     }
 
@@ -67,6 +69,38 @@ router.post('/', async (req, res) => {
         .neq('id', id);
     }
 
+    if (id) {
+      // ── UPDATE: build only the fields that changed ──────────────────────────
+      const updateFields = {};
+      if (platform)      updateFields.platform      = platform;
+      if (account_name)  updateFields.account_name  = account_name;
+      if (app_id != null) updateFields.app_id        = app_id;
+      if (workspace_id)  updateFields.workspace_id   = workspace_id;
+
+      // Only overwrite credentials if they look like real values (not masked/empty)
+      const credsLookReal = credentials &&
+        typeof credentials === 'object' &&
+        Object.values(credentials).some(v => v && !String(v).includes('...'));
+      if (credsLookReal) {
+        updateFields.credentials = credentials;
+      }
+
+      // Always update chatbot fields
+      if (chatbot_enabled  !== undefined) updateFields.chatbot_enabled        = chatbot_enabled;
+      if (chatbot_persona  !== undefined) updateFields.chatbot_persona         = chatbot_persona;
+      if (auto_reply_rules !== undefined) updateFields.auto_reply_rules        = auto_reply_rules;
+      if (first_reply_delay   !== undefined) updateFields.first_reply_delay   = first_reply_delay;
+      if (conversation_delay  !== undefined) updateFields.conversation_delay  = conversation_delay;
+      if (static_reply_enabled  !== undefined) updateFields.static_reply_enabled  = static_reply_enabled;
+      if (static_reply_override !== undefined) updateFields.static_reply_override = static_reply_override;
+      if (is_active !== undefined) updateFields.is_active = is_active;
+
+      const result = await connectedAccountsRepository.update(id, updateFields);
+      await auditLogRepository.log('ACCOUNT_UPDATED', `Settings updated for account ${account_name || id} (${platform || '?'})`);
+      return res.json({ success: true, account: result });
+    }
+
+    // ── CREATE: full fields required ───────────────────────────────────────────
     const accountFields = {
       platform,
       account_name,
@@ -85,23 +119,15 @@ router.post('/', async (req, res) => {
       is_active: is_active ?? false
     };
 
-    let result;
-    if (id) {
-      // Update account
-      result = await connectedAccountsRepository.update(id, accountFields);
-      await auditLogRepository.log('ACCOUNT_UPDATED', `Settings updated for account ${account_name} (${platform})`);
-    } else {
-      // Create new account
-      result = await connectedAccountsRepository.create(accountFields);
-      await auditLogRepository.log('ACCOUNT_CONNECTED', `Connected new platform account: ${account_name} (${platform})`);
-    }
-
+    const result = await connectedAccountsRepository.create(accountFields);
+    await auditLogRepository.log('ACCOUNT_CONNECTED', `Connected new platform account: ${account_name} (${platform})`);
     res.json({ success: true, account: result });
   } catch (err) {
     logger.error(`[Accounts API] POST failed: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // DELETE /api/automation/accounts/:id - Disconnect/Delete account configuration
 router.delete('/:id', async (req, res) => {
