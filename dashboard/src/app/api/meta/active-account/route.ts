@@ -6,14 +6,16 @@ import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 
 export async function GET() {
   try {
-    const active = await getActiveConnectedAccount()
-    if (active) {
+    const activeIg = await getActiveConnectedAccount('instagram')
+    const activeFb = await getActiveConnectedAccount('messenger')
+
+    if (activeIg || activeFb) {
       return NextResponse.json({
         found: true,
-        displayName: active.accountName,
-        platform: active.platform,
-        pageId: active.pageId,
-        instagramBusinessId: active.instagramBusinessId,
+        displayName: activeIg?.accountName || activeFb?.accountName || 'Active Connection',
+        platform: activeIg ? 'instagram' : 'messenger',
+        pageId: activeFb?.pageId || activeIg?.pageId || '',
+        instagramBusinessId: activeIg?.instagramBusinessId || '',
         source: 'connected_accounts',
       })
     }

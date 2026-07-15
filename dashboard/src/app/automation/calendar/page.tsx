@@ -99,6 +99,21 @@ export default function ContentCalendarPage() {
   const [posts, setPosts] = useState<CalendarPost[]>([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [activeIgName, setActiveIgName] = useState('Instagram Business')
+  const [activeFbName, setActiveFbName] = useState('Meta Page')
+
+  useEffect(() => {
+    fetch('/api/automation/accounts')
+      .then(r => r.json())
+      .then(data => {
+        if (data.accounts) {
+          const ig = data.accounts.find((a: any) => a.platform === 'instagram' && a.is_active)
+          const fb = data.accounts.find((a: any) => (a.platform === 'facebook' || a.platform === 'messenger') && a.is_active)
+          if (ig) setActiveIgName(ig.account_name)
+          if (fb) setActiveFbName(fb.account_name)
+        }
+      }).catch(() => {})
+  }, [])
 
   // Time scheduling states
   const [defaultTime, setDefaultTime] = useState(() => {
@@ -244,7 +259,7 @@ export default function ContentCalendarPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             platform: 'facebook',
-            account_name: 'Meta Page',
+            account_name: activeFbName,
             content: 'Scheduled via Calendar Drag & Drop',
             media_url: imageUrl,
             scheduled_at: scheduledDate.toISOString()
@@ -327,7 +342,7 @@ export default function ContentCalendarPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               platform,
-              account_name: platform === 'instagram' ? 'Instagram Business' : 'Meta Page',
+              account_name: platform === 'instagram' ? activeIgName : activeFbName,
               content: modalCaption,
               media_url: modalImageUrl || null,
               scheduled_at: scheduledDate.toISOString()

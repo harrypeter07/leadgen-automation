@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { 
   Upload, 
@@ -65,6 +65,21 @@ const PLATFORMS = [
 export default function PublishComposerPage() {
   const [content, setContent]                   = useState('')
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['facebook'])
+  const [activeIgName, setActiveIgName] = useState('Instagram Business')
+  const [activeFbName, setActiveFbName] = useState('Meta Page')
+
+  useEffect(() => {
+    fetch('/api/automation/accounts')
+      .then(r => r.json())
+      .then(data => {
+        if (data.accounts) {
+          const ig = data.accounts.find((a: any) => a.platform === 'instagram' && a.is_active)
+          const fb = data.accounts.find((a: any) => (a.platform === 'facebook' || a.platform === 'messenger') && a.is_active)
+          if (ig) setActiveIgName(ig.account_name)
+          if (fb) setActiveFbName(fb.account_name)
+        }
+      }).catch(() => {})
+  }, [])
   const [imageUrl, setImageUrl]                 = useState('')
   const [driveInput, setDriveInput]             = useState('')
   const [scheduledFor, setScheduledFor]         = useState('')
@@ -255,7 +270,7 @@ export default function PublishComposerPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               platform,
-              account_name: platform === 'instagram' ? 'Instagram Business' : 'Meta Page',
+              account_name: platform === 'instagram' ? activeIgName : activeFbName,
               content,
               media_url: imageUrl || null,
               scheduled_at: new Date(scheduledFor).toISOString(),
