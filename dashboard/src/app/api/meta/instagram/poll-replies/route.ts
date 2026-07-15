@@ -73,6 +73,7 @@ export async function GET() {
       'THREAD_AI_CONFIGS',
       'AI_STATIC_REPLY_OVERRIDE',
       'AI_STATIC_REPLY_ENABLED',
+      'AI_RESPONSE_LENGTH',
     ])
 
     const lastPollTs = settings[LAST_POLL_KEY]
@@ -113,6 +114,15 @@ export async function GET() {
       if (!msgsRes.success || !msgsRes.data?.data) continue
 
       const msgs = msgsRes.data.data as any[]
+      if (msgs.length === 0) continue
+
+      // Strict constraint: Do not reply if the latest message in the entire thread was sent by the business/bot.
+      // This avoids double auto-replies / consecutive messaging spam.
+      const latestMsg = msgs[0]
+      const latestFromId = latestMsg.from?.id
+      if (!latestFromId || latestFromId === igId) {
+        continue
+      }
 
       // Find the latest message from someone else (not us) newer than last poll
       for (const msg of msgs) {
@@ -143,8 +153,8 @@ export async function GET() {
         const conversationDelay = threadConfig.conversationDelay !== undefined ? Number(threadConfig.conversationDelay) : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 0)
         const staticReplyEnabled = threadConfig.staticReplyEnabled !== undefined ? !!threadConfig.staticReplyEnabled : (settings.AI_STATIC_REPLY_ENABLED === 'true')
         const staticReply = threadConfig.staticReply || settings.AI_STATIC_REPLY_OVERRIDE || ''
-        const responseLength: 'short' | 'medium' | 'long' = threadConfig.responseLength || 'medium'
-        const maxTokensMap = { short: 60, medium: 150, long: 350 }
+        const responseLength: 'extra_small' | 'short' | 'medium' | 'long' = threadConfig.responseLength || settings.AI_RESPONSE_LENGTH || 'medium'
+        const maxTokensMap = { extra_small: 30, short: 60, medium: 150, long: 350 }
 
         let replied = false
         let replyContent = ''
@@ -177,7 +187,9 @@ export async function GET() {
           try {
             const { generateWithGemini } = await import('@/lib/gemini')
             const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
-            const lengthInstruction = responseLength === 'short'
+            const lengthInstruction = responseLength === 'extra_small'
+              ? 'Reply in MAXIMUM 5-8 words. Extremely short and punchy.'
+              : responseLength === 'short'
               ? 'Reply in MAXIMUM 1 short sentence. Be very concise.'
               : responseLength === 'long'
               ? 'Reply in 4-5 sentences. Be expressive and detailed.'
@@ -214,11 +226,25 @@ CRITICAL RULES (never break these):
           const hasRepliedBefore = msgs.some(m => m.from?.id === igId)
           const delaySec = hasRepliedBefore ? conversationDelay : firstReplyDelay
 
-          // Show typing bubble to recipient
-          await InstagramService.sendTypingIndicator(senderId, 'typing_on').catch(() => {})
-
+          // Show typing bubble to recipient periodically during the delay to look natural
           if (delaySec > 0) {
-            await new Promise(r => setTimeout(r, delaySec * 1000))
+            const intervalTime = 3000
+            const totalMs = delaySec * 1000
+            let elapsedMs = 0
+
+            await InstagramService.sendTypingIndicator(senderId, 'typing_on').catch(() => {})
+
+            while (elapsedMs < totalMs) {
+              const waitMs = Math.min(intervalTime, totalMs - elapsedMs)
+              await new Promise(r => setTimeout(r, waitMs))
+              elapsedMs += waitMs
+              if (elapsedMs < totalMs) {
+                await InstagramService.sendTypingIndicator(senderId, 'typing_on').catch(() => {})
+              }
+            }
+          } else {
+            await InstagramService.sendTypingIndicator(senderId, 'typing_on').catch(() => {})
+            await new Promise(r => setTimeout(r, 800))
           }
 
           try {

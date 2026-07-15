@@ -164,7 +164,8 @@ async function handleAutoReply(
         'AI_CONVERSATION_DELAY',
         'THREAD_AI_CONFIGS',
         'AI_STATIC_REPLY_OVERRIDE',
-        'AI_STATIC_REPLY_ENABLED'
+        'AI_STATIC_REPLY_ENABLED',
+        'AI_RESPONSE_LENGTH'
       ])
 
     const settings: Record<string, string> = {}
@@ -246,8 +247,8 @@ async function handleAutoReply(
           : (settings.AI_STATIC_REPLY_OVERRIDE || ''))
 
     // Response length → token limits (default to short for concise responses)
-    const responseLength: 'short' | 'medium' | 'long' = threadConfig.responseLength || 'short'
-    const maxTokensMap = { short: 60, medium: 150, long: 350 }
+    const responseLength: 'extra_small' | 'short' | 'medium' | 'long' = threadConfig.responseLength || settings.AI_RESPONSE_LENGTH || 'medium'
+    const maxTokensMap = { extra_small: 30, short: 60, medium: 150, long: 350 }
 
     const textLower = messageText.toLowerCase()
     let replied = false
@@ -283,7 +284,9 @@ async function handleAutoReply(
       console.log(`[AutoReply] Generating AI response for "${messageText}"...`)
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
       const { generateWithGemini } = await import('@/lib/gemini')
-      const lengthInstruction = responseLength === 'short'
+      const lengthInstruction = responseLength === 'extra_small'
+        ? 'Reply in MAXIMUM 5-8 words. Extremely short and punchy.'
+        : responseLength === 'short'
         ? 'Reply in MAXIMUM 1 short sentence. Be very concise.'
         : responseLength === 'long'
         ? 'Reply in 4-5 sentences. Be expressive and detailed.'
@@ -328,7 +331,17 @@ CRITICAL RULES (never break these):
               const msgsRes = await InstagramService.getConversationMessages(myConv.id, 10)
               if (msgsRes.success && msgsRes.data?.data) {
                 const msgs = msgsRes.data.data as any[]
-                // If there are messages from ourselves, it's not the first reply
+                
+                // Strict consecutive guard: Skip if latest message is from the bot
+                if (msgs.length > 0) {
+                  const latestMsg = msgs[0]
+                  const latestFromId = latestMsg.from?.id
+                  if (!latestFromId || latestFromId === igId) {
+                    console.log(`[AutoReply] Skipping webhook: Bot already replied last.`)
+                    return NextResponse.json({ success: true, message: 'Bot already replied last.' })
+                  }
+                }
+
                 const hasRepliedBefore = msgs.some(m => m.from?.id === igId)
                 isFirstReply = !hasRepliedBefore
               }
@@ -345,6 +358,17 @@ CRITICAL RULES (never break these):
               const msgsRes = await FacebookService.getConversationMessages(myConv.id, 10)
               if (msgsRes.success && msgsRes.data?.data) {
                 const msgs = msgsRes.data.data as any[]
+
+                // Strict consecutive guard: Skip if latest message is from the bot
+                if (msgs.length > 0) {
+                  const latestMsg = msgs[0]
+                  const latestFromId = latestMsg.from?.id
+                  if (!latestFromId || latestFromId === pageId) {
+                    console.log(`[AutoReply] Skipping webhook: Bot already replied last.`)
+                    return NextResponse.json({ success: true, message: 'Bot already replied last.' })
+                  }
+                }
+
                 const hasRepliedBefore = msgs.some(m => m.from?.id === pageId)
                 isFirstReply = !hasRepliedBefore
               }
@@ -359,14 +383,27 @@ CRITICAL RULES (never break these):
 
       const tokenOverride = matchedAccount?.credentials?.access_token || undefined
 
-      // Show typing indicator to recipient (gives real-time "typing..." bubble)
+      // Show typing indicator to recipient (gives real-time "typing..." bubble) periodically during the delay to look natural
       if (platform === 'instagram') {
         await InstagramService.sendTypingIndicator(senderId, 'typing_on', tokenOverride).catch(() => {})
       }
 
       if (delaySec > 0) {
         console.log(`[AutoReply] Sleeping for ${delaySec} seconds before dispatching reply...`)
-        await new Promise(resolve => setTimeout(resolve, delaySec * 1000))
+        const intervalTime = 3000
+        const totalMs = delaySec * 1000
+        let elapsedMs = 0
+
+        while (elapsedMs < totalMs) {
+          const waitMs = Math.min(intervalTime, totalMs - elapsedMs)
+          await new Promise(resolve => setTimeout(resolve, waitMs))
+          elapsedMs += waitMs
+          if (elapsedMs < totalMs && platform === 'instagram') {
+            await InstagramService.sendTypingIndicator(senderId, 'typing_on', tokenOverride).catch(() => {})
+          }
+        }
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 800))
       }
 
       console.log(`[AutoReply] Sending reply: "${replyContent.slice(0, 60)}..."`)
