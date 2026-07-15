@@ -275,6 +275,7 @@ export default function SocialInboxPage() {
 
   // Active connected account
   const [activeAccountIgBizId, setActiveAccountIgBizId] = useState<string>('17841411718913026')
+  const [activeAccountPageId, setActiveAccountPageId] = useState<string>('1165738093294228')
   const [activeAccountDisplayName, setActiveAccountDisplayName] = useState<string>('smritifyp')
 
   useEffect(() => {
@@ -283,6 +284,7 @@ export default function SocialInboxPage() {
       .then(data => {
         if (data.found) {
           if (data.instagramBusinessId) setActiveAccountIgBizId(data.instagramBusinessId)
+          if (data.pageId) setActiveAccountPageId(data.pageId)
           if (data.displayName) setActiveAccountDisplayName(data.displayName)
         }
       })
@@ -469,8 +471,17 @@ export default function SocialInboxPage() {
           const msgs = conv.messages?.data || []
           const last = msgs[0]
           const otherParticipant = conv.participants?.data?.find(
-            (p: { id: string; name?: string; username?: string }) =>
-              p.id !== activeAccountIgBizId && p.username !== activeAccountDisplayName
+            (p: { id: string; name?: string; username?: string }) => {
+              const bId = p.id
+              const bUser = (p.username || '').toLowerCase()
+              const bName = (p.name || '').toLowerCase()
+              const activeName = activeAccountDisplayName.toLowerCase()
+
+              if (bId === activeAccountIgBizId || bId === activeAccountPageId) return false
+              if (bUser && (activeName.includes(bUser) || bUser.includes(activeName))) return false
+              if (bName && (activeName.includes(bName) || bName.includes(activeName))) return false
+              return true
+            }
           ) || conv.participants?.data?.[0]
 
           const displayName = otherParticipant?.name || (otherParticipant?.username ? `@${otherParticipant.username}` : 'Instagram User')
@@ -524,8 +535,8 @@ export default function SocialInboxPage() {
         attachments?: { data?: Array<{ id: string; mime_type?: string; file_url?: string; name?: string; image_data?: { url?: string } }> }
       }> = data.data?.data ?? data.data ?? []
 
-      const pageId = '1165738093294228'
-      const myIgId = '17841411718913026'
+      const pageId = activeAccountPageId
+      const myIgId = activeAccountIgBizId
 
       const mapped: Message[] = rawMsgs.map(m => ({
         id:     m.id || String(Math.random()),

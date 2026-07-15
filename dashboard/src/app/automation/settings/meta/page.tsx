@@ -369,8 +369,14 @@ export default function MetaSettingsPage() {
     setSaving(false)
   }
 
+  function getUserGroup(accountName: string): 'smriti' | 'kashi' {
+    const name = (accountName || '').toLowerCase()
+    if (name.includes('kashi') || name.includes('kashii')) return 'kashi'
+    return 'smriti'
+  }
+
   // Make selected account the active platform connection
-  // Also activates ALL rows with the same account_name (covers both IG + Messenger for one user)
+  // Also activates ALL rows with the same user profile (covers Facebook, Instagram + Messenger for the user)
   async function handleActivateAccount() {
     if (!selectedAccountId) return
     const toastId = toast.loading('Activating account...')
@@ -378,10 +384,11 @@ export default function MetaSettingsPage() {
       const acc = accounts.find((a: any) => a.id === selectedAccountId)
       if (!acc) throw new Error('Account not found.')
 
-      // Find all rows for this account_name (e.g. both IG + Messenger for Kashi Singh)
-      const sameNameAccounts = accounts.filter((a: any) => a.account_name === acc.account_name)
+      const targetGroup = getUserGroup(acc.account_name)
+      const sameNameAccounts = accounts.filter((a: any) => getUserGroup(a.account_name) === targetGroup)
+      const otherAccounts = accounts.filter((a: any) => getUserGroup(a.account_name) !== targetGroup)
 
-      // Activate all of them
+      // Activate all rows belonging to the target profile
       await Promise.all(sameNameAccounts.map(async (a: any) => {
         const payload = {
           id: a.id,
@@ -400,7 +407,26 @@ export default function MetaSettingsPage() {
         }
       }))
 
-      toast.success(`${acc.account_name} is now active for all platforms!`, { id: toastId })
+      // Deactivate all rows belonging to the other profile
+      await Promise.all(otherAccounts.map(async (a: any) => {
+        const payload = {
+          id: a.id,
+          platform: a.platform,
+          account_name: a.account_name,
+          is_active: false
+        }
+        const res = await fetch('/api/automation/accounts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        if (!res.ok) {
+          const d = await res.json()
+          throw new Error(d.error || 'Deactivation failed')
+        }
+      }))
+
+      toast.success('Account profile activated successfully!', { id: toastId })
       await fetchAccounts(selectedAccountId)
     } catch (err: any) {
       toast.error(err.message, { id: toastId })

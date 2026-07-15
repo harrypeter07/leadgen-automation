@@ -163,10 +163,10 @@ export async function getActiveConnectedAccount(
     console.log(`[RuntimeConfig] Active account: ${data.account_name} (${data.platform}), creds keys: ${Object.keys(creds).join(', ')}`)
 
     return {
-      pageAccessToken:     creds.page_access_token || creds.META_PAGE_ACCESS_TOKEN || creds.MESSENGER_PAGE_TOKEN || '',
-      instagramToken:      creds.instagram_access_token || creds.INSTAGRAM_ACCESS_TOKEN || creds.page_access_token || '',
+      pageAccessToken:     creds.page_access_token || creds.META_PAGE_ACCESS_TOKEN || creds.MESSENGER_PAGE_TOKEN || creds.access_token || '',
+      instagramToken:      creds.instagram_access_token || creds.INSTAGRAM_ACCESS_TOKEN || creds.page_access_token || creds.access_token || '',
       pageId:              creds.page_id || creds.META_PAGE_ID || '',
-      instagramBusinessId: creds.instagram_business_id || creds.INSTAGRAM_BUSINESS_ID || '',
+      instagramBusinessId: creds.instagram_business_id || creds.INSTAGRAM_BUSINESS_ID || (data.platform === 'instagram' ? creds.page_id : '') || '',
       accountName:         data.account_name as string || '',
       platform:            data.platform as string || '',
     }

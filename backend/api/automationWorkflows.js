@@ -125,6 +125,20 @@ router.get('/publish/queue', async (req, res) => {
     const { status } = req.query;
     let query = supabase.from('automation_publishing_queue').select('*').order('scheduled_at', { ascending: true });
     
+    // Fetch currently active account names to filter scheduled posts
+    const { data: activeAccs } = await supabase
+      .from('connected_accounts')
+      .select('account_name')
+      .eq('is_active', true);
+    
+    const activeNames = (activeAccs || []).map(a => a.account_name);
+    if (activeNames.length > 0) {
+      query = query.in('account_name', activeNames);
+    } else {
+      // If no active accounts, return empty queue
+      return res.json({ queue: [] });
+    }
+
     if (status) {
       query = query.eq('status', status);
       // Only return posts that are due for publication if status is scheduled
