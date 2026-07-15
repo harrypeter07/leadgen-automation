@@ -29,7 +29,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   const [conversationDelay, setConversationDelay] = useState(2)
   const [staticReply, setStaticReply] = useState('')
   const [staticReplyEnabled, setStaticReplyEnabled] = useState(false)
-  const [responseLength, setResponseLength] = useState<'short' | 'medium' | 'long'>('medium')
+  const [responseLength, setResponseLength] = useState<'extra_small' | 'short' | 'medium' | 'long'>('medium')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [availableModels, setAvailableModels] = useState<string[]>([])
@@ -166,6 +166,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
           initialConversationDelay = globalData.conversationDelay !== undefined ? Number(globalData.conversationDelay) : 2
           initialStaticReply = globalData.staticReply || ''
           initialStaticReplyEnabled = globalData.staticReplyEnabled || false
+          if (globalData.responseLength) setResponseLength(globalData.responseLength)
         }
 
         if (threadId) {
@@ -296,6 +297,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             conversationDelay,
             staticReply: staticReply.trim(),
             staticReplyEnabled,
+            responseLength,
           }),
         })
       }
@@ -529,7 +531,7 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">📏 Response Length</label>
                     <div className="flex gap-2">
-                      {(['short', 'medium', 'long'] as const).map(len => (
+                      {(['extra_small', 'short', 'medium', 'long'] as const).map(len => (
                         <button
                           key={len}
                           type="button"
@@ -540,12 +542,12 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
                               : 'bg-white dark:bg-[#0E0E10] border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-500 hover:border-purple-300 hover:text-purple-600'
                           }`}
                         >
-                          {len === 'short' ? '⚡ Short' : len === 'medium' ? '💬 Medium' : '📝 Long'}
+                          {len === 'extra_small' ? '⚡ X-Small' : len === 'short' ? '💬 Small' : len === 'medium' ? '📝 Medium' : '📚 Large'}
                         </button>
                       ))}
                     </div>
                     <p className="text-[8px] text-slate-400 dark:text-gray-500">
-                      {responseLength === 'short' ? '1 sentence max — very quick, punchy reply' : responseLength === 'medium' ? '2-3 sentences — balanced and natural' : '4-5 sentences — detailed and expressive'}
+                      {responseLength === 'extra_small' ? 'MAXIMUM 5-8 words — extremely short and punchy reply' : responseLength === 'short' ? '1 sentence max — very quick, punchy reply' : responseLength === 'medium' ? '2-3 sentences — balanced and natural' : '4-5 sentences — detailed and expressive'}
                     </p>
                   </div>
 
