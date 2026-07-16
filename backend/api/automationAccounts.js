@@ -344,8 +344,29 @@ router.post('/oauth/exchange', async (req, res) => {
       }
     });
 
-    const userAccessToken = tokenRes.data.access_token;
-    logger.info(`[OAuth Exchange] Successfully fetched user token. Fetching linked pages and Instagram accounts...`);
+    const shortLivedToken = tokenRes.data.access_token;
+    logger.info(`[OAuth Exchange] Successfully fetched short-lived user token. Exchanging for long-lived user token...`);
+
+    // Exchange short-lived token for long-lived user token
+    let userAccessToken = shortLivedToken;
+    try {
+      const longLivedRes = await axios.get('https://graph.facebook.com/v20.0/oauth/access_token', {
+        params: {
+          grant_type: 'fb_exchange_token',
+          client_id: appId,
+          client_secret: appSecret,
+          fb_exchange_token: shortLivedToken
+        }
+      });
+      if (longLivedRes.data && longLivedRes.data.access_token) {
+        userAccessToken = longLivedRes.data.access_token;
+        logger.info(`[OAuth Exchange] Successfully exchanged for long-lived user token.`);
+      }
+    } catch (err) {
+      logger.warn(`[OAuth Exchange] Long-lived token exchange failed, falling back to short-lived: ${err.message}`);
+    }
+
+    logger.info(`[OAuth Exchange] Fetching linked pages and Instagram accounts using user token...`);
 
     // 3. Query pages and linked Instagram accounts
     const pagesRes = await axios.get('https://graph.facebook.com/v20.0/me/accounts', {
