@@ -2,6 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Activity, RefreshCw, Trash2, Send, Copy, Check, Terminal, ShieldCheck } from 'lucide-react'
 
 interface WebhookLog {
   timestamp: string
@@ -18,10 +23,10 @@ export default function WebhookDebuggerPage() {
   const [simulating, setSimulating] = useState(false)
   const [selectedLog, setSelectedLog] = useState<WebhookLog | null>(null)
   
-  // Settings info for copy-pasting
   const [verifyToken, setVerifyToken] = useState('FLOWFYP_VERIFY_TOKEN')
   const [callbackUrl, setCallbackUrl] = useState('')
-  const [pollingEnabled, setPollingEnabled] = useState(true)
+  const [copiedUrl, setCopiedUrl] = useState(false)
+  const [copiedToken, setCopiedToken] = useState(false)
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -55,29 +60,25 @@ export default function WebhookDebuggerPage() {
     }
     fetchLogs()
     fetchSettings()
+    const timer = setInterval(fetchLogs, 4000)
+    return () => clearInterval(timer)
   }, [fetchLogs, fetchSettings])
 
-  useEffect(() => {
-    if (!pollingEnabled) return
-    const timer = setInterval(fetchLogs, 3000)
-    return () => clearInterval(timer)
-  }, [pollingEnabled, fetchLogs])
-
   const handleClearLogs = async () => {
-    if (!confirm('Are you sure you want to clear the webhook event logs?')) return
+    if (!confirm('Are you sure you want to clear all webhook event logs?')) return
     setClearing(true)
     const toastId = toast.loading('Clearing webhook log history...')
     try {
       const res = await fetch('/api/meta/webhook-logs', { method: 'DELETE' })
       if (res.ok) {
-        toast.success('Webhook log history cleared!', { id: toastId })
+        toast.success('Logs cleared!', { id: toastId })
         fetchLogs()
         setSelectedLog(null)
       } else {
         throw new Error()
       }
     } catch {
-      toast.error('Failed to clear webhook logs', { id: toastId })
+      toast.error('Failed to clear logs', { id: toastId })
     } finally {
       setClearing(false)
     }
@@ -85,22 +86,25 @@ export default function WebhookDebuggerPage() {
 
   const handleSimulateWebhook = async () => {
     setSimulating(true)
-    const toastId = toast.loading('Simulating inbound Meta message event...')
+    const toastId = toast.loading('Sending test webhook event...')
     try {
+      const activeAccountRes = await fetch('/api/meta/active-account').then(r => r.json()).catch(() => ({}))
+      const targetIgId = activeAccountRes.instagramBusinessId || '17841411718913026'
+
       const mockPayload = {
         object: 'instagram',
         entry: [
           {
-            id: '17841411718913026',
+            id: targetIgId,
             time: Math.floor(Date.now() / 1000),
             messaging: [
               {
-                sender: { id: 'simulate_sender_999' },
-                recipient: { id: '17841411718913026' },
+                sender: { id: 'simulate_test_user_777' },
+                recipient: { id: targetIgId },
                 timestamp: Date.now(),
                 message: {
-                  mid: `m_simulated_${Math.random().toString(36).substring(2, 9)}`,
-                  text: 'Hello, this is a simulated debug message! 🚀'
+                  mid: `mid.test.${Date.now()}`,
+                  text: 'Hello! I am testing the webhook debugger.'
                 }
               }
             ]
@@ -110,223 +114,141 @@ export default function WebhookDebuggerPage() {
 
       const res = await fetch('/api/meta/webhook', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Bypass app secret signature check locally
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mockPayload)
       })
 
       if (res.ok) {
-        toast.success('Simulation event sent successfully!', { id: toastId })
+        toast.success('Test webhook event simulated successfully!', { id: toastId })
         setTimeout(fetchLogs, 500)
       } else {
-        const err = await res.text()
-        throw new Error(err || 'Server rejected simulation')
+        throw new Error('Simulation failed')
       }
     } catch (err: any) {
-      toast.error(`Simulation failed: ${err.message}`, { id: toastId })
+      toast.error(err.message || 'Simulation error', { id: toastId })
     } finally {
       setSimulating(false)
     }
   }
 
+  const copyToClipboard = (text: string, type: 'url' | 'token') => {
+    navigator.clipboard.writeText(text)
+    if (type === 'url') {
+      setCopiedUrl(true)
+      setTimeout(() => setCopiedUrl(false), 2000)
+    } else {
+      setCopiedToken(true)
+      setTimeout(() => setCopiedToken(false), 2000)
+    }
+    toast.success('Copied to clipboard!')
+  }
+
   return (
-    <div className="space-y-8 select-none text-white animate-fadeIn">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight">📡 Webhook Debugger & Event Logs</h1>
-          <p className="mt-1 text-sm text-gray-500 font-medium">Verify verification handshakes, inspect real-time payloads, and diagnose Meta messaging events.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-xl border border-border bg-card">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary">
+            <Terminal className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">Meta Webhook Live Monitor</h1>
+            <p className="text-xs text-muted-foreground">Inspect real-time inbound Meta webhook payloads, test triggers, and verify challenges.</p>
+          </div>
         </div>
-        
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPollingEnabled(!pollingEnabled)}
-            className={`px-4 py-3 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
-              pollingEnabled
-                ? 'bg-green-950/40 hover:bg-green-900/30 text-green-300 border-green-800/40'
-                : 'bg-[#222225] hover:bg-[#2D2D30] text-gray-400 border-[#2D2D30]'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${pollingEnabled ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`}></span>
-            {pollingEnabled ? '⏸️ Auto-Refresh: ON' : '▶️ Auto-Refresh: OFF'}
-          </button>
 
-          {!pollingEnabled && (
-            <button
-              type="button"
-              onClick={fetchLogs}
-              className="px-4 py-3 rounded-xl bg-[#222225] border border-[#2D2D30] hover:bg-[#2D2D30] text-gray-300 text-xs font-bold uppercase tracking-wider transition-colors"
-            >
-              🔄 Fetch Logs
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleSimulateWebhook}
-            disabled={simulating}
-            className="px-4 py-3 rounded-xl bg-purple-950/40 hover:bg-purple-900/30 text-purple-300 border border-purple-900/40 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40"
-          >
-            {simulating ? '⏳ Sending...' : '🧪 Simulate Event'}
-          </button>
-          
-          <button
-            type="button"
-            onClick={handleClearLogs}
-            disabled={clearing || logs.length === 0}
-            className="px-4 py-3 rounded-xl bg-red-950/40 hover:bg-red-900/30 text-red-300 border border-red-900/40 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40"
-          >
-            Clear History
-          </button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleSimulateWebhook} disabled={simulating} className="gap-1.5">
+            <Send className="w-3.5 h-3.5 text-primary" />
+            <span>Simulate Inbound Event</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleClearLogs} disabled={clearing} className="gap-1.5 text-rose-400">
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear Logs</span>
+          </Button>
         </div>
       </div>
 
-      {/* Copyable Meta Configuration Cards */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-5 space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Cloud Callback URL:</span>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(callbackUrl)
-                toast.success('Callback URL copied!')
-              }}
-              className="text-[9px] text-[#E3B859] hover:underline uppercase font-bold"
-            >
-              Copy Link
-            </button>
-          </div>
-          <input
-            readOnly
-            value={callbackUrl}
-            className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs font-mono text-gray-300 focus:outline-none"
-          />
-          <span className="text-[10px] text-gray-600 block leading-normal">
-            Configure this target URL under Webhook settings in the Meta App Developer Console.
-          </span>
-        </div>
-
-        <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-5 space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Verify Token:</span>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(verifyToken)
-                toast.success('Verify Token copied!')
-              }}
-              className="text-[9px] text-[#E3B859] hover:underline uppercase font-bold"
-            >
-              Copy Token
-            </button>
-          </div>
-          <input
-            readOnly
-            value={verifyToken}
-            className="w-full bg-[#141416] border border-[#2D2D30] rounded-xl px-3 py-2 text-xs font-mono text-gray-300 focus:outline-none"
-          />
-          <span className="text-[10px] text-gray-600 block leading-normal">
-            Enter this verification token under Meta Webhook configurations to authenticate the handshake challenge.
-          </span>
-        </div>
-      </div>
-
-      {/* Main Debugger Area */}
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Left Side: Recent Handshake & Payload Logs */}
-        <div className="md:col-span-2 rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4">
-          <div className="flex justify-between items-center border-b border-[#2D2D30] pb-2">
-            <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider">📡 Incoming Webhook Feed</h3>
-            <span className="text-[10px] text-green-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
-              Live Listening (3s Poll)
-            </span>
-          </div>
-
-          {loading ? (
-            <div className="py-20 text-center text-xs text-gray-500 animate-pulse font-semibold">Reading webhook logs...</div>
-          ) : logs.length === 0 ? (
-            <div className="py-24 text-center text-xs text-gray-500 uppercase border border-dashed border-[#2D2D30]/65 rounded-2xl">
-              No Meta Webhooks received yet. Try clicking "Simulate Event" above!
+      {/* Webhook Registration Credentials Card */}
+      <Card>
+        <CardHeader className="p-4 border-b border-border">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            Meta Webhook Subscription Details
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground">Callback URL</label>
+            <div className="flex gap-2">
+              <Input value={callbackUrl} readOnly className="font-mono text-xs" />
+              <Button size="sm" variant="outline" onClick={() => copyToClipboard(callbackUrl, 'url')}>
+                {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              </Button>
             </div>
-          ) : (
-            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-              {logs.map((log, index) => {
-                const dateStr = new Date(log.timestamp).toLocaleTimeString()
-                const isSelected = selectedLog?.timestamp === log.timestamp
+          </div>
 
-                return (
-                  <div
-                    key={index}
-                    onClick={() => setSelectedLog(log)}
-                    className={`p-4 rounded-xl border transition-all cursor-pointer flex justify-between items-center ${
-                      isSelected
-                        ? 'bg-[#222225] border-[#E3B859]'
-                        : 'bg-[#141416] border-[#2D2D30]/50 hover:border-gray-600'
-                    }`}
-                  >
-                    <div className="space-y-1 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-purple-900/30 text-purple-300">
-                          {log.object}
-                        </span>
-                        <span className="text-gray-500 text-[10px] font-semibold">{dateStr}</span>
-                      </div>
-                      <div className="text-gray-300 font-medium">
-                        Sender: <span className="font-mono text-gray-400">{log.senderId}</span>
-                      </div>
-                      {log.snippet && (
-                        <div className="text-[10px] text-gray-500 font-semibold italic truncate max-w-sm">
-                          "{log.snippet}"
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      className="px-2.5 py-1.5 bg-gray-800 text-[10px] font-bold uppercase rounded-lg hover:bg-gray-700 transition-colors"
-                    >
-                      Inspect
-                    </button>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground">Verify Token</label>
+            <div className="flex gap-2">
+              <Input value={verifyToken} readOnly className="font-mono text-xs" />
+              <Button size="sm" variant="outline" onClick={() => copyToClipboard(verifyToken, 'token')}>
+                {copiedToken ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Log Feed Grid (4 cols list + 8 cols JSON detail) */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 h-[500px]">
+        <Card className="md:col-span-5 flex flex-col h-full overflow-hidden">
+          <CardHeader className="p-3 border-b border-border flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-semibold">Live Events ({logs.length})</CardTitle>
+            <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-400">Live Polling</Badge>
+          </CardHeader>
+          <CardContent className="p-0 flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="p-4 space-y-2">
+                {[1,2,3,4].map(i => <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />)}
+              </div>
+            ) : logs.length === 0 ? (
+              <div className="p-8 text-center text-xs text-muted-foreground">No webhook events logged yet.</div>
+            ) : (
+              logs.map((log, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => setSelectedLog(log)}
+                  className={`p-3 border-b border-border cursor-pointer transition-colors hover:bg-accent/50 ${
+                    selectedLog === log ? 'bg-accent border-l-2 border-l-primary' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <Badge variant="outline" className="text-[9px] uppercase">{log.object}</Badge>
+                    <span className="text-[10px] text-muted-foreground">{new Date(log.timestamp).toLocaleTimeString()}</span>
                   </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+                  <p className="text-xs font-mono text-foreground truncate">{log.snippet || 'Webhook payload received'}</p>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Right Side: Payload Inspection Panel */}
-        <div className="rounded-2xl border border-[#2D2D30] bg-[#18181A] p-6 space-y-4">
-          <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider border-b border-[#2D2D30] pb-2">
-            🔍 Payload Inspector
-          </h3>
-
-          {!selectedLog ? (
-            <div className="py-32 text-center text-xs text-gray-600 uppercase">
-              Select a webhook event from the feed to inspect the raw JSON response payload
-            </div>
-          ) : (
-            <div className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <div className="text-gray-500 font-bold uppercase text-[9px]">Event Type:</div>
-                <div className="font-black text-white text-md uppercase">{selectedLog.object}</div>
+        {/* Payload Detail JSON view */}
+        <Card className="md:col-span-7 flex flex-col h-full overflow-hidden">
+          <CardHeader className="p-3 border-b border-border">
+            <CardTitle className="text-xs font-semibold">Event Payload Inspector</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 flex-1 overflow-y-auto font-mono text-xs bg-muted/20">
+            {selectedLog ? (
+              <pre className="text-[11px] leading-relaxed whitespace-pre-wrap text-foreground">{JSON.stringify(selectedLog.payload, null, 2)}</pre>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-xs font-sans">
+                Select an event log on the left to inspect raw payload JSON.
               </div>
-              
-              <div className="space-y-1">
-                <div className="text-gray-500 font-bold uppercase text-[9px]">Received Timestamp:</div>
-                <div className="font-mono text-gray-300">{new Date(selectedLog.timestamp).toLocaleString()}</div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="text-gray-500 font-bold uppercase text-[9px]">JSON Payload Structure:</div>
-                <pre className="p-4 bg-[#0E0E10] border border-[#2D2D30] rounded-xl overflow-x-auto text-[10px] font-mono text-purple-300 max-h-[300px] overflow-y-auto">
-                  {JSON.stringify(selectedLog.payload, null, 2)}
-                </pre>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

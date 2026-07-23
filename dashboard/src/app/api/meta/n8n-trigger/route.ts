@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { ensureMetaConfig } from '@/lib/meta/runtime-config'
+import { supabaseAdmin } from '@/lib/supabase'
+
+export const dynamic = 'force-dynamic'
 
 // POST /api/meta/n8n-trigger
 // Triggers n8n workflow for outbound manual messages to sync state and trigger downstream n8n nodes
 export async function POST(req: NextRequest) {
   try {
+    await ensureMetaConfig()
     const payload = await req.json()
     const { type, platform, recipientId, threadId, senderName, message, timestamp } = payload
 
@@ -13,8 +18,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'n8n not configured' })
     }
 
-    const myIgId = process.env.INSTAGRAM_BUSINESS_ID || '17841411718913026'
-    const pageId = process.env.META_PAGE_ID || '1165738093294228'
+    // Fetch active connected account IDs dynamically
+    const { data: accounts } = await supabaseAdmin
+      .from('connected_accounts')
+      .select('*')
+      .eq('is_active', true)
+
+    const activeIgAcc = accounts?.find(a => a.platform === 'instagram')
+    const activeFbAcc = accounts?.find(a => a.platform === 'facebook' || a.platform === 'messenger')
+
+    const myIgId = activeIgAcc?.credentials?.page_id || process.env.INSTAGRAM_BUSINESS_ID || ''
+    const pageId = activeFbAcc?.credentials?.page_id || process.env.META_PAGE_ID || ''
 
     // Format the payload to resemble a Meta Webhook Outbound message so n8n can process it natively
     const metaWebhookPayload = {

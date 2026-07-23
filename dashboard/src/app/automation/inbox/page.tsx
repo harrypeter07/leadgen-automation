@@ -3,6 +3,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import toast from 'react-hot-toast'
 import AutoReplyModal from './AutoReplyModal'
+import { GeminiKeyModal } from '@/components/gemini-key-modal'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Sparkles, Send, RefreshCw, Bot, MessageSquare, Plus, Key, Settings as SettingsIcon, Paperclip, CheckCircle, AlertCircle } from 'lucide-react'
 
 interface Thread {
   id: string
@@ -29,30 +35,10 @@ interface Message {
   }>
 }
 
-const PLATFORM_ICON: Record<string, string> = {
-  messenger: '💬',
-  instagram: '📸',
-  facebook:  '📘',
-}
 const PLATFORM_COLOR: Record<string, string> = {
-  messenger: 'text-blue-500 dark:text-blue-400',
-  instagram: 'text-pink-500 dark:text-pink-400',
-  facebook:  'text-blue-600 dark:text-blue-500',
-}
-const PLATFORM_GRADIENT: Record<string, string> = {
-  messenger: 'from-blue-600 to-blue-500',
-  instagram: 'from-pink-600 to-purple-600',
-  facebook:  'from-blue-700 to-blue-500',
-}
-
-function timeAgo(ts: string) {
-  try {
-    const diff = (Date.now() - new Date(ts).getTime()) / 1000
-    if (diff < 60)    return `${Math.round(diff)}s ago`
-    if (diff < 3600)  return `${Math.round(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.round(diff / 3600)}h ago`
-    return new Date(ts).toLocaleDateString()
-  } catch { return ts }
+  messenger: 'text-blue-400',
+  instagram: 'text-pink-400',
+  facebook:  'text-blue-500',
 }
 
 function formatMessageTime(ts: string) {
@@ -65,197 +51,6 @@ function formatMessageTime(ts: string) {
   } catch { return ts }
 }
 
-// ─── Compose DM Modal ─────────────────────────────────────────────────────────
-interface ComposeDMModalProps {
-  onClose: () => void
-  threads: Thread[]
-}
-
-function ComposeDMModal({ onClose, threads }: ComposeDMModalProps) {
-  const [platform, setPlatform]       = useState<'instagram' | 'messenger'>('instagram')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedUser, setSelectedUser] = useState<{ id: string; name: string } | null>(null)
-  const [message, setMessage]         = useState('')
-  const [sending, setSending]         = useState(false)
-
-  // Lock background body scroll when modal is open
-  useEffect(() => {
-    const originalStyle = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = originalStyle
-    }
-  }, [])
-
-  const existingRecipients = threads
-    .filter(t => t.platform === platform && t.participantId)
-    .map(t => ({ id: t.participantId!, name: t.name, platform: t.platform }))
-
-  const filtered = searchQuery
-    ? existingRecipients.filter(r => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : existingRecipients
-
-  async function handleSend() {
-    if (!selectedUser || !message.trim()) return
-    setSending(true)
-    const toastId = toast.loading('Sending DM…')
-    try {
-      const endpoint = platform === 'instagram'
-        ? '/api/meta/instagram/messages'
-        : '/api/meta/facebook/messages'
-      const res  = await fetch(endpoint, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ recipient_id: selectedUser.id, text: message.trim() }),
-      })
-      const data = await res.json()
-      if (res.ok && data.success) {
-        toast.success(`DM sent to ${selectedUser.name}!`, { id: toastId })
-        setMessage('')
-        setSelectedUser(null)
-        onClose()
-      } else {
-        throw new Error(data.error?.message || data.error || 'Send failed')
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Send failed', { id: toastId })
-    }
-    setSending(false)
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-4 text-slate-800 dark:text-white"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-slate-900 dark:text-white font-black text-lg">✏️ New DM</h2>
-            <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">Send a reply to an existing conversation</p>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-800 dark:text-gray-500 dark:hover:text-white text-xl transition-colors">✕</button>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">Platform</label>
-          <div className="flex gap-2">
-            {(['instagram', 'messenger'] as const).map(p => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => { setPlatform(p); setSelectedUser(null); setSearchQuery('') }}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all flex items-center justify-center gap-2 ${
-                  platform === p
-                    ? p === 'instagram'
-                      ? 'bg-pink-50 dark:bg-gradient-to-r dark:from-pink-950/60 dark:to-purple-950/60 border-pink-300 dark:border-pink-800/50 text-pink-600 dark:text-pink-300'
-                      : 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800/50 text-blue-600 dark:text-blue-300'
-                    : 'bg-gray-50 dark:bg-[#141416] border-gray-200 dark:border-[#2D2D30] text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300'
-                }`}
-              >
-                {PLATFORM_ICON[p]} {p === 'instagram' ? 'Instagram' : 'Messenger'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">
-            Select Recipient
-            <span className="ml-1 text-slate-400 dark:text-gray-600 normal-case font-normal">(from existing conversations)</span>
-          </label>
-          {existingRecipients.length === 0 ? (
-            <div className="bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-xl p-4 text-center">
-              <p className="text-xs text-slate-500 dark:text-gray-500 font-semibold">No {platform} conversations yet.</p>
-              <div className="mt-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-lg p-2 text-[10px] text-amber-600 dark:text-amber-400">
-                ⚠️ App is in Dev Mode — only app testers appear
-              </div>
-            </div>
-          ) : (
-            <>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search contacts…"
-                className="w-full bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500"
-              />
-              <div className="max-h-36 overflow-y-auto space-y-1 rounded-xl bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] p-1">
-                {filtered.map(r => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setSelectedUser(r)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors ${
-                      selectedUser?.id === r.id
-                        ? 'bg-purple-100 dark:bg-purple-950/40 text-purple-900 dark:text-white border border-purple-200 dark:border-purple-900/30'
-                        : 'text-slate-600 dark:text-gray-400 hover:bg-gray-200/50 dark:hover:bg-[#1A1A1C] hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    <span className="w-7 h-7 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white text-[10px] font-black flex-shrink-0">
-                      {r.name[0]?.toUpperCase()}
-                    </span>
-                    <span>{r.name}</span>
-                    {selectedUser?.id === r.id && <span className="ml-auto text-green-500 dark:text-green-400">✓</span>}
-                  </button>
-                ))}
-                {filtered.length === 0 && (
-                  <p className="text-center text-[10px] text-slate-400 dark:text-gray-600 py-2">No results for &quot;{searchQuery}&quot;</p>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">Message</label>
-          <textarea
-            rows={3}
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend() }}
-            placeholder={selectedUser ? `Message to ${selectedUser.name}…` : 'Select a recipient first…'}
-            disabled={!selectedUser}
-            className="w-full bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors resize-none disabled:opacity-40"
-          />
-        </div>
-
-        <div className="flex gap-3 pt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-400 text-xs font-bold hover:text-slate-800 dark:hover:text-white transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={sending || !selectedUser || !message.trim()}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-40 bg-gradient-to-r ${PLATFORM_GRADIENT[platform]} text-white`}
-          >
-            {sending ? '⏳ Sending…' : `📤 Send ${platform === 'instagram' ? 'IG DM' : 'Message'}`}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Typing Indicator ─────────────────────────────────────────────────────────
-function TypingIndicator() {
-  return (
-    <div className="flex justify-start">
-      <div className="bg-white dark:bg-[#222225] border border-gray-200 dark:border-[#2D2D30] rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
-        <span className="w-1.5 h-1.5 bg-slate-400 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-        <span className="w-1.5 h-1.5 bg-slate-400 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-        <span className="w-1.5 h-1.5 bg-slate-400 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-      </div>
-    </div>
-  )
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 export default function SocialInboxPage() {
   const [threads, setThreads]               = useState<Thread[]>([])
   const [messages, setMessages]             = useState<Message[]>([])
@@ -266,17 +61,16 @@ export default function SocialInboxPage() {
   const [loadingMsgs, setLoadingMsgs]       = useState(false)
   const [aiGenerating, setAiGenerating]     = useState(false)
   const [filter, setFilter]                 = useState<'all' | 'messenger' | 'instagram'>('all')
-  const [igError, setIgError]               = useState('')
-  const [fbError, setFbError]               = useState('')
-  const [showCompose, setShowCompose]       = useState(false)
   const [showAutoReply, setShowAutoReply]   = useState(false)
-  const [showThreadSettings, setShowThreadSettings] = useState(false)
+  const [geminiModalOpen, setGeminiModalOpen] = useState(false)
   const [isTyping, setIsTyping]             = useState(false)
 
   // Active connected account
   const [activeAccountIgBizId, setActiveAccountIgBizId] = useState<string>('17841411718913026')
   const [activeAccountPageId, setActiveAccountPageId] = useState<string>('1165738093294228')
-  const [activeAccountDisplayName, setActiveAccountDisplayName] = useState<string>('smritifyp')
+
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const textareaRef    = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     fetch('/api/meta/active-account')
@@ -285,331 +79,74 @@ export default function SocialInboxPage() {
         if (data.found) {
           if (data.instagramBusinessId) setActiveAccountIgBizId(data.instagramBusinessId)
           if (data.pageId) setActiveAccountPageId(data.pageId)
-          if (data.displayName) setActiveAccountDisplayName(data.displayName)
         }
       })
       .catch(() => {})
   }, [])
 
-  const [showLogsPanel, setShowLogsPanel]   = useState(false)
-  const [logs, setLogs]                     = useState<any[]>([])
-
-  // Thread specific autopilot state overrides
-  const [autopilotOverrides, setAutopilotOverrides] = useState<Record<string, boolean>>({})
-  const [globalAutopilotEnabled, setGlobalAutopilotEnabled] = useState(false)
-  const [threadConfigs, setThreadConfigs]                   = useState<Record<string, any>>({})
-
-  // Refs
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const pollingRef     = useRef<NodeJS.Timeout | null>(null)
-  const selectedThreadRef = useRef<Thread | null>(null)
-  const textareaRef    = useRef<HTMLTextAreaElement>(null)
-
-  // Keep ref in sync
-  useEffect(() => { selectedThreadRef.current = selectedThread }, [selectedThread])
-
-  // Auto-scroll to bottom whenever messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
-  // ── Autopilot settings ─────────────────────────────────────────────────────
-  const fetchAutopilotSettings = useCallback(async () => {
+  // Fetch threads
+  const fetchThreads = useCallback(async () => {
+    setLoadingThreads(true)
     try {
-      const [overridesRes, configRes, threadConfigsRes] = await Promise.all([
-        fetch('/api/meta/instagram/thread-autopilot'),
-        fetch('/api/meta/instagram/auto-reply'),
-        fetch('/api/meta/instagram/thread-config'),
-      ])
-      const overridesData = await overridesRes.json()
-      const configData = await configRes.json()
-      const threadConfigsData = await threadConfigsRes.json()
-      if (overridesRes.ok && overridesData.success) {
-        setAutopilotOverrides(overridesData.overrides || {})
-      }
-      if (configRes.ok && configData.success) {
-        setGlobalAutopilotEnabled(configData.chatbotEnabled || false)
-      }
-      if (threadConfigsRes.ok && threadConfigsData.success) {
-        setThreadConfigs(threadConfigsData.configs || {})
-      }
-    } catch (err) {
-      console.error('Failed to load autopilot settings:', err)
-    }
-  }, [])
-
-  useEffect(() => { fetchAutopilotSettings() }, [fetchAutopilotSettings])
-
-  // ── Logs panel helpers ─────────────────────────────────────────────────────
-  const fetchLogs = useCallback(async () => {
-    try {
-      const res = await fetch('/api/meta/instagram/auto-reply-logs')
+      const res = await fetch('/api/meta/instagram/messages?limit=25')
       const data = await res.json()
-      if (res.ok && data.success) setLogs(data.logs || [])
-    } catch (err) {
-      console.error('Failed to fetch auto-reply logs:', err)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (showLogsPanel) fetchLogs()
-  }, [showLogsPanel, fetchLogs])
-
-  const handleClearLogs = useCallback(async () => {
-    try {
-      await fetch('/api/meta/instagram/auto-reply-logs', { method: 'DELETE' })
-      setLogs([])
-      toast.success('Logs cleared')
-    } catch {
-      toast.error('Failed to clear logs')
-    }
-  }, [])
-
-  // ── Polling-based auto-reply (fallback when webhooks don't deliver DMs) ──────
-  const [pollStatus, setPollStatus] = useState<{ newMessages: number; repliesSent: number; polledAt: string } | null>(null)
-  const [isPolling, setIsPolling] = useState(false)
-
-  const runPollReplies = useCallback(async (silent = true) => {
-    if (isPolling) return
-    setIsPolling(true)
-    try {
-      const res = await fetch('/api/meta/instagram/poll-replies')
-      const data = await res.json()
-      if (data.success) {
-        setPollStatus({ newMessages: data.newMessages, repliesSent: data.repliesSent, polledAt: data.polledAt })
-        if (!silent && data.newMessages > 0) {
-          toast.success(`Polled: ${data.newMessages} new message(s), ${data.repliesSent} reply(ies) sent`)
-        }
-        // Refresh logs panel if it's open
-        if (showLogsPanel && data.repliesSent > 0) fetchLogs()
+      if (res.ok && data.threads) {
+        setThreads(data.threads)
       }
     } catch (err) {
-      console.error('[PollReplies] Failed:', err)
+      console.error('Failed to load threads:', err)
     } finally {
-      setIsPolling(false)
+      setLoadingThreads(false)
     }
-  }, [isPolling, showLogsPanel, fetchLogs])
-
-  // Auto-poll every 90 seconds, only when tab is active/visible to save database hits
-  useEffect(() => {
-    const handleAutoPoll = () => {
-      if (document.visibilityState === 'visible') {
-        runPollReplies(true)
-      }
-    }
-
-    handleAutoPoll() // immediate run on mount if visible
-    const interval = setInterval(handleAutoPoll, 90_000)
-    return () => clearInterval(interval)
-  }, [runPollReplies])
-
-  const senderId = selectedThread?.participantId || selectedThread?.id.replace('ig_', '')
-  // Priority: threadConfig.enabled (Chat Settings modal) > THREAD_AUTOPILOT_OVERRIDES (header button) > global
-  const threadConfig = senderId ? (threadConfigs[senderId] || {}) : {}
-  const threadOverride = senderId ? autopilotOverrides[senderId] : undefined
-  const isAutopilotActive = threadConfig.enabled !== undefined
-    ? threadConfig.enabled
-    : (threadOverride !== undefined ? threadOverride : globalAutopilotEnabled)
-
-  async function toggleThreadAutopilot() {
-    if (!selectedThread || !senderId) return
-    const nextState = !isAutopilotActive
-    const toastId = toast.loading(`${nextState ? 'Enabling' : 'Disabling'} Autopilot…`)
-    try {
-      const res = await fetch('/api/meta/instagram/thread-autopilot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ senderId, enabled: nextState }),
-      })
-      const data = await res.json()
-      if (res.ok && data.success) {
-        setAutopilotOverrides(data.overrides || {})
-        toast.success(`Autopilot ${nextState ? 'ON' : 'OFF'} for this chat!`, { id: toastId })
-      } else {
-        throw new Error(data.error || 'Failed to update')
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Action failed', { id: toastId })
-    }
-  }
-
-  // ── Fetch threads ──────────────────────────────────────────────────────────
-  const fetchThreads = useCallback(async (silent = false) => {
-    if (!silent) setLoadingThreads(true)
-    const fetched: Thread[] = []
-
-    try {
-      const fbRes  = await fetch('/api/meta/facebook/messages?limit=20')
-      const fbData = await fbRes.json()
-      const fbConvs = fbData.data?.data ?? fbData.data ?? []
-      if (Array.isArray(fbConvs) && fbConvs.length > 0) {
-        for (const conv of fbConvs) {
-          const msgs = conv.messages?.data || []
-          const last = msgs[0]
-          fetched.push({
-            id: conv.id,
-            name: conv.participants?.data?.[0]?.name || 'Messenger User',
-            platform: 'messenger',
-            lastMessage: last?.message || '(no message)',
-            time: last?.created_time ? timeAgo(last.created_time) : '',
-            unread: false,
-            participantId: conv.participants?.data?.[0]?.id,
-          })
-        }
-        setFbError('')
-      } else if (fbData.error) {
-        setFbError(typeof fbData.error === 'object' ? fbData.error.message || JSON.stringify(fbData.error) : fbData.error)
-      }
-    } catch { /* ignore */ }
-
-    try {
-      const igRes  = await fetch('/api/meta/instagram/messages?limit=20')
-      const igData = await igRes.json()
-      const igConvs = igData.data?.data ?? igData.data ?? []
-      if (Array.isArray(igConvs) && igConvs.length > 0) {
-        for (const conv of igConvs) {
-          const msgs = conv.messages?.data || []
-          const last = msgs[0]
-          const otherParticipant = conv.participants?.data?.find(
-            (p: { id: string; name?: string; username?: string }) => {
-              const bId = p.id
-              const bUser = (p.username || '').toLowerCase()
-              const bName = (p.name || '').toLowerCase()
-              const activeName = activeAccountDisplayName.toLowerCase()
-
-              if (bId === activeAccountIgBizId || bId === activeAccountPageId) return false
-              if (bUser && (activeName.includes(bUser) || bUser.includes(activeName))) return false
-              if (bName && (activeName.includes(bName) || bName.includes(activeName))) return false
-              return true
-            }
-          ) || conv.participants?.data?.[0]
-
-          const displayName = otherParticipant?.name || (otherParticipant?.username ? `@${otherParticipant.username}` : 'Instagram User')
-          fetched.push({
-            id: `ig_${conv.id}`,
-            name: displayName,
-            platform: 'instagram',
-            lastMessage: last?.message || (last ? '📎 Attachment' : '(no message)'),
-            time: conv.updated_time ? timeAgo(conv.updated_time) : (last?.created_time ? timeAgo(last.created_time) : ''),
-            unread: false,
-            participantId: otherParticipant?.id,
-          })
-        }
-        setIgError('')
-      } else if (igData.error) {
-        setIgError(typeof igData.error === 'object' ? igData.error.message || JSON.stringify(igData.error) : igData.error)
-      } else {
-        setIgError('')
-      }
-    } catch { /* ignore */ }
-
-    setThreads(fetched)
-    if (!silent) setLoadingThreads(false)
   }, [])
 
   useEffect(() => { fetchThreads() }, [fetchThreads])
 
-  // ── Fetch messages for selected thread ────────────────────────────────────
-  const fetchMessages = useCallback(async (thread: Thread, silent = false) => {
-    if (!silent) setLoadingMsgs(true)
+  // Fetch messages for selected thread
+  const fetchMessages = useCallback(async (thread: Thread) => {
+    setLoadingMsgs(true)
     try {
       const rawId = thread.id.replace('ig_', '')
       const platform = thread.platform === 'instagram' ? 'instagram' : 'facebook'
       const res  = await fetch(`/api/meta/${platform}/messages/${rawId}?limit=50`)
       const data = await res.json()
 
-      if (!res.ok || !data.success) {
-        console.warn('[Inbox] Failed to load messages:', data.error || 'API Error')
-        if (!silent) {
-          toast.error('Meta API rate limit reached. Retrying in a few seconds...', { id: 'inbox-rate-limit' })
-        }
-        if (!silent) setLoadingMsgs(false)
-        return
+      if (res.ok && data.data) {
+        const rawMsgs = data.data.data || data.data || []
+        const mapped: Message[] = rawMsgs.map((m: any) => ({
+          id: m.id || String(Math.random()),
+          sender: (m.from?.id === activeAccountPageId || m.from?.id === activeAccountIgBizId) ? 'system' : 'lead',
+          body: m.message || (m.attachments?.data?.length ? '' : '(media)'),
+          time: m.created_time ? formatMessageTime(m.created_time) : '',
+          rawTime: m.created_time,
+          attachments: m.attachments?.data || [],
+        })).reverse()
+        setMessages(mapped)
       }
-
-      const rawMsgs: Array<{
-        id: string
-        from?: { name?: string; username?: string; id?: string }
-        message?: string
-        created_time?: string
-        attachments?: { data?: Array<{ id: string; mime_type?: string; file_url?: string; name?: string; image_data?: { url?: string } }> }
-      }> = data.data?.data ?? data.data ?? []
-
-      const pageId = activeAccountPageId
-      const myIgId = activeAccountIgBizId
-
-      const mapped: Message[] = rawMsgs.map(m => ({
-        id:     m.id || String(Math.random()),
-        sender: ((m.from?.id === pageId || m.from?.id === myIgId) ? 'system' : 'lead') as 'system' | 'lead',
-        body:   m.message || (m.attachments?.data?.length ? '' : '(media)'),
-        time:   m.created_time ? formatMessageTime(m.created_time) : '',
-        rawTime: m.created_time,
-        attachments: m.attachments?.data || [],
-      })).reverse()
-
-      setMessages(prev => {
-        // Only update if messages actually changed (avoid flicker during polling)
-        if (JSON.stringify(prev.map(m => m.id)) === JSON.stringify(mapped.map(m => m.id))) return prev
-        return mapped
-      })
     } catch (err) {
-      console.error('[Inbox] fetchMessages error:', err)
+      console.error('fetchMessages error:', err)
+    } finally {
+      setLoadingMsgs(false)
     }
-    if (!silent) setLoadingMsgs(false)
-  }, [])
-
-  // ── Real-time polling ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (pollingRef.current) clearInterval(pollingRef.current)
-
-    if (selectedThread) {
-      let isVisible = true
-
-      const handleVisibilityChange = () => {
-        isVisible = !document.hidden
-        if (!isVisible && pollingRef.current) {
-          clearInterval(pollingRef.current)
-          pollingRef.current = null
-        } else if (isVisible && !pollingRef.current && selectedThreadRef.current) {
-          startPolling()
-        }
-      }
-
-      const startPolling = () => {
-        if (pollingRef.current) clearInterval(pollingRef.current)
-        pollingRef.current = setInterval(() => {
-          if (selectedThreadRef.current && isVisible) {
-            fetchMessages(selectedThreadRef.current, true)
-          }
-        }, 8000) // Safer 8-second interval against Meta Rate Limits
-      }
-
-      document.addEventListener('visibilitychange', handleVisibilityChange)
-      startPolling()
-
-      return () => {
-        if (pollingRef.current) clearInterval(pollingRef.current)
-        document.removeEventListener('visibilitychange', handleVisibilityChange)
-      }
-    }
-  }, [selectedThread, fetchMessages])
+  }, [activeAccountPageId, activeAccountIgBizId])
 
   async function openThread(thread: Thread) {
-    if (pollingRef.current) clearInterval(pollingRef.current)
     setSelectedThread(thread)
-    // Clear display state cleanly before non-silent load
     setMessages([])
     await fetchMessages(thread)
     setTimeout(() => textareaRef.current?.focus(), 100)
   }
 
-  // ── Send reply ─────────────────────────────────────────────────────────────
+  // Send reply
   async function handleSendReply(e: React.FormEvent) {
     e.preventDefault()
     if (!replyText.trim() || !selectedThread) return
     setSending(true)
 
-    // Optimistically add message
     const optimisticId = `opt_${Date.now()}`
     const optimisticMsg: Message = {
       id: optimisticId,
@@ -623,52 +160,36 @@ export default function SocialInboxPage() {
 
     try {
       const recipientId = selectedThread.participantId || selectedThread.id.replace('ig_', '')
-      const endpoint    = selectedThread.platform === 'instagram'
+      const endpoint = selectedThread.platform === 'instagram'
         ? '/api/meta/instagram/messages'
         : '/api/meta/facebook/messages'
-      const res  = await fetch(endpoint, {
-        method:  'POST',
+      const res = await fetch(endpoint, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ recipient_id: recipientId, text: sentText }),
+        body: JSON.stringify({ recipient_id: recipientId, text: sentText }),
       })
       const data = await res.json()
       if (res.ok && data.success) {
-        toast.success('Sent!', { duration: 1500 })
-
-        // Trigger n8n webhook for outbound manual message
-        const n8nUrl = '/api/meta/n8n-trigger'
-        fetch(n8nUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'manual_reply',
-            platform: selectedThread.platform,
-            recipientId,
-            threadId: selectedThread.id,
-            senderName: selectedThread.name,
-            message: sentText,
-            timestamp: new Date().toISOString(),
-          }),
-        }).catch(() => {})
-
-        setTimeout(() => fetchMessages(selectedThread, true), 1500)
+        toast.success('Reply sent!')
+        setTimeout(() => fetchMessages(selectedThread), 1500)
       } else {
         setMessages(prev => prev.filter(m => m.id !== optimisticId))
         setReplyText(sentText)
-        throw new Error(data.error?.message || data.error || 'Send failed')
+        throw new Error(data.error?.message || 'Send failed')
       }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Send failed')
+    } catch (err: any) {
+      toast.error(err.message || 'Send failed')
+    } finally {
+      setSending(false)
     }
-    setSending(false)
   }
 
-  // ── AI Generate ───────────────────────────────────────────────────────────
+  // AI Generate Response using Gemini API
   async function handleGenerateAI() {
     if (!selectedThread) return
     setAiGenerating(true)
     setIsTyping(true)
-    const toastId = toast.loading('Generating AI response…')
+    const toastId = toast.loading('Generating AI reply via Gemini...')
     try {
       const history = messages.slice(-6).map(m => ({
         role: m.sender === 'system' ? 'system' : 'user',
@@ -683,416 +204,237 @@ export default function SocialInboxPage() {
       const data = await res.json()
       if (res.ok && data.reply) {
         setReplyText(data.reply)
-        toast.success('AI draft ready!', { id: toastId })
+        toast.success('Gemini AI draft generated!', { id: toastId })
         textareaRef.current?.focus()
       } else {
         throw new Error(data.error || 'AI generation failed')
       }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'AI failed', { id: toastId })
+    } catch (err: any) {
+      toast.error(err.message || 'AI failed', { id: toastId })
+    } finally {
+      setIsTyping(false)
+      setAiGenerating(false)
     }
-    setIsTyping(false)
-    setAiGenerating(false)
   }
 
   const visibleThreads = filter === 'all' ? threads : threads.filter(t => t.platform === filter)
 
   return (
-    <>
-      {showCompose && <ComposeDMModal onClose={() => { setShowCompose(false); fetchThreads() }} threads={threads} />}
+    <div className="space-y-4">
+      {/* Reusable Gemini API Key Modal */}
+      <GeminiKeyModal open={geminiModalOpen} onOpenChange={setGeminiModalOpen} />
       {showAutoReply && <AutoReplyModal onClose={() => setShowAutoReply(false)} />}
-      {showThreadSettings && selectedThread && senderId && (
-        <AutoReplyModal
-          threadId={senderId}
-          threadName={selectedThread.name}
-          onClose={() => {
-            setShowThreadSettings(false)
-            fetchAutopilotSettings()
-          }}
-        />
-      )}
 
-      <div className="flex flex-col h-[calc(100vh-120px)] rounded-2xl border border-gray-200 dark:border-[#2D2D30] overflow-hidden bg-white dark:bg-[#0A0A0C] text-slate-800 dark:text-white select-none shadow-sm">
-        <div className="flex flex-1 overflow-hidden">
-
-          {/* ── Thread Sidebar ─────────────────────────────────────────────── */}
-          <div className="w-72 flex-shrink-0 border-r border-gray-200 dark:border-[#2D2D30] flex flex-col bg-gray-50 dark:bg-[#0E0E10]">
-            <div className="p-4 border-b border-gray-200 dark:border-[#2D2D30] space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-black text-slate-800 dark:text-white tracking-tight">Inbox</h2>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setShowAutoReply(true)}
-                    className="p-1.5 rounded-lg bg-white dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] hover:bg-gray-100 dark:hover:bg-[#1e1e21] text-xs transition-all shadow-sm"
-                    title="AI Settings"
-                  >
-                    🤖
-                  </button>
-                  <button
-                    onClick={() => setShowCompose(true)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
-                  >
-                    ✏️ New DM
-                  </button>
-                  <button
-                    onClick={() => fetchThreads()}
-                    className="p-1.5 rounded-lg bg-white dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] hover:bg-gray-100 dark:hover:bg-[#1e1e21] text-xs transition-all shadow-sm"
-                    title="Refresh"
-                  >
-                    🔄
-                  </button>
-                </div>
-              </div>
-
-              {/* Platform filter tabs */}
-              <div className="flex gap-1 bg-gray-200/50 dark:bg-[#141416] rounded-xl p-1">
-                {([
-                  { key: 'all',       label: 'All',        icon: '🌐' },
-                  { key: 'messenger', label: 'Messenger',   icon: '💬' },
-                  { key: 'instagram', label: 'Instagram',   icon: '📸' },
-                ] as const).map(f => (
-                  <button
-                    key={f.key}
-                    onClick={() => setFilter(f.key)}
-                    className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all flex flex-col items-center gap-0.5 ${
-                      filter === f.key
-                        ? f.key === 'instagram'
-                          ? 'bg-pink-100 dark:bg-gradient-to-b dark:from-pink-950/80 dark:to-purple-950/80 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-900/40 shadow-sm'
-                          : f.key === 'messenger'
-                          ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900/40 shadow-sm'
-                          : 'bg-white dark:bg-[#222225] text-slate-800 dark:text-white border border-gray-300 dark:border-[#3D3D40] shadow-sm'
-                        : 'text-slate-500 dark:text-gray-500 hover:text-slate-800 dark:hover:text-gray-300'
-                    }`}
-                  >
-                    <span className="text-sm">{f.icon}</span>
-                    <span>{f.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Thread list */}
-            <div className="flex-1 overflow-y-auto">
-              {loadingThreads ? (
-                <div className="flex flex-col gap-2 p-3">
-                  {[1,2,3].map(i => <div key={i} className="h-16 rounded-xl bg-gray-200/50 dark:bg-[#1A1A1C] animate-pulse" />)}
-                </div>
-              ) : visibleThreads.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 text-slate-400 dark:text-gray-600 gap-2 p-4 text-center">
-                  <span className="text-3xl">{filter === 'instagram' ? '📸' : filter === 'messenger' ? '💬' : '📭'}</span>
-                  <span className="text-xs font-semibold">No conversations found.</span>
-                  {filter === 'instagram' && igError && (
-                    <p className="text-[10px] text-red-500 dark:text-red-400 font-mono bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded p-2">{igError}</p>
-                  )}
-                  {filter === 'messenger' && fbError && (
-                    <p className="text-[10px] text-red-500 dark:text-red-400 font-mono bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded p-2">{fbError}</p>
-                  )}
-                </div>
-              ) : (
-                visibleThreads.map(thread => (
-                  <button
-                    key={thread.id}
-                    onClick={() => openThread(thread)}
-                    className={`w-full text-left p-4 border-b border-gray-100 dark:border-[#1A1A1C] transition-all hover:bg-gray-100/50 dark:hover:bg-[#141416] group ${
-                      selectedThread?.id === thread.id
-                        ? 'bg-gray-100/70 dark:bg-[#141416] border-l-2 border-l-purple-500'
-                        : 'border-l-2 border-l-transparent'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center font-black text-xs text-white bg-gradient-to-br ${
-                        thread.platform === 'instagram' ? 'from-pink-500 to-purple-600' : 'from-blue-500 to-blue-700'
-                      }`}>
-                        {thread.name[0]?.toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <span className="text-xs font-bold text-slate-800 dark:text-white truncate">{thread.name}</span>
-                          <span className="text-[9px] text-slate-400 dark:text-gray-600 flex-shrink-0">{thread.time}</span>
-                        </div>
-                        <p className="text-[11px] text-slate-500 dark:text-gray-500 truncate leading-tight">{thread.lastMessage}</p>
-                        <span className={`text-[9px] font-semibold mt-0.5 inline-block ${PLATFORM_COLOR[thread.platform]}`}>
-                          {PLATFORM_ICON[thread.platform]} {thread.platform}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
+      {/* Inbox Header Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-border bg-card">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10 text-primary">
+            <MessageSquare className="w-5 h-5" />
           </div>
+          <div>
+            <h1 className="text-base font-semibold text-foreground">Unified Social Inbox</h1>
+            <p className="text-xs text-muted-foreground">Manage Instagram and Facebook DMs with AI Quick Replies.</p>
+          </div>
+        </div>
 
-          {/* ── Chat & Logs Panel Wrapper ─────────────────────────────────────────── */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* ── Chat Panel ──────────────────────────────────────────────────── */}
-            <div className="flex-1 flex flex-col bg-gray-50 dark:bg-[#0A0A0C]">
-            {!selectedThread ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 dark:text-gray-600 gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-white dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] flex items-center justify-center text-3xl shadow-sm">
-                  💬
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold">Select a conversation</p>
-                  <p className="text-xs mt-1">Choose from the left sidebar to start messaging</p>
-                </div>
-                <button
-                  onClick={() => setShowCompose(true)}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-md"
-                >
-                  ✏️ Compose New DM
-                </button>
+        <div className="flex items-center gap-2">
+          {/* Inline Gemini API Key button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setGeminiModalOpen(true)}
+            className="gap-1.5 border-blue-500/30 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Set Gemini Key</span>
+          </Button>
+
+          <Button variant="outline" size="sm" onClick={() => setShowAutoReply(true)} className="gap-1.5">
+            <Bot className="w-3.5 h-3.5" />
+            <span>AI Bot Rules</span>
+          </Button>
+          <Button variant="secondary" size="sm" onClick={fetchThreads}>
+            <RefreshCw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Inbox Layout Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 h-[calc(100vh-210px)]">
+        {/* Thread Sidebar (4 cols) */}
+        <Card className="md:col-span-4 flex flex-col overflow-hidden h-full">
+          <CardHeader className="p-3 border-b border-border space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground">Conversations</span>
+              <Badge variant="outline" className="text-[10px]">{visibleThreads.length} active</Badge>
+            </div>
+            {/* Filter buttons */}
+            <div className="grid grid-cols-3 gap-1 p-1 bg-muted rounded-lg text-xs">
+              <button
+                onClick={() => setFilter('all')}
+                className={`py-1 rounded-md text-[11px] font-medium transition-colors ${filter === 'all' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'}`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilter('messenger')}
+                className={`py-1 rounded-md text-[11px] font-medium transition-colors ${filter === 'messenger' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'}`}
+              >
+                Messenger
+              </button>
+              <button
+                onClick={() => setFilter('instagram')}
+                className={`py-1 rounded-md text-[11px] font-medium transition-colors ${filter === 'instagram' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'}`}
+              >
+                Instagram
+              </button>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0 flex-1 overflow-y-auto">
+            {loadingThreads ? (
+              <div className="p-4 space-y-3">
+                {[1,2,3,4].map(i => <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />)}
+              </div>
+            ) : visibleThreads.length === 0 ? (
+              <div className="p-8 text-center text-xs text-muted-foreground space-y-1">
+                <MessageSquare className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="font-medium text-foreground">No threads found</p>
+                <p>Select a different filter or refresh conversations.</p>
               </div>
             ) : (
-              <>
-                {/* Chat header */}
-                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 dark:border-[#2D2D30] bg-white dark:bg-[#0E0E10]">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs text-white bg-gradient-to-br ${
-                      selectedThread.platform === 'instagram' ? 'from-pink-500 to-purple-600' : 'from-blue-500 to-blue-700'
-                    }`}>
-                      {selectedThread.name[0]?.toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{selectedThread.name}</div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className={`text-[9px] font-bold ${PLATFORM_COLOR[selectedThread.platform]}`}>
-                          {PLATFORM_ICON[selectedThread.platform]} {selectedThread.platform}
-                        </span>
-                        <span className="text-gray-300 dark:text-gray-700">·</span>
-                        <span className="text-[9px] text-slate-400 dark:text-gray-600">{selectedThread.time}</span>
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" title="Live polling active" />
-                      </div>
-                    </div>
+              visibleThreads.map(t => (
+                <div
+                  key={t.id}
+                  onClick={() => openThread(t)}
+                  className={`p-3.5 border-b border-border cursor-pointer transition-colors hover:bg-accent/50 ${selectedThread?.id === t.id ? 'bg-accent border-l-2 border-l-primary' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <span className="text-xs font-semibold text-foreground truncate">{t.name}</span>
+                    <span className="text-[10px] text-muted-foreground flex-shrink-0">{t.time}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setShowThreadSettings(true)}
-                      className="p-1.5 rounded-lg bg-white dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] hover:bg-gray-100 dark:hover:bg-[#1e1e21] text-xs transition-all shadow-sm"
-                      title="Custom Chat Settings"
-                    >
-                      ⚙️
-                    </button>
-                    <button
-                      onClick={toggleThreadAutopilot}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        isAutopilotActive
-                          ? 'bg-purple-100 dark:bg-purple-950/50 border-purple-300 dark:border-purple-700/50 text-purple-700 dark:text-purple-300'
-                          : 'bg-white dark:bg-[#141416] border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-500 hover:text-slate-800 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-500'
-                      }`}
-                    >
-                      🤖 Autopilot: {isAutopilotActive ? 'ON' : 'OFF'}
-                    </button>
-                    <button
-                      onClick={() => setShowLogsPanel(prev => !prev)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        showLogsPanel
-                          ? 'bg-amber-100 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700/50 text-amber-700 dark:text-amber-300'
-                          : 'bg-white dark:bg-[#141416] border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-500 hover:text-slate-800 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-500'
-                      }`}
-                      title="Toggle Webhook Logs Panel"
-                    >
-                      📜 Logs {showLogsPanel ? 'ON' : 'OFF'}
-                    </button>
-                    <button
-                      onClick={() => runPollReplies(false)}
-                      disabled={isPolling}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 ${
-                        isPolling
-                          ? 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700/50 text-green-700 dark:text-green-400 animate-pulse'
-                          : 'bg-white dark:bg-[#141416] border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-500 hover:text-green-700 dark:hover:text-green-400 hover:border-green-400 dark:hover:border-green-600'
-                      }`}
-                      title={pollStatus ? `Last poll: ${new Date(pollStatus.polledAt).toLocaleTimeString()} — ${pollStatus.newMessages} new msgs, ${pollStatus.repliesSent} sent` : 'Poll Instagram DMs now'}
-                    >
-                      {isPolling ? '⏳' : '🔄'} {isPolling ? 'Polling…' : 'Poll Now'}
-                    </button>
-                    <button
-                      onClick={() => setShowCompose(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] text-slate-500 dark:text-gray-400 text-[10px] font-bold hover:text-slate-800 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-500 transition-all"
-                    >
-                      ✏️ New DM
-                    </button>
+                  <p className="text-xs text-muted-foreground truncate">{t.lastMessage}</p>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <Badge variant="outline" className={`text-[9px] capitalize ${PLATFORM_COLOR[t.platform]}`}>
+                      {t.platform}
+                    </Badge>
                   </div>
                 </div>
-
-                {/* Messages area */}
-                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
-                  {loadingMsgs ? (
-                    <div className="flex flex-col gap-3 pt-4">
-                      {[1,2,3].map(i => (
-                        <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`h-10 rounded-2xl bg-gray-200 dark:bg-[#1A1A1C] animate-pulse ${i % 2 === 0 ? 'w-48' : 'w-36'}`} />
-                        </div>
-                      ))}
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-gray-600 gap-2">
-                      <span className="text-3xl">📭</span>
-                      <span className="text-sm">No messages in this conversation yet.</span>
-                    </div>
-                  ) : (
-                    <>
-                      {messages.map((msg, idx) => {
-                        const isSystem = msg.sender === 'system'
-                        const showTime = idx === messages.length - 1 ||
-                          messages[idx + 1]?.sender !== msg.sender ||
-                          (idx < messages.length - 1 && msg.rawTime && messages[idx + 1]?.rawTime &&
-                            Math.abs(new Date(msg.rawTime).getTime() - new Date(messages[idx + 1].rawTime!).getTime()) > 300000)
-
-                        return (
-                          <div key={msg.id} className={`flex ${isSystem ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-xs lg:max-w-md ${isSystem ? 'items-end' : 'items-start'} flex flex-col gap-0.5`}>
-                              <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                                isSystem
-                                  ? 'bg-[#E3B859] text-slate-950 font-bold rounded-br-sm shadow-md'
-                                  : 'bg-white dark:bg-[#1E1E22] text-slate-800 dark:text-gray-100 border border-gray-200 dark:border-[#2D2D30] rounded-bl-sm shadow-sm'
-                              }`}>
-                                {msg.body && <p>{msg.body}</p>}
-                                {msg.attachments && msg.attachments.length > 0 && msg.attachments.map(att => {
-                                  const imgUrl = att.file_url || att.image_data?.url
-                                  const isImage = att.mime_type?.startsWith('image') || (imgUrl && /\.(jpg|jpeg|png|gif|webp)/i.test(imgUrl))
-                                  const isVideo = att.mime_type?.startsWith('video') || (imgUrl && /\.(mp4|mov|avi)/i.test(imgUrl || ''))
-                                  if (isImage && imgUrl) return (
-                                    <a key={att.id} href={imgUrl} target="_blank" rel="noreferrer" className="block mt-2">
-                                      <img src={imgUrl} alt={att.name || 'attachment'} className="rounded-xl max-w-[220px] max-h-[200px] object-cover border border-white/10" />
-                                    </a>
-                                  )
-                                  if (isVideo && imgUrl) return (
-                                    <video key={att.id} src={imgUrl} controls className="rounded-xl mt-2 max-w-[220px]" />
-                                  )
-                                  return (
-                                    <a key={att.id} href={imgUrl || '#'} target="_blank" rel="noreferrer"
-                                      className="flex items-center gap-1.5 mt-2 text-[11px] underline opacity-80">
-                                      📎 {att.name || 'Attachment'}
-                                    </a>
-                                  )
-                                })}
-                              </div>
-                              {showTime && (
-                                <span className={`text-[9px] px-1 text-slate-400 dark:text-gray-600 ${isSystem ? 'text-right' : ''}`}>
-                                  {msg.time}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                      {isTyping && <TypingIndicator />}
-                    </>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Reply bar */}
-                <div className="px-4 py-3 border-t border-gray-200 dark:border-[#2D2D30] bg-white dark:bg-[#0E0E10]">
-                  <form onSubmit={handleSendReply} className="flex items-end gap-2">
-                    <textarea
-                      ref={textareaRef}
-                      rows={1}
-                      value={replyText}
-                      onChange={e => {
-                        setReplyText(e.target.value)
-                        e.target.style.height = 'auto'
-                        e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
-                          handleSendReply(e)
-                        }
-                      }}
-                      placeholder={`Reply via ${selectedThread.platform}…`}
-                      className="flex-1 bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors resize-none leading-relaxed"
-                      style={{ minHeight: '42px', maxHeight: '120px' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleGenerateAI}
-                      disabled={aiGenerating}
-                      className="px-3 py-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800/40 text-purple-700 dark:text-purple-300 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors disabled:opacity-40 flex items-center gap-1 whitespace-nowrap"
-                    >
-                      {aiGenerating ? '⏳' : '✨'} AI
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={!replyText.trim() || sending}
-                      className="px-4 py-2.5 rounded-xl bg-[#E3B859] text-slate-950 text-xs font-bold disabled:opacity-40 hover:bg-[#d4ac50] transition-all flex items-center gap-1.5 whitespace-nowrap"
-                    >
-                      {sending ? '⏳' : '📤'} Send
-                    </button>
-                  </form>
-                </div>
-              </>
+              ))
             )}
-          </div>
+          </CardContent>
+        </Card>
 
-          {/* Webhook Execution Logs Panel */}
-          {showLogsPanel && (
-            <div className="w-80 flex-shrink-0 flex flex-col bg-white dark:bg-[#0E0E10] border-l border-gray-200 dark:border-[#2D2D30] overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416]">
-                <span className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5 font-sans">
-                  📜 Webhook Logs
-                </span>
-                <div className="flex items-center gap-1.5 font-sans">
-                  <button
-                    onClick={handleClearLogs}
-                    className="text-[9px] font-bold text-red-500 hover:underline hover:scale-105 active:scale-95 transition-all"
-                  >
-                    Clear
-                  </button>
-                  <span className="text-gray-300 dark:text-gray-700">|</span>
-                  <button
-                    onClick={() => setShowLogsPanel(false)}
-                    className="text-xs text-slate-405 dark:text-gray-500 hover:text-slate-700 dark:hover:text-white transition-colors"
-                  >
-                    ✕
-                  </button>
-                </div>
+        {/* Thread Chat Detail (8 cols) */}
+        <Card className="md:col-span-8 flex flex-col overflow-hidden h-full">
+          {!selectedThread ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-3">
+              <div className="p-4 rounded-full bg-primary/10 text-primary">
+                <MessageSquare className="w-8 h-8" />
               </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Select a conversation</p>
+                <p className="text-xs">Choose a thread from the left sidebar to view messages and generate AI responses.</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Chat Header */}
+              <CardHeader className="p-4 border-b border-border flex flex-row items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs">
+                    {selectedThread.name[0]?.toUpperCase()}
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm font-semibold">{selectedThread.name}</CardTitle>
+                    <span className={`text-[10px] capitalize ${PLATFORM_COLOR[selectedThread.platform]}`}>
+                      {selectedThread.platform}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setGeminiModalOpen(true)} className="gap-1 text-xs border-blue-500/30 text-blue-400">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Gemini Key</span>
+                  </Button>
+                </div>
+              </CardHeader>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono">
-                {logs.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 text-xs border border-dashed border-gray-200 dark:border-[#2D2D30] rounded-xl font-sans">
-                    No webhook events logged yet.
+              {/* Chat Messages */}
+              <CardContent className="p-4 flex-1 overflow-y-auto space-y-3">
+                {loadingMsgs ? (
+                  <div className="space-y-3 pt-4">
+                    {[1,2,3].map(i => (
+                      <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
+                        <div className="h-10 w-40 rounded-xl bg-muted animate-pulse" />
+                      </div>
+                    ))}
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-muted-foreground">
+                    No message history loaded for this thread.
                   </div>
                 ) : (
-                  logs.map((log: any, idx: number) => (
-                    <div key={idx} className="p-2.5 rounded-xl border border-gray-150 dark:border-[#1E1E22] bg-gray-50 dark:bg-[#141416] text-[10px] space-y-1">
-                      <div className="flex items-center justify-between text-[8px] text-slate-400">
-                        <span>{new Date(log.timestamp).toLocaleString()}</span>
-                        <span className={`px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
-                          log.status === 'sent' ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400' :
-                          log.status === 'skipped' ? 'bg-gray-100 text-gray-650 dark:bg-gray-800 dark:text-gray-400' :
-                          'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
-                        }`}>
-                          {log.status}
-                        </span>
+                  messages.map(m => (
+                    <div key={m.id} className={`flex ${m.sender === 'system' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-md p-3 rounded-xl text-xs space-y-1 ${
+                        m.sender === 'system' 
+                          ? 'bg-primary text-primary-foreground font-medium rounded-br-none' 
+                          : 'bg-muted text-foreground rounded-bl-none border border-border'
+                      }`}>
+                        <p>{m.body}</p>
+                        <span className="text-[9px] opacity-70 block text-right">{m.time}</span>
                       </div>
-                      <div className="text-slate-700 dark:text-gray-300">
-                        <span className="font-semibold text-purple-650 dark:text-purple-400">User:</span> {log.message}
-                      </div>
-                      <div className="text-slate-750 dark:text-gray-300">
-                        <span className="font-semibold text-[#E3B859]">Match:</span> <span className="underline">{log.matchedType}</span>
-                        {log.modelUsed && <span className="text-[8px] text-slate-400 ml-1.5">({log.modelUsed})</span>}
-                      </div>
-                      {log.replyContent && (
-                        <div className="text-slate-600 dark:text-gray-405 whitespace-pre-line bg-white dark:bg-[#0E0E10] p-1.5 rounded-md mt-1 border border-gray-100 dark:border-[#1c1c1f]">
-                          <span className="font-semibold text-green-600">Reply:</span> {log.replyContent}
-                        </div>
-                      )}
-                      {log.error && (
-                        <div className="text-red-500 bg-red-50 dark:bg-red-950/20 p-1.5 rounded-md mt-1 border border-red-100">
-                          <span className="font-semibold">Error:</span> {log.error}
-                        </div>
-                      )}
                     </div>
                   ))
                 )}
+                <div ref={messagesEndRef} />
+              </CardContent>
+
+              {/* Reply Compose Bar */}
+              <div className="p-3 border-t border-border bg-card flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <textarea
+                    ref={textareaRef}
+                    rows={1}
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendReply(e)
+                      }
+                    }}
+                    placeholder={`Reply via ${selectedThread.platform}...`}
+                    className="flex-1 bg-background border border-input rounded-md px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none min-h-[38px]"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={aiGenerating}
+                    onClick={handleGenerateAI}
+                    className="gap-1 text-purple-400 border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>AI Draft</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!replyText.trim() || sending}
+                    onClick={handleSendReply}
+                    className="gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send</span>
+                  </Button>
+                </div>
               </div>
-            </div>
+            </>
           )}
-        </div>
+        </Card>
       </div>
     </div>
-  </>
   )
 }
