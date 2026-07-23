@@ -145,11 +145,11 @@ async function handleAutoReply(
     }
 
     // 3. Resolve the config options: prefer account-specific fields, fall back to global config
-    const pageId = matchedAccount?.credentials?.page_id || process.env.META_PAGE_ID || '1165738093294228'
-    const igId = matchedAccount?.credentials?.page_id || process.env.INSTAGRAM_BUSINESS_ID || '17841411718913026'
+    const pageId = matchedAccount?.credentials?.page_id || process.env.META_PAGE_ID || ''
+    const igId = matchedAccount?.credentials?.instagram_business_id || matchedAccount?.credentials?.page_id || process.env.INSTAGRAM_BUSINESS_ID || ''
     
     // Skip if sender is ourselves
-    if (senderId === pageId || senderId === igId) return
+    if ((pageId && senderId === pageId) || (igId && senderId === igId)) return
 
     // Load global settings for fallback
     const { data: configRows } = await supabaseAdmin

@@ -1,4 +1,3 @@
-// dashboard/src/app/automation/layout.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -23,8 +22,14 @@ import {
   BookOpen, 
   Search, 
   Bell,
-  Sparkles
+  Sparkles,
+  ChevronRight,
+  Menu,
+  X
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { GeminiKeyModal } from '@/components/gemini-key-modal'
 
 interface AutomationLayoutProps {
   children: React.ReactNode
@@ -33,146 +38,150 @@ interface AutomationLayoutProps {
 export default function AutomationLayout({ children }: AutomationLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const [activeWorkspace, setActiveWorkspace] = useState('Stratnent Workspace')
+  const [activeWorkspace, setActiveWorkspace] = useState('Stratnent Marketing')
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  
-  // Theme sync state
-  const [theme, setTheme] = useState<'dark' | 'light'>('light')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [geminiModalOpen, setGeminiModalOpen] = useState(false)
+
+  // Active connected account state for quick badge
+  const [activeAccount, setActiveAccount] = useState<{ accountName?: string; platform?: string } | null>(null)
 
   useEffect(() => {
-    // Monitor theme changes via DOM attribute
-    const checkTheme = () => {
-      const activeTheme = document.documentElement.getAttribute('data-theme') as 'dark' | 'light' | null
-      if (activeTheme) {
-        setTheme(activeTheme)
-      }
-    }
-    checkTheme()
-    
-    // Create a MutationObserver to watch document element changes
-    const observer = new MutationObserver(checkTheme)
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] })
-    
-    return () => observer.disconnect()
-  }, [])
+    fetch('/api/meta/active-account')
+      .then(r => r.json())
+      .then(d => {
+        if (d.account_name) {
+          setActiveAccount({ accountName: d.account_name, platform: d.platform })
+        }
+      })
+      .catch(() => {})
+  }, [pathname])
 
   const getBreadcrumbs = () => {
     const parts = pathname.split('/').filter(Boolean)
     return parts.map((part, index) => {
       const href = '/' + parts.slice(0, index + 1).join('/')
-      const name = part.charAt(0).toUpperCase() + part.slice(1)
+      const name = part.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
       return { name, href }
     })
   }
 
   const breadcrumbs = getBreadcrumbs()
-  const isDark = false
+
+  const navSections = [
+    { 
+      label: 'Communication', 
+      items: [
+        { name: 'Unified Inbox', href: '/automation/inbox', icon: <Inbox className="w-4 h-4" /> },
+        { name: 'Comment Manager', href: '/automation/comments', icon: <MessageSquare className="w-4 h-4" /> },
+        { name: 'CRM Pipelines', href: '/automation/crm', icon: <Briefcase className="w-4 h-4" /> },
+        { name: 'Outreach Campaigns', href: '/automation/campaigns', icon: <Send className="w-4 h-4" /> },
+        { name: 'Email Outreach', href: '/automation/email-outreach', icon: <Mail className="w-4 h-4" /> },
+      ]
+    },
+    { 
+      label: 'Publishing', 
+      items: [
+        { name: 'Campaign Composer', href: '/automation/publish', icon: <Edit className="w-4 h-4" /> },
+        { name: 'Content Calendar', href: '/automation/calendar', icon: <Calendar className="w-4 h-4" /> },
+        { name: 'Trending Research', href: '/automation/trending', icon: <Flame className="w-4 h-4" /> },
+        { name: 'Media Library', href: '/automation/media', icon: <ImageIcon className="w-4 h-4" /> },
+        { name: 'ChatGPT Images', href: '/automation/chatgpt-images', icon: <Sparkles className="w-4 h-4" /> },
+      ]
+    },
+    { 
+      label: 'Operations', 
+      items: [
+        { name: 'Connected Accounts', href: '/automation/accounts', icon: <Key className="w-4 h-4" /> },
+        { name: 'Meta Settings', href: '/automation/settings/meta', icon: <Settings className="w-4 h-4" /> },
+        { name: 'n8n Workflows', href: '/automation/workflows', icon: <RefreshCw className="w-4 h-4" /> },
+        { name: 'System Health', href: '/automation/health', icon: <Activity className="w-4 h-4" /> },
+        { name: 'API Console', href: '/automation/testing', icon: <Terminal className="w-4 h-4" /> },
+        { name: 'Activity Logs', href: '/automation/logs', icon: <FileText className="w-4 h-4" /> },
+        { name: 'Docs', href: '/automation/docs', icon: <BookOpen className="w-4 h-4" /> },
+      ]
+    },
+  ]
 
   return (
-    <div className={`flex min-h-screen transition-colors duration-300 font-sans ${
-      isDark ? 'bg-[#141416] text-[#E4E3DD]' : 'bg-[#F4F4F6] text-gray-800'
-    }`}>
+    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground antialiased font-sans">
       {/* Command Palette Overlay */}
       {commandPaletteOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="border w-full max-w-lg p-5 shadow-2xl space-y-4 rounded-2xl bg-white border-slate-200 text-slate-800">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3 text-xs font-bold uppercase tracking-wider text-rose-600">
-              <span className="flex items-center gap-1"><Search className="w-3.5 h-3.5" /> Search Actions & Commands</span>
-              <button onClick={() => setCommandPaletteOpen(false)} className="text-slate-400 hover:text-slate-900 transition-colors">Close</button>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="border border-border w-full max-w-lg p-5 shadow-2xl space-y-4 rounded-xl bg-card text-card-foreground">
+            <div className="flex justify-between items-center border-b border-border pb-3 text-xs font-semibold uppercase tracking-wider text-primary">
+              <span className="flex items-center gap-1.5"><Search className="w-3.5 h-3.5" /> Search Actions & Modules</span>
+              <button onClick={() => setCommandPaletteOpen(false)} className="text-muted-foreground hover:text-foreground">Close</button>
             </div>
             <input 
               type="text" 
-              placeholder="Search conversations, create lead pipeline, trigger campaign sequence..." 
-              className="w-full border rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-rose-600 bg-slate-50 border-slate-200 text-slate-900"
+              placeholder="Search page, trigger campaign, view inbox..." 
+              className="w-full border border-input rounded-md px-3.5 py-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring bg-background text-foreground"
             />
-            <div className="space-y-1.5 text-xs text-slate-400">
-              <div className="p-2.5 rounded-lg cursor-pointer flex justify-between hover:bg-slate-50 text-slate-650 font-bold">
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <div onClick={() => { router.push('/automation/inbox'); setCommandPaletteOpen(false) }} className="p-2 rounded-md cursor-pointer flex justify-between hover:bg-accent hover:text-accent-foreground">
                 <span>Go to Unified Chat Inbox</span>
-                <span className="font-mono text-[10px] text-slate-400">⌥I</span>
+                <span className="font-mono text-[10px]">/inbox</span>
               </div>
-              <div className="p-2.5 rounded-lg cursor-pointer flex justify-between hover:bg-slate-50 text-slate-650 font-bold">
-                <span>View CRM Pipeline Stages</span>
-                <span className="font-mono text-[10px] text-slate-400">⌥P</span>
+              <div onClick={() => { router.push('/automation/email-outreach'); setCommandPaletteOpen(false) }} className="p-2 rounded-md cursor-pointer flex justify-between hover:bg-accent hover:text-accent-foreground">
+                <span>Go to Email Outreach</span>
+                <span className="font-mono text-[10px]">/email</span>
               </div>
-              <div className="p-2.5 rounded-lg cursor-pointer flex justify-between hover:bg-slate-50 text-slate-650 font-bold">
-                <span>Launch n8n workflow execution</span>
-                <span className="font-mono text-[10px] text-slate-400">⌥W</span>
+              <div onClick={() => { router.push('/automation/settings/meta'); setCommandPaletteOpen(false) }} className="p-2 rounded-md cursor-pointer flex justify-between hover:bg-accent hover:text-accent-foreground">
+                <span>Meta Settings & Accounts</span>
+                <span className="font-mono text-[10px]">/settings</span>
               </div>
             </div>
           </div>
         </div>
       )}
-            {/* Inner Sub-Sidebar for Social Automation modules */}
+
+      {/* Global Gemini API Key Modal */}
+      <GeminiKeyModal open={geminiModalOpen} onOpenChange={setGeminiModalOpen} />
+
+      {/* Desktop Navigation Sidebar */}
       <aside
-        className="hidden md:flex border-r flex-col justify-between flex-shrink-0 relative transition-all duration-300 border-slate-200 bg-white"
-        style={{ width: sidebarCollapsed ? '56px' : '230px' }}
+        className="hidden md:flex border-r border-border flex-col justify-between flex-shrink-0 relative transition-all duration-300 bg-card"
+        style={{ width: sidebarCollapsed ? '64px' : '240px' }}
       >
-        {/* Collapse inner toggle arrow */}
         <button
           onClick={() => setSidebarCollapsed(c => !c)}
-          className="absolute -right-3 top-6 z-10 w-6 h-6 rounded-full border flex items-center justify-center text-slate-400 hover:text-slate-900 bg-white border-slate-350 hover:border-slate-300 transition-all shadow-md focus:outline-none"
-          title={sidebarCollapsed ? 'Expand sub-menu' : 'Collapse sub-menu'}
+          className="absolute -right-3 top-5 z-20 w-6 h-6 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground bg-card shadow-sm transition-transform"
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <svg className={`w-3 h-3 transition-transform duration-300 ${sidebarCollapsed ? 'rotate-0' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-          </svg>
+          <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${sidebarCollapsed ? 'rotate-0' : 'rotate-180'}`} />
         </button>
 
-        <div className="overflow-hidden">
-          {/* Workspace Switcher */}
-          <div className="p-3 border-b border-slate-100">
-            {!sidebarCollapsed && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Workspace</span>}
-            {sidebarCollapsed ? (
-              <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center font-black text-xs mx-auto shadow-md shadow-rose-600/20">W</div>
+        <div className="flex flex-col h-full overflow-hidden">
+          {/* Sidebar Header / Logo */}
+          <div className="h-14 border-b border-border px-4 flex items-center justify-between flex-shrink-0">
+            {!sidebarCollapsed ? (
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center font-bold text-xs text-primary-foreground">
+                  A
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold tracking-tight text-foreground">Auto-MT Platform</span>
+                  <span className="text-[10px] text-muted-foreground">Automation Command</span>
+                </div>
+              </div>
             ) : (
-              <div className="relative">
-                <select
-                  value={activeWorkspace}
-                  onChange={(e) => setActiveWorkspace(e.target.value)}
-                  className="w-full border text-[10px] font-bold px-2.5 py-2 rounded-xl appearance-none focus:outline-none cursor-pointer bg-slate-50 border-slate-200 text-slate-800 focus:border-rose-600 transition-colors"
-                >
-                  <option value="Stratnent Workspace">Stratnent Marketing</option>
-                  <option value="Personal Sandbox Workspace">Personal Sandbox</option>
-                  <option value="Client Staging Workspace">Client Staging</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-slate-400 text-xs">▼</div>
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-xs text-primary-foreground mx-auto">
+                A
               </div>
             )}
           </div>
 
           {/* Navigation Sections */}
-          <div className="p-1.5 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
-            {[
-              { label: 'Business Communication', items: [
-                { name: 'Unified Inbox', href: '/automation/inbox', icon: <Inbox className="w-3.5 h-3.5" /> },
-                { name: 'Comment Manager', href: '/automation/comments', icon: <MessageSquare className="w-3.5 h-3.5" /> },
-                { name: 'CRM Pipelines', href: '/automation/crm', icon: <Briefcase className="w-3.5 h-3.5" /> },
-                { name: 'Outreach Campaigns', href: '/automation/campaigns', icon: <Send className="w-3.5 h-3.5" /> },
-                { name: 'Email Outreach', href: '/automation/email-outreach', icon: <Mail className="w-3.5 h-3.5" /> },
-              ]},
-              { label: 'Content Publishing', items: [
-                { name: 'Campaign Composer', href: '/automation/publish', icon: <Edit className="w-3.5 h-3.5" /> },
-                { name: 'Content Calendar', href: '/automation/calendar', icon: <Calendar className="w-3.5 h-3.5" /> },
-                { name: 'Trending Research', href: '/automation/trending', icon: <Flame className="w-3.5 h-3.5" /> },
-                { name: 'Media Library', href: '/automation/media', icon: <ImageIcon className="w-3.5 h-3.5" /> },
-                { name: 'ChatGPT Images', href: '/automation/chatgpt-images', icon: <Sparkles className="w-3.5 h-3.5" /> },
-              ]},
-              { label: 'System Operations', items: [
-                { name: 'Connected Accounts', href: '/automation/accounts', icon: <Key className="w-3.5 h-3.5" /> },
-                { name: 'Meta Settings', href: '/automation/settings/meta', icon: <Settings className="w-3.5 h-3.5" /> },
-                { name: 'n8n Workflow Jobs', href: '/automation/workflows', icon: <RefreshCw className="w-3.5 h-3.5" /> },
-                { name: 'System Health', href: '/automation/health', icon: <Activity className="w-3.5 h-3.5" /> },
-                { name: 'API Test Console', href: '/automation/testing', icon: <Terminal className="w-3.5 h-3.5" /> },
-                { name: 'Activity Logs', href: '/automation/logs', icon: <FileText className="w-3.5 h-3.5" /> },
-                { name: 'System Docs', href: '/automation/docs', icon: <BookOpen className="w-3.5 h-3.5" /> },
-                { name: 'Module Settings', href: '/automation/settings', icon: <Settings className="w-3.5 h-3.5" /> },
-              ]},
-            ].map(section => (
-              <div key={section.label} className="space-y-0.5">
+          <div className="flex-1 px-3 py-3 space-y-4 overflow-y-auto">
+            {navSections.map(section => (
+              <div key={section.label} className="space-y-1">
                 {!sidebarCollapsed && (
-                  <span className="px-2.5 text-[8px] font-bold text-slate-400 uppercase tracking-widest block mb-1">{section.label}</span>
+                  <span className="px-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+                    {section.label}
+                  </span>
                 )}
                 {section.items.map((item) => {
                   const isActive = pathname === item.href
@@ -181,14 +190,13 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
                       key={item.name}
                       href={item.href}
                       title={sidebarCollapsed ? item.name : undefined}
-                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all relative ${
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                         isActive 
-                          ? 'text-rose-600 bg-rose-50/80 border border-rose-100/50 shadow-sm' 
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                      } ${sidebarCollapsed ? 'justify-center' : ''}`}
+                          ? 'bg-secondary text-primary font-semibold shadow-xs' 
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      } ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
                     >
-                      {isActive && <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-rose-600 rounded-r" />}
-                      <span className={`transition-colors ${isActive ? 'text-rose-600' : 'text-slate-400'}`}>{item.icon}</span>
+                      <span className={isActive ? 'text-primary' : 'text-muted-foreground'}>{item.icon}</span>
                       {!sidebarCollapsed && <span>{item.name}</span>}
                     </Link>
                   )
@@ -196,108 +204,98 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
               </div>
             ))}
           </div>
-        </div>
 
-        {/* Command Palette trigger */}
-        {!sidebarCollapsed && (
-          <div className="p-3 border-t border-slate-100 bg-inherit">
-            <button 
-              onClick={() => setCommandPaletteOpen(true)}
-              className="w-full py-2.5 border rounded-xl text-[9px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-            >
-              <Search className="w-3 h-3 text-rose-600" /> Actions Search
-            </button>
-          </div>
-        )}
+          {/* Sidebar Footer / Gemini Key button */}
+          {!sidebarCollapsed && (
+            <div className="p-3 border-t border-border bg-card space-y-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setGeminiModalOpen(true)}
+                className="w-full justify-start gap-2 text-xs border-primary/20 text-primary hover:bg-primary/10"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Gemini API Key</span>
+              </Button>
+            </div>
+          )}
+        </div>
       </aside>
 
-      {/* Main Content Pane */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Header navbar */}
-        <header className="h-14 border-b px-6 flex items-center justify-between transition-colors duration-300 border-slate-200 bg-white shadow-sm flex-shrink-0">
-          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            <Link href="/" className="hover:text-slate-700 text-slate-400">Root</Link>
-            {breadcrumbs.map((b, i) => (
-              <React.Fragment key={b.href}>
-                <span className="text-slate-300">/</span>
-                {i === breadcrumbs.length - 1 ? (
-                  <span className="text-slate-900">{b.name}</span>
-                ) : (
-                  <Link href={b.href} className="hover:text-slate-700 text-slate-400">{b.name}</Link>
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-
-          {/* Mobile Sub-Navigation Selector */}
-          <div className="relative block md:hidden max-w-[160px]">
-            <select
-              value={pathname}
-              onChange={(e) => router.push(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-slate-800 text-[10px] font-bold uppercase tracking-wider rounded-xl pl-3 pr-8 py-1.5 focus:outline-none appearance-none cursor-pointer w-full text-ellipsis overflow-hidden whitespace-nowrap"
-            >
-              <option value="" disabled>Choose Module...</option>
-              <optgroup label="Communication">
-                <option value="/automation/inbox">Unified Inbox</option>
-                <option value="/automation/comments">Comment Manager</option>
-                <option value="/automation/crm">CRM Pipelines</option>
-                <option value="/automation/campaigns">Campaigns</option>
-                <option value="/automation/email-outreach">Email Outreach</option>
-              </optgroup>
-              <optgroup label="Publishing">
-                <option value="/automation/publish">Composer</option>
-                <option value="/automation/calendar">Calendar</option>
-                <option value="/automation/trending">Trending Research</option>
-                <option value="/automation/media">Media Library</option>
-                <option value="/automation/chatgpt-images">ChatGPT Images</option>
-              </optgroup>
-              <optgroup label="Operations">
-                <option value="/automation/accounts">Accounts</option>
-                <option value="/automation/settings/meta">Meta Settings</option>
-                <option value="/automation/workflows">Workflows</option>
-                <option value="/automation/health">Health</option>
-                <option value="/automation/testing">API Console</option>
-                <option value="/automation/logs">Logs</option>
-                <option value="/automation/docs">Docs</option>
-                <option value="/automation/settings">Module Settings</option>
-              </optgroup>
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-slate-500 text-[9px]">▼</div>
-          </div>
-
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header Bar */}
+        <header className="h-14 border-b border-border px-4 md:px-6 flex items-center justify-between bg-card flex-shrink-0">
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+
+            {/* Breadcrumb path */}
+            <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Link href="/automation" className="hover:text-foreground transition-colors">Automation</Link>
+              {breadcrumbs.map((b, i) => (
+                <React.Fragment key={b.href}>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60" />
+                  {i === breadcrumbs.length - 1 ? (
+                    <span className="text-foreground font-semibold">{b.name}</span>
+                  ) : (
+                    <Link href={b.href} className="hover:text-foreground transition-colors">{b.name}</Link>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
+          {/* Header Controls */}
+          <div className="flex items-center gap-3">
+            {/* Active Account Status Badge */}
+            {activeAccount && (
+              <Badge variant="outline" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>{activeAccount.accountName}</span>
+              </Badge>
+            )}
+
+            {/* Inline Gemini Key Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setGeminiModalOpen(true)}
+              className="h-8 gap-1.5 text-xs border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden sm:inline">Set Gemini Key</span>
+            </Button>
+
+            {/* Notifications Dropdown */}
             <div className="relative">
               <button 
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="w-8 h-8 rounded-lg border flex items-center justify-center transition-colors relative focus:outline-none border-slate-200 bg-slate-50 hover:bg-slate-100"
+                className="p-2 rounded-lg border border-border bg-background hover:bg-accent transition-colors relative"
               >
-                <Bell className="w-4 h-4 text-slate-655" />
-                <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-rose-500 rounded-full border border-white" />
+                <Bell className="w-4 h-4 text-muted-foreground" />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full" />
               </button>
               
               {notificationsOpen && (
-                <div className="absolute right-0 mt-2 border rounded-xl w-60 p-3.5 shadow-xl z-50 text-[10px] space-y-2 bg-white border-slate-200 text-slate-700 shadow-md">
-                  <div className="font-bold border-b pb-1.5 uppercase tracking-wider text-[8px] text-slate-900 border-slate-100">Unread Alert Logs</div>
-                  <div className="p-1.5 rounded-lg hover:bg-slate-50">
-                    <span className="font-bold block text-slate-900">Broadcast completed</span>
-                    <span className="text-[9px] text-slate-500">WhatsApp segment sent successfully</span>
-                  </div>
-                  <div className="p-1.5 rounded-lg hover:bg-slate-50">
-                    <span className="font-bold block text-slate-900">Opportunity Created</span>
-                    <span className="text-[9px] text-slate-500">Singapore Cafe marked as lead</span>
+                <div className="absolute right-0 mt-2 w-64 rounded-xl border border-border bg-card p-3 shadow-xl z-50 text-xs space-y-2">
+                  <div className="font-semibold border-b border-border pb-1.5 text-foreground">System Alerts</div>
+                  <div className="p-2 rounded-md bg-secondary/50">
+                    <span className="font-semibold block text-foreground">Meta Active Account</span>
+                    <span className="text-[11px] text-muted-foreground">Active profile connected and healthy</span>
                   </div>
                 </div>
               )}
             </div>
-
-            <div className="text-[10px] font-bold border px-3 py-1.5 rounded-xl uppercase tracking-wider border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100/50 transition-colors cursor-pointer shadow-xs">
-              Enterprise Portal
-            </div>
           </div>
         </header>
 
-        {/* Dynamic Panel child views */}
-        <main className="flex-1 p-5 md:p-6 overflow-y-auto transition-colors duration-300 bg-slate-50">
+        {/* Dynamic Page Content */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
           {children}
         </main>
       </div>

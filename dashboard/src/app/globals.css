@@ -2,223 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-}
+@layer base {
+  :root {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-plus-jakarta), sans-serif;
-}
+    --card: 222.2 84% 6.9%;
+    --card-foreground: 210 40% 98%;
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+    --popover: 222.2 84% 6.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+
+    --radius: 0.75rem;
   }
 }
 
-/* Custom dark theme variable overrides for Zarss Premium Dashboard */
-.dark {
-  --background: #141416;
-  --foreground: #f3f4f6;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
 }
 
-/* Force dark theme overrides on static light elements when .dark wrapper is active */
-.dark .bg-white {
-  background-color: #18181A !important;
-  color: #f3f4f6 !important;
-}
-
-.dark .text-\[\#1C1C1E\] {
-  color: #ffffff !important;
-}
-
-.dark .text-gray-800 {
-  color: #f3f4f6 !important;
-}
-
-.dark .text-gray-700 {
-  color: #e5e7eb !important;
-}
-
-.dark .text-gray-600 {
-  color: #d1d5db !important;
-}
-
-.dark .text-gray-500 {
-  color: #9ca3af !important;
-}
-
-.dark .text-gray-400 {
-  color: #9ca3af !important;
-}
-
-.dark .border-\[\#E4E3DD\] {
-  border-color: #2D2D30 !important;
-}
-
-.dark .border-gray-100 {
-  border-color: #252528 !important;
-}
-
-.dark .border-slate-200 {
-  border-color: #2D2D30 !important;
-}
-
-.dark .border-gray-200 {
-  border-color: #2D2D30 !important;
-}
-
-.dark .divide-\[\#E4E3DD\]\/60 > * {
-  border-color: #2D2D30 !important;
-}
-
-.dark .divide-y tr {
-  border-color: #2D2D30 !important;
-}
-
-.dark .bg-gray-50\/50 {
-  background-color: #202022 !important;
-}
-
-.dark .bg-gray-50 {
-  background-color: #202022 !important;
-}
-
-.dark .hover\:bg-gray-50:hover {
-  background-color: #252528 !important;
-}
-
-.dark tr.hover\:bg-\[\#F4F3EF\]\/30:hover {
-  background-color: #252528 !important;
-}
-
-.dark .bg-\[\#F4F3EF\] {
-  background-color: #252528 !important;
-}
-
-.dark .bg-\[\#ECEAE4\] {
-  background-color: #2D2D30 !important;
-}
-
-.dark .bg-\[\#1C1C1E\] {
-  background-color: #3D3D40 !important;
-  color: #ffffff !important;
-}
-
-.dark .hover\:bg-\[\#252528\]:hover {
-  background-color: #4D4D50 !important;
-}
-
-.dark .text-slate-800 {
-  color: #e5e7eb !important;
-}
-
-.dark .text-slate-500 {
-  color: #9ca3af !important;
-}
-
-/* Map hardcoded dark theme sub-page elements to light theme when NOT in dark mode */
-:not(.dark) .bg-\[\#0A0A0C\] {
-  background-color: #f9f9fb !important;
-  color: #1f2937 !important;
-}
-
-:not(.dark) .bg-\[\#0E0E10\] {
-  background-color: #ffffff !important;
-  color: #1f2937 !important;
-}
-
-:not(.dark) .bg-\[\#1E1E22\] {
-  background-color: #f3f4f6 !important;
-  color: #1f2937 !important;
-}
-
-:not(.dark) .border-\[\#1A1A1C\] {
-  border-color: #e5e7eb !important;
-}
-
-:not(.dark) .bg-\[\#18181A\] {
-  background-color: #ffffff !important;
-  color: #1f2937 !important;
-}
-
-:not(.dark) .bg-\[\#141416\] {
-  background-color: #f3f4f6 !important;
-  color: #1f2937 !important;
-}
-
-:not(.dark) .bg-\[\#222225\] {
-  background-color: #ece9e2 !important;
-  color: #1f2937 !important;
-}
-
-:not(.dark) .border-\[\#2D2D30\] {
-  border-color: #e5e7eb !important;
-}
-
-:not(.dark) .border-\[\#2D2D30\]\/60 {
-  border-color: #f3f4f6 !important;
-}
-
-:not(.dark) .text-white {
-  color: #0f172a !important;
-}
-
-:not(.dark) .text-slate-800 {
-  color: #0f172a !important;
-}
-
-:not(.dark) .text-slate-500 {
-  color: #334155 !important;
-}
-
-:not(.dark) .text-gray-400 {
-  color: #374151 !important;
-}
-
-:not(.dark) .text-gray-500 {
-  color: #1f2937 !important;
-}
-
-:not(.dark) .border-gray-200 {
-  border-color: #cbd5e1 !important;
-}
-
-:not(.dark) .border-gray-300 {
-  border-color: #94a3b8 !important;
-}
-
-:not(.dark) .placeholder-gray-600::placeholder {
-  color: #6b7280 !important;
-}
-
-:not(.dark) .hover\:bg-gray-800:hover {
-  background-color: #e2e8f0 !important;
-  color: #0f172a !important;
-}
-
-/* Custom premium scrollbar styling */
+/* Custom scrollbars for clean UI */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
-  background: #0E0E10;
+  background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #2D2D30;
-  border-radius: 99px;
+  background: hsl(var(--border));
+  border-radius: 9999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #4D4D52;
+  background: hsl(var(--muted-foreground) / 0.5);
 }
-
-/* Firefox styling */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #2D2D30 #0E0E10;
-}
-
