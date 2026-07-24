@@ -191,6 +191,19 @@ Link: https://smritishans.mywebsite.social/`
         })
       }
 
+      // Check if this conversation thread has 0 previous replies from the bot/model
+      const previousBotTurns = convHistory.filter(m => m.role === 'model')
+      const isFirstTurn = previousBotTurns.length === 0
+
+      const dynamicTurnContext = isFirstTurn
+        ? `CONTEXT: FIRST MESSAGE FROM A NEW STRANGER (NEW IG DM)
+This is the very FIRST message from this user. 
+- Greet them in a sweet, lovely, warm, and welcoming way like a real Indian girl receiving a fresh DM.
+- Say something cute, lovely, and short like "Heyy! Boliye? 😊✨", "Hii! Kaise ho? ❤️", or "Hey! Thanks for messaging ✨".
+- DO NOT act like you already know them well, and DO NOT ask heavy personal questions or how their whole day went yet on message #1.`
+        : `CONTEXT: ONGOING CONVERSATION
+Continue the chat naturally based on the previous dialogue history.`
+
       // 7. Generate reply content
       let replyText = ''
       if (staticReplyEnabled && staticReply.trim()) {
@@ -207,6 +220,8 @@ Link: https://smritishans.mywebsite.social/`
           : 'Reply in MAXIMUM 2 short sentences.'
 
         const prompt = `${chatbotPersona}
+
+${dynamicTurnContext}
 
 CRITICAL INSTRUCTIONS (NEVER BREAK THESE):
 - Output ONLY your direct conversational message to the user.

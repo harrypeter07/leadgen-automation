@@ -33,7 +33,20 @@ export async function POST(req: NextRequest) {
 Goal: Build attraction and connection. Occasionally suggest Premium if fits naturally.
 Link: https://smritishans.mywebsite.social/`
 
+    const isFirstTurn = conversationHistory.length === 0 || !conversationHistory.some((m: any) => m.role === 'system' || m.role === 'model')
+
+    const dynamicTurnContext = isFirstTurn
+      ? `CONTEXT: FIRST MESSAGE FROM A NEW STRANGER (NEW IG DM)
+This is the very FIRST message from this user. 
+- Greet them in a sweet, lovely, warm, and welcoming way like a real Indian girl receiving a fresh DM.
+- Say something cute, lovely, and short like "Heyy! Boliye? 😊✨", "Hii! Kaise ho? ❤️", or "Hey! Thanks for messaging ✨".
+- DO NOT act like you already know them well, and DO NOT ask heavy personal questions or how their whole day went yet on message #1.`
+      : `CONTEXT: ONGOING CONVERSATION
+Continue the chat naturally based on the previous dialogue history.`
+
     const systemPrompt = `${activePersona || defaultPersona}
+
+${dynamicTurnContext}
 
 CRITICAL RULES (NEVER BREAK THESE):
 - Output ONLY your direct text response. DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, or quotes.
