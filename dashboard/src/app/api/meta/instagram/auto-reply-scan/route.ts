@@ -3,32 +3,15 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { InstagramService } from '@/lib/meta/instagram-service'
 import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 import { generateWithGemini } from '@/lib/gemini'
-import { getChatMemory, saveChatMemory, MemoryMessage } from '@/lib/meta/chat-memory'
+import { getChatMemory, saveChatMemory, sanitizeAiReply, MemoryMessage } from '@/lib/meta/chat-memory'
 
 export const dynamic = 'force-dynamic'
 
 const autoRepliedMsgIds = new Set<string>()
-
-// Helper to clean internal thinking tags or draft options from Gemini output
-function sanitizeAiReply(text: string): string {
-  if (!text) return ''
-  let cleaned = text.trim()
-  
-  if (cleaned.includes('Draft') || cleaned.includes('* User:') || cleaned.includes('* Persona:')) {
-    const quoteMatches = Array.from(cleaned.matchAll(/"([^"]+)"/g))
-    if (quoteMatches.length > 0) {
-      cleaned = quoteMatches[quoteMatches.length - 1][1]
-    } else {
-      cleaned = cleaned.replace(/\*[^*]+\*/g, '').trim()
-    }
-  }
-  
-  cleaned = cleaned.replace(/^["'`]+|["'`]+$/g, '').trim()
-  return cleaned
-}
+const lastRepliedTimestampMap = new Map<string, number>()
 
 // POST /api/meta/instagram/auto-reply-scan
-// Background polling worker that inspects full conversation threads, syncs DB memory, and responds to user DMs
+// Background polling worker that inspects full conversation threads, syncs DB memory, and responds to user DMs with human timing & strict length rules
 export async function POST() {
   try {
     await ensureMetaConfig()
@@ -62,7 +45,7 @@ Goal: Build attraction and connection. Occasionally suggest Premium if fits natu
 Link: https://smritishans.mywebsite.social/`
     
     const responseLength = (settings.AI_RESPONSE_LENGTH || 'small') as 'extra_small' | 'small' | 'medium' | 'large'
-    const conversationDelay = Number(settings.AI_CONVERSATION_DELAY || 2)
+    const conversationDelay = Number(settings.AI_CONVERSATION_DELAY || 3)
 
     if (!chatbotEnabled && !staticReplyEnabled) {
       return NextResponse.json({ success: true, message: 'Auto-reply bot disabled' })
@@ -78,22 +61,33 @@ Link: https://smritishans.mywebsite.social/`
     let processedCount = 0
 
     for (const conv of conversations) {
+      const convId = conv.id
+
+      // Human timing guard: Avoid replying multiple times in less than 15 seconds to the same thread
+      const lastSentTime = lastRepliedTimestampMap.get(convId) || 0
+      if (Date.now() - lastSentTime < 12000) {
+        continue
+      }
+
       // Fetch complete thread messages to inspect full real-time message stream
-      const msgsRes = await InstagramService.getConversationMessages(conv.id, 20)
+      const msgsRes = await InstagramService.getConversationMessages(convId, 20)
       const rawMsgs = (msgsRes.success && msgsRes.data) 
         ? ((msgsRes.data as any).data || []) 
         : (conv.messages?.data || [])
 
+      if (rawMsgs.length === 0) continue
+
       // Sync fetched messages to DB chat memory
-      if (rawMsgs.length > 0) {
-        const memList: MemoryMessage[] = rawMsgs.map((m: any) => ({
-          id: m.id || String(Math.random()),
-          role: (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' : 'user',
-          text: m.message || '',
-          time: m.created_time || new Date().toISOString(),
-          fromUsername: m.from?.username,
-        }))
-        await saveChatMemory(conv.id, memList)
+      const memList: MemoryMessage[] = rawMsgs.map((m: any) => ({
+        id: m.id || String(Math.random()),
+        role: (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' : 'user',
+        text: m.message || (m.attachments?.data?.length ? '[Photo/Attachment]' : ''),
+        time: m.created_time || new Date().toISOString(),
+        fromUsername: m.from?.username,
+      })).filter((m: MemoryMessage) => m.text.trim().length > 0)
+
+      if (memList.length > 0) {
+        await saveChatMemory(convId, memList)
       }
 
       // Sort messages chronologically (oldest first, newest last)
@@ -123,11 +117,21 @@ Link: https://smritishans.mywebsite.social/`
 
       // Skip if we already replied to this exact latest user message ID
       if (!senderId || autoRepliedMsgIds.has(latestUserMsg.id)) continue
-      autoRepliedMsgIds.add(latestUserMsg.id)
 
-      // Combine text of all unreplied messages sent back-to-back by the user
-      const combinedUserText = unrepliedUserMsgs.map(m => m.message).filter(Boolean).join('\n')
-      console.log(`[AutoReplyScan] Found ${unrepliedUserMsgs.length} unreplied message(s) from ${senderUsername}: "${combinedUserText}"`)
+      // Combine text of all unreplied messages (substituting photos/attachments if text is empty)
+      const userTextParts = unrepliedUserMsgs.map(m => {
+        const txt = (m.message || '').trim()
+        if (txt) return txt
+        if (m.attachments?.data?.length || m.attachments?.length) return '[User sent a photo/attachment]'
+        return ''
+      }).filter(Boolean)
+
+      if (userTextParts.length === 0) continue
+      const combinedUserText = userTextParts.join('\n')
+
+      autoRepliedMsgIds.add(latestUserMsg.id)
+      lastRepliedTimestampMap.set(convId, Date.now())
+      console.log(`[AutoReplyScan] Processing ${unrepliedUserMsgs.length} unreplied message(s) from ${senderUsername}: "${combinedUserText}"`)
 
       // 3. Send typing indicator
       try {
@@ -139,8 +143,8 @@ Link: https://smritishans.mywebsite.social/`
         await new Promise(res => setTimeout(res, Math.min(conversationDelay * 1000, 5000)))
       }
 
-      // 5. Build full conversation history for Gemini (previous turns + new user input)
-      const dbMem = await getChatMemory(conv.id)
+      // 5. Build full conversation history for Gemini from DB memory
+      const dbMem = await getChatMemory(convId)
       const convHistory = (dbMem.length > 0 ? dbMem : sortedMsgs)
         .slice(-12) // Take last 12 historical turns
         .map((m: any) => ({
@@ -162,25 +166,28 @@ Link: https://smritishans.mywebsite.social/`
         replyText = staticReply.trim()
       } else {
         const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
-        const maxTokens = responseLength === 'extra_small' ? 40 : responseLength === 'small' ? 90 : responseLength === 'medium' ? 180 : 350
+        
+        // Strict token limit & instructions based on selected response length
+        const maxTokens = responseLength === 'extra_small' ? 25 : responseLength === 'small' ? 45 : responseLength === 'medium' ? 85 : 180
         const lengthInstruction = responseLength === 'extra_small'
-          ? 'Reply in MAXIMUM 5-8 words.'
+          ? 'Reply in MAXIMUM 1 short sentence (5-8 words total).'
           : responseLength === 'small'
-          ? 'Reply in 1-2 short sentences. Be concise and punchy.'
-          : 'Reply in 2-3 short sentences.'
+          ? 'Reply in MAXIMUM 1 short sentence (max 12-15 words total). Never write long paragraphs.'
+          : 'Reply in MAXIMUM 2 short sentences.'
 
         const prompt = `${chatbotPersona}
 
-CRITICAL RULES (NEVER BREAK THESE):
-- Output ONLY your direct text response. DO NOT include internal reasoning, draft options (e.g. *Draft 1:*), explanations, or quotes.
+CRITICAL INSTRUCTIONS (NEVER BREAK THESE):
+- Output ONLY your direct conversational message to the user.
+- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.
 - ${lengthInstruction}
-- Speak naturally like a real human Indian girl on Instagram DMs. Never sound like an AI or chatbot.
+- Speak naturally like a real human Indian girl on Instagram DMs. Never sound like a chatbot.
 - Share link https://smritishans.mywebsite.social/ naturally when relevant.`
 
         const { text } = await generateWithGemini({
           system_instruction: { parts: [{ text: prompt }] },
           contents: convHistory,
-          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.75 }
+          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 }
         }, apiKey)
 
         replyText = sanitizeAiReply(text)
@@ -193,7 +200,7 @@ CRITICAL RULES (NEVER BREAK THESE):
 
         // Save generated bot reply to DB memory
         const botMsgId = (sendRes.data as any)?.message_id || `bot_${Date.now()}`
-        await saveChatMemory(conv.id, [{
+        await saveChatMemory(convId, [{
           id: botMsgId,
           role: 'model',
           text: replyText,

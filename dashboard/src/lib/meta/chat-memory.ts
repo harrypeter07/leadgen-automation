@@ -9,6 +9,35 @@ export interface MemoryMessage {
 }
 
 /**
+ * Sanitizes Gemini AI responses to strip internal thought process, draft headers, and persona annotations
+ */
+export function sanitizeAiReply(text: string): string {
+  if (!text) return ''
+  let cleaned = text.trim()
+  
+  if (
+    cleaned.includes('* User') || 
+    cleaned.includes('* Persona') || 
+    cleaned.includes('* Draft') || 
+    cleaned.includes('* Style') || 
+    cleaned.includes('* Tone') || 
+    cleaned.includes('* Constraints') ||
+    cleaned.includes('Empty message')
+  ) {
+    const quotes = cleaned.match(/"([^"]+)"/g)
+    if (quotes && quotes.length > 0) {
+      const last = quotes[quotes.length - 1]
+      cleaned = last.replace(/^"|"$/g, '')
+    } else {
+      cleaned = cleaned.replace(/\*[^*]+\*/g, '').trim()
+    }
+  }
+
+  cleaned = cleaned.replace(/^["'`]+|["'`]+$/g, '').trim()
+  return cleaned
+}
+
+/**
  * Retrieves stored chat memory for a specific thread ID from Supabase meta_config
  */
 export async function getChatMemory(threadId: string): Promise<MemoryMessage[]> {

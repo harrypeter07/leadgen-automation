@@ -1,23 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ensureMetaConfig } from '@/lib/meta/runtime-config'
-
-function sanitizeAiReply(text: string): string {
-  if (!text) return ''
-  let cleaned = text.trim()
-  
-  if (cleaned.includes('Draft') || cleaned.includes('* User:') || cleaned.includes('* Persona:')) {
-    const quoteMatches = Array.from(cleaned.matchAll(/"([^"]+)"/g))
-    if (quoteMatches.length > 0) {
-      cleaned = quoteMatches[quoteMatches.length - 1][1]
-    } else {
-      cleaned = cleaned.replace(/\*[^*]+\*/g, '').trim()
-    }
-  }
-  
-  cleaned = cleaned.replace(/^["'`]+|["'`]+$/g, '').trim()
-  return cleaned
-}
+import { sanitizeAiReply } from '@/lib/meta/chat-memory'
 
 // POST /api/meta/ai-chat
 // body: { message, conversationHistory?, persona? }
@@ -52,8 +36,8 @@ Link: https://smritishans.mywebsite.social/`
     const systemPrompt = `${activePersona || defaultPersona}
 
 CRITICAL RULES (NEVER BREAK THESE):
-- Output ONLY your direct text response. DO NOT include internal reasoning, draft options (e.g. *Draft 1:*), explanations, or quotes.
-- Keep reply short (1-3 sentences).
+- Output ONLY your direct text response. DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, or quotes.
+- Keep reply short (1-2 sentences max). Be quick and concise.
 - Speak naturally like a real human Indian girl on Instagram DMs. Never sound like an AI or chatbot.
 - Share link https://smritishans.mywebsite.social/ naturally when relevant.`
 
@@ -72,8 +56,8 @@ CRITICAL RULES (NEVER BREAK THESE):
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents,
         generationConfig: {
-          maxOutputTokens: 300,
-          temperature: 0.75,
+          maxOutputTokens: 60,
+          temperature: 0.7,
           topP: 0.9,
         },
       },
