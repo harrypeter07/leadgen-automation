@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { InstagramService } from '@/lib/meta/instagram-service'
 import { ensureMetaConfig } from '@/lib/meta/runtime-config'
 import { generateWithGemini } from '@/lib/gemini'
+import { getChatMemory, saveChatMemory, MemoryMessage } from '@/lib/meta/chat-memory'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ function sanitizeAiReply(text: string): string {
 }
 
 // POST /api/meta/instagram/auto-reply-scan
-// Background polling worker that inspects full conversation threads for unreplied incoming user DMs (single or rapid multi-messages) and generates AI responses
+// Background polling worker that inspects full conversation threads, syncs DB memory, and responds to user DMs
 export async function POST() {
   try {
     await ensureMetaConfig()
@@ -83,7 +84,17 @@ Link: https://smritishans.mywebsite.social/`
         ? ((msgsRes.data as any).data || []) 
         : (conv.messages?.data || [])
 
-      if (rawMsgs.length === 0) continue
+      // Sync fetched messages to DB chat memory
+      if (rawMsgs.length > 0) {
+        const memList: MemoryMessage[] = rawMsgs.map((m: any) => ({
+          id: m.id || String(Math.random()),
+          role: (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' : 'user',
+          text: m.message || '',
+          time: m.created_time || new Date().toISOString(),
+          fromUsername: m.from?.username,
+        }))
+        await saveChatMemory(conv.id, memList)
+      }
 
       // Sort messages chronologically (oldest first, newest last)
       const sortedMsgs = [...rawMsgs].reverse()
@@ -129,19 +140,21 @@ Link: https://smritishans.mywebsite.social/`
       }
 
       // 5. Build full conversation history for Gemini (previous turns + new user input)
-      const previousTurns = sortedMsgs.slice(0, sortedMsgs.length - unrepliedUserMsgs.length)
-      const convHistory = previousTurns
-        .slice(-10) // Take last 10 historical turns
+      const dbMem = await getChatMemory(conv.id)
+      const convHistory = (dbMem.length > 0 ? dbMem : sortedMsgs)
+        .slice(-12) // Take last 12 historical turns
         .map((m: any) => ({
-          role: (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' : 'user',
-          parts: [{ text: m.message || '' }]
+          role: m.role || ((m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' : 'user'),
+          parts: [{ text: m.text || m.message || '' }]
         }))
         .filter((m: any) => m.parts[0].text.trim().length > 0)
 
-      convHistory.push({
-        role: 'user',
-        parts: [{ text: combinedUserText }]
-      })
+      if (convHistory.length === 0 || convHistory[convHistory.length - 1].parts[0].text !== combinedUserText) {
+        convHistory.push({
+          role: 'user',
+          parts: [{ text: combinedUserText }]
+        })
+      }
 
       // 6. Generate reply content
       let replyText = ''
@@ -175,8 +188,18 @@ CRITICAL RULES (NEVER BREAK THESE):
 
       if (replyText) {
         console.log(`[AutoReplyScan] Sending DM reply to ${senderUsername}: "${replyText}"`)
-        await InstagramService.sendDM(senderId, replyText)
+        const sendRes = await InstagramService.sendDM(senderId, replyText)
         processedCount++
+
+        // Save generated bot reply to DB memory
+        const botMsgId = (sendRes.data as any)?.message_id || `bot_${Date.now()}`
+        await saveChatMemory(conv.id, [{
+          id: botMsgId,
+          role: 'model',
+          text: replyText,
+          time: new Date().toISOString(),
+          fromUsername: 'smritifyp',
+        }])
       }
 
       // 7. Turn off typing indicator

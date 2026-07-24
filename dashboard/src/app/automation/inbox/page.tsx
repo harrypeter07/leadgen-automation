@@ -18,6 +18,7 @@ interface Thread {
   time: string
   unread: boolean
   participantId?: string
+  initialMessages?: Message[]
 }
 
 interface Message {
@@ -108,6 +109,14 @@ export default function SocialInboxPage() {
             const lastMsg = item.messages?.data?.[0]?.message || 'Conversation'
             const updatedTime = item.updated_time || item.messages?.data?.[0]?.created_time || new Date().toISOString()
             
+            const initialMsgs: Message[] = (item.messages?.data || []).map((m: any) => ({
+              id: m.id || String(Math.random()),
+              sender: (m.from?.id === activeAccountPageId || m.from?.id === activeAccountIgBizId || m.from?.username === 'smritifyp') ? 'system' : 'lead',
+              body: m.message || '(media)',
+              time: m.created_time ? formatMessageTime(m.created_time) : '',
+              rawTime: m.created_time,
+            })).reverse()
+
             combinedThreads.push({
               id: `ig_${item.id}`,
               name: name,
@@ -115,7 +124,8 @@ export default function SocialInboxPage() {
               lastMessage: lastMsg,
               time: formatMessageTime(updatedTime),
               unread: false,
-              participantId: leadParticipant.id
+              participantId: leadParticipant.id,
+              initialMessages: initialMsgs,
             })
           }
         }
@@ -137,6 +147,14 @@ export default function SocialInboxPage() {
             const lastMsg = item.messages?.data?.[0]?.message || 'Conversation'
             const updatedTime = item.updated_time || item.messages?.data?.[0]?.created_time || new Date().toISOString()
 
+            const initialMsgs: Message[] = (item.messages?.data || []).map((m: any) => ({
+              id: m.id || String(Math.random()),
+              sender: (m.from?.id === activeAccountPageId || m.from?.id === activeAccountIgBizId) ? 'system' : 'lead',
+              body: m.message || '(media)',
+              time: m.created_time ? formatMessageTime(m.created_time) : '',
+              rawTime: m.created_time,
+            })).reverse()
+
             combinedThreads.push({
               id: `fb_${item.id}`,
               name: name,
@@ -144,7 +162,8 @@ export default function SocialInboxPage() {
               lastMessage: lastMsg,
               time: formatMessageTime(updatedTime),
               unread: false,
-              participantId: leadParticipant.id
+              participantId: leadParticipant.id,
+              initialMessages: initialMsgs,
             })
           }
         }
@@ -162,12 +181,12 @@ export default function SocialInboxPage() {
 
   useEffect(() => { fetchThreads() }, [fetchThreads])
 
-  // Background polling for thread list and auto-reply scanner
+  // Background polling for thread list and auto-reply scanner (8s interval to prevent 403 Meta limits)
   useEffect(() => {
-    const threadTimer = setInterval(() => fetchThreads(true), 4000)
+    const threadTimer = setInterval(() => fetchThreads(true), 8000)
     const botTimer = setInterval(() => {
       fetch('/api/meta/instagram/auto-reply-scan', { method: 'POST' }).catch(() => {})
-    }, 5000)
+    }, 8000)
     return () => {
       clearInterval(threadTimer)
       clearInterval(botTimer)
@@ -185,27 +204,38 @@ export default function SocialInboxPage() {
 
       if (res.ok && data.data) {
         const rawMsgs = data.data.data || data.data || []
-        const mapped: Message[] = rawMsgs.map((m: any) => ({
-          id: m.id || String(Math.random()),
-          sender: (m.from?.id === activeAccountPageId || m.from?.id === activeAccountIgBizId) ? 'system' : 'lead',
-          body: m.message || (m.attachments?.data?.length ? '(attachment)' : '(media)'),
-          time: m.created_time ? formatMessageTime(m.created_time) : '',
-          rawTime: m.created_time,
-          attachments: m.attachments?.data || [],
-        })).reverse()
-        setMessages(mapped)
+        if (Array.isArray(rawMsgs) && rawMsgs.length > 0) {
+          const mapped: Message[] = rawMsgs.map((m: any) => ({
+            id: m.id || String(Math.random()),
+            sender: (m.from?.id === activeAccountPageId || m.from?.id === activeAccountIgBizId || m.from?.username === 'smritifyp') ? 'system' : 'lead',
+            body: m.message || (m.attachments?.data?.length ? '(attachment)' : '(media)'),
+            time: m.created_time ? formatMessageTime(m.created_time) : '',
+            rawTime: m.created_time,
+            attachments: m.attachments?.data || [],
+          })).reverse()
+          setMessages(mapped)
+          return
+        }
+      }
+
+      // Fallback: If 403 rate limit or empty array returned, use thread.initialMessages
+      if (thread.initialMessages && thread.initialMessages.length > 0) {
+        setMessages(prev => prev.length > 0 ? prev : thread.initialMessages!)
       }
     } catch (err) {
       console.error('fetchMessages error:', err)
+      if (thread.initialMessages && thread.initialMessages.length > 0) {
+        setMessages(prev => prev.length > 0 ? prev : thread.initialMessages!)
+      }
     } finally {
       if (!silent) setLoadingMsgs(false)
     }
   }, [activeAccountPageId, activeAccountIgBizId])
 
-  // Background polling for active thread messages
+  // Background polling for active thread messages (6s interval)
   useEffect(() => {
     if (!selectedThread) return
-    const msgTimer = setInterval(() => fetchMessages(selectedThread, true), 3000)
+    const msgTimer = setInterval(() => fetchMessages(selectedThread, true), 6000)
     return () => clearInterval(msgTimer)
   }, [selectedThread, fetchMessages])
 
