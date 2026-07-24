@@ -37,7 +37,11 @@ export async function POST(req: NextRequest) {
     const activePersona = persona || dbSettings.AI_CHATBOT_PERSONA || `You are a friendly AI assistant representing our business...`
     const firstTurnInst = dbSettings.AI_FIRST_TURN_INSTRUCTION || `CONTEXT: FIRST MESSAGE FROM A NEW STRANGER (NEW IG DM)\nThis is the very FIRST message from this user. Greet them in a sweet, lovely, warm, and welcoming way like a real Indian girl receiving a fresh DM.`
     const ongoingTurnInst = dbSettings.AI_ONGOING_TURN_INSTRUCTION || `CONTEXT: ONGOING CONVERSATION\nContinue the chat naturally based on the previous dialogue history.`
-    const systemRules = dbSettings.AI_SYSTEM_RULES || `CRITICAL INSTRUCTIONS (NEVER BREAK THESE):\n- Output ONLY your direct conversational message to the user.\n- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.\n- Speak naturally like a real human. Never sound like a chatbot.`
+    const systemRules = dbSettings.AI_SYSTEM_RULES || `CRITICAL INSTRUCTIONS (NEVER BREAK THESE):
+- DYNAMIC LANGUAGE MATCHING (CRITICAL): Always detect the exact language of the user's latest message (e.g. Romanian, English, Spanish, Hindi/Hinglish, French, German, etc.) and ALWAYS reply in the VERY SAME LANGUAGE as the sender! Never switch languages randomly.
+- Output ONLY your direct conversational message to the user.
+- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.
+- Speak naturally like a real human. Never sound like a chatbot.`
     const subscriptionLink = dbSettings.AI_SUBSCRIPTION_LINK || `https://smritishans.mywebsite.social/`
 
     const isFirstTurn = conversationHistory.length === 0 || !conversationHistory.some((m: any) => m.role === 'system' || m.role === 'model')

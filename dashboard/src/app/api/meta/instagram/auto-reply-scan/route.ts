@@ -55,7 +55,11 @@ export async function POST() {
 
     const ongoingTurnInst = settings.AI_ONGOING_TURN_INSTRUCTION || `CONTEXT: ONGOING CONVERSATION\nContinue the chat naturally based on the previous dialogue history.`
 
-    const systemRules = settings.AI_SYSTEM_RULES || `CRITICAL INSTRUCTIONS (NEVER BREAK THESE):\n- Output ONLY your direct conversational message to the user.\n- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.\n- Speak naturally like a real human. Never sound like a chatbot.`
+    const systemRules = settings.AI_SYSTEM_RULES || `CRITICAL INSTRUCTIONS (NEVER BREAK THESE):
+- DYNAMIC LANGUAGE MATCHING (CRITICAL): Always detect the exact language of the user's latest message (e.g. Romanian, English, Spanish, Hindi/Hinglish, French, German, etc.) and ALWAYS reply in the VERY SAME LANGUAGE as the sender! Never switch languages randomly. If the user speaks Romanian, respond in Romanian. If the user speaks English, respond in English. If the user speaks Hindi/Hinglish, respond in Hindi/Hinglish.
+- Output ONLY your direct conversational message to the user.
+- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.
+- Speak naturally like a real human. Never sound like a chatbot.`
 
     const subscriptionLink = settings.AI_SUBSCRIPTION_LINK || `https://smritishans.mywebsite.social/`
     const maxDurationMins = Number(settings.AI_CONVERSATION_MAX_DURATION_MINS || 3)
