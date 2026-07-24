@@ -66,6 +66,8 @@ export default function SocialInboxPage() {
   const [geminiModalOpen, setGeminiModalOpen] = useState(false)
   const [isTyping, setIsTyping]             = useState(false)
 
+  const [autopilotOverrides, setAutopilotOverrides] = useState<Record<string, boolean>>({})
+
   // Active connected account
   const [activeAccountIgBizId, setActiveAccountIgBizId] = useState<string>('17841411718913026')
   const [activeAccountPageId, setActiveAccountPageId] = useState<string>('1165738093294228')
@@ -83,7 +85,31 @@ export default function SocialInboxPage() {
         }
       })
       .catch(() => {})
+
+    fetch('/api/meta/instagram/thread-autopilot')
+      .then(r => r.json())
+      .then(data => {
+        if (data.overrides) setAutopilotOverrides(data.overrides)
+      })
+      .catch(() => {})
   }, [])
+
+  async function toggleThreadAutopilot(threadId: string, currentEnabled: boolean) {
+    const newStatus = !currentEnabled
+    const cleanId = threadId.replace('ig_', '').replace('fb_', '')
+    setAutopilotOverrides(prev => ({ ...prev, [threadId]: newStatus, [cleanId]: newStatus }))
+
+    try {
+      await fetch('/api/meta/instagram/thread-autopilot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderId: threadId, enabled: newStatus }),
+      })
+      toast.success(`AI Autopilot ${newStatus ? 'ENABLED' : 'DISABLED'} for this chat`)
+    } catch (err) {
+      toast.error('Failed to toggle thread autopilot')
+    }
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -456,6 +482,31 @@ export default function SocialInboxPage() {
                       {selectedThread.platform}
                     </span>
                   </div>
+                </div>
+
+                {/* Per-Chat Autopilot Toggle */}
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const cleanId = selectedThread.id.replace('ig_', '').replace('fb_', '')
+                    const isAutopilotOn = autopilotOverrides[selectedThread.id] !== false && 
+                                         autopilotOverrides[cleanId] !== false &&
+                                         (!selectedThread.participantId || autopilotOverrides[selectedThread.participantId] !== false)
+                    return (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleThreadAutopilot(selectedThread.id, isAutopilotOn)}
+                        className={`gap-1.5 text-xs transition-all ${
+                          isAutopilotOn 
+                            ? 'border-emerald-500/40 text-emerald-400 bg-emerald-950/20 hover:bg-emerald-900/30' 
+                            : 'border-rose-500/40 text-rose-400 bg-rose-950/20 hover:bg-rose-900/30'
+                        }`}
+                      >
+                        <Bot className="w-3.5 h-3.5" />
+                        <span>AI Autopilot: {isAutopilotOn ? 'ON' : 'OFF'}</span>
+                      </Button>
+                    )
+                  })()}
                 </div>
               </CardHeader>
 

@@ -11,12 +11,12 @@ const autoRepliedMsgIds = new Set<string>()
 const lastRepliedTimestampMap = new Map<string, number>()
 
 // POST /api/meta/instagram/auto-reply-scan
-// Background polling worker that inspects full conversation threads, syncs DB memory, and responds to user DMs with human timing & strict length rules
+// Background polling worker that inspects full conversation threads, syncs DB memory, respects per-chat autopilot overrides, and prevents > 1 consecutive bot reply
 export async function POST() {
   try {
     await ensureMetaConfig()
 
-    // 1. Load Auto-Reply Settings from meta_config
+    // 1. Load Auto-Reply Settings & Per-Thread Overrides from meta_config
     const { data: configRows } = await supabaseAdmin
       .from('meta_config')
       .select('key, value')
@@ -28,7 +28,8 @@ export async function POST() {
         'AI_CONVERSATION_DELAY',
         'AI_STATIC_REPLY_OVERRIDE',
         'AI_STATIC_REPLY_ENABLED',
-        'AI_RESPONSE_LENGTH'
+        'AI_RESPONSE_LENGTH',
+        'THREAD_AUTOPILOT_OVERRIDES'
       ])
 
     const settings: Record<string, string> = {}
@@ -47,6 +48,11 @@ Link: https://smritishans.mywebsite.social/`
     const responseLength = (settings.AI_RESPONSE_LENGTH || 'small') as 'extra_small' | 'small' | 'medium' | 'large'
     const conversationDelay = Number(settings.AI_CONVERSATION_DELAY || 3)
 
+    let threadOverrides: Record<string, boolean> = {}
+    try {
+      threadOverrides = settings.THREAD_AUTOPILOT_OVERRIDES ? JSON.parse(settings.THREAD_AUTOPILOT_OVERRIDES) : {}
+    } catch {}
+
     if (!chatbotEnabled && !staticReplyEnabled) {
       return NextResponse.json({ success: true, message: 'Auto-reply bot disabled' })
     }
@@ -63,7 +69,7 @@ Link: https://smritishans.mywebsite.social/`
     for (const conv of conversations) {
       const convId = conv.id
 
-      // Human timing guard: Avoid replying multiple times in less than 15 seconds to the same thread
+      // Human timing guard: Avoid replying multiple times in less than 12 seconds to the same thread
       const lastSentTime = lastRepliedTimestampMap.get(convId) || 0
       if (Date.now() - lastSentTime < 12000) {
         continue
@@ -98,8 +104,21 @@ Link: https://smritishans.mywebsite.social/`
       const lastSenderId = lastMsg.from?.id
       const lastSenderUsername = lastMsg.from?.username
 
-      // 1. Skip if the last message in the thread was sent by US (smritifyp)
+      // 1. STRICT GUARD: Skip if the last message in the thread was sent by US (smritifyp)
+      // Never send double messages / >1 consecutive bot replies without the user replying back!
       if (lastSenderUsername === 'smritifyp' || lastSenderId === '17841411718913026') continue
+
+      // Check consecutive bot messages count guard
+      let consecutiveBotCount = 0
+      for (let i = sortedMsgs.length - 1; i >= 0; i--) {
+        const m = sortedMsgs[i]
+        if (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') {
+          consecutiveBotCount++
+        } else {
+          break
+        }
+      }
+      if (consecutiveBotCount >= 1) continue
 
       // 2. Collect all consecutive unreplied user messages at the end of the thread
       const unrepliedUserMsgs: any[] = []
@@ -114,6 +133,18 @@ Link: https://smritishans.mywebsite.social/`
       const latestUserMsg = unrepliedUserMsgs[unrepliedUserMsgs.length - 1]
       const senderId = latestUserMsg.from?.id
       const senderUsername = latestUserMsg.from?.username || ''
+
+      // 3. Per-Chat Autopilot Override check: Skip if user turned off AI automation for this chat
+      const isAutopilotDisabled = 
+        threadOverrides[convId] === false ||
+        threadOverrides[`ig_${convId}`] === false ||
+        (senderId && threadOverrides[senderId] === false) ||
+        (senderUsername && threadOverrides[senderUsername] === false)
+
+      if (isAutopilotDisabled) {
+        console.log(`[AutoReplyScan] AI Autopilot disabled for thread ${convId} (${senderUsername}). Skipping.`)
+        continue
+      }
 
       // Skip if we already replied to this exact latest user message ID
       if (!senderId || autoRepliedMsgIds.has(latestUserMsg.id)) continue
@@ -133,17 +164,17 @@ Link: https://smritishans.mywebsite.social/`
       lastRepliedTimestampMap.set(convId, Date.now())
       console.log(`[AutoReplyScan] Processing ${unrepliedUserMsgs.length} unreplied message(s) from ${senderUsername}: "${combinedUserText}"`)
 
-      // 3. Send typing indicator
+      // 4. Send typing indicator
       try {
         await InstagramService.sendTypingIndicator(senderId, 'typing_on')
       } catch {}
 
-      // 4. Delay wait according to conversationDelay
+      // 5. Delay wait according to conversationDelay
       if (conversationDelay > 0) {
         await new Promise(res => setTimeout(res, Math.min(conversationDelay * 1000, 5000)))
       }
 
-      // 5. Build full conversation history for Gemini from DB memory
+      // 6. Build full conversation history for Gemini from DB memory
       const dbMem = await getChatMemory(convId)
       const convHistory = (dbMem.length > 0 ? dbMem : sortedMsgs)
         .slice(-12) // Take last 12 historical turns
@@ -160,7 +191,7 @@ Link: https://smritishans.mywebsite.social/`
         })
       }
 
-      // 6. Generate reply content
+      // 7. Generate reply content
       let replyText = ''
       if (staticReplyEnabled && staticReply.trim()) {
         replyText = staticReply.trim()
@@ -209,7 +240,7 @@ CRITICAL INSTRUCTIONS (NEVER BREAK THESE):
         }])
       }
 
-      // 7. Turn off typing indicator
+      // 8. Turn off typing indicator
       try {
         await InstagramService.sendTypingIndicator(senderId, 'typing_off')
       } catch {}
