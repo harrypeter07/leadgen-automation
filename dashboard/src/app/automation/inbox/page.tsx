@@ -89,8 +89,8 @@ export default function SocialInboxPage() {
   }, [messages, isTyping])
 
   // Fetch threads
-  const fetchThreads = useCallback(async () => {
-    setLoadingThreads(true)
+  const fetchThreads = useCallback(async (silent = false) => {
+    if (!silent) setLoadingThreads(true)
     try {
       const combinedThreads: Thread[] = []
 
@@ -156,15 +156,27 @@ export default function SocialInboxPage() {
     } catch (err) {
       console.error('Failed to load threads:', err)
     } finally {
-      setLoadingThreads(false)
+      if (!silent) setLoadingThreads(false)
     }
   }, [activeAccountIgBizId, activeAccountPageId])
 
   useEffect(() => { fetchThreads() }, [fetchThreads])
 
+  // Background polling for thread list and auto-reply scanner
+  useEffect(() => {
+    const threadTimer = setInterval(() => fetchThreads(true), 4000)
+    const botTimer = setInterval(() => {
+      fetch('/api/meta/instagram/auto-reply-scan', { method: 'POST' }).catch(() => {})
+    }, 5000)
+    return () => {
+      clearInterval(threadTimer)
+      clearInterval(botTimer)
+    }
+  }, [fetchThreads])
+
   // Fetch messages for selected thread
-  const fetchMessages = useCallback(async (thread: Thread) => {
-    setLoadingMsgs(true)
+  const fetchMessages = useCallback(async (thread: Thread, silent = false) => {
+    if (!silent) setLoadingMsgs(true)
     try {
       const rawId = thread.id.replace('ig_', '').replace('fb_', '')
       const platform = thread.platform === 'instagram' ? 'instagram' : 'facebook'
@@ -186,9 +198,16 @@ export default function SocialInboxPage() {
     } catch (err) {
       console.error('fetchMessages error:', err)
     } finally {
-      setLoadingMsgs(false)
+      if (!silent) setLoadingMsgs(false)
     }
   }, [activeAccountPageId, activeAccountIgBizId])
+
+  // Background polling for active thread messages
+  useEffect(() => {
+    if (!selectedThread) return
+    const msgTimer = setInterval(() => fetchMessages(selectedThread, true), 3000)
+    return () => clearInterval(msgTimer)
+  }, [selectedThread, fetchMessages])
 
   async function openThread(thread: Thread) {
     setSelectedThread(thread)
@@ -407,12 +426,6 @@ export default function SocialInboxPage() {
                       {selectedThread.platform}
                     </span>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setGeminiModalOpen(true)} className="gap-1 text-xs border-blue-500/30 text-blue-400">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Gemini Key</span>
-                  </Button>
                 </div>
               </CardHeader>
 
