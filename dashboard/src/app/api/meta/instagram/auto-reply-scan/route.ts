@@ -27,7 +27,7 @@ function sanitizeAiReply(text: string): string {
 }
 
 // POST /api/meta/instagram/auto-reply-scan
-// Background polling worker that checks for unreplied incoming DMs and sends AI responses with full chat history & persona compliance
+// Background polling worker that inspects full conversation threads for unreplied incoming user DMs (single or rapid multi-messages) and generates AI responses
 export async function POST() {
   try {
     await ensureMetaConfig()
@@ -77,21 +77,46 @@ Link: https://smritishans.mywebsite.social/`
     let processedCount = 0
 
     for (const conv of conversations) {
-      const rawMessages = conv.messages?.data || []
-      if (rawMessages.length === 0) continue
+      // Fetch complete thread messages to inspect full real-time message stream
+      const msgsRes = await InstagramService.getConversationMessages(conv.id, 20)
+      const rawMsgs = (msgsRes.success && msgsRes.data) 
+        ? ((msgsRes.data as any).data || []) 
+        : (conv.messages?.data || [])
 
-      const latestMsg = rawMessages[0]
-      const msgId = latestMsg.id
-      const messageText = latestMsg.message || ''
-      const senderId = latestMsg.from?.id
-      const senderUsername = latestMsg.from?.username || ''
+      if (rawMsgs.length === 0) continue
 
-      // Skip if we sent this message, or if message ID already processed
-      if (!senderId || autoRepliedMsgIds.has(msgId)) continue
-      if (senderUsername === 'smritifyp' || senderId === '17841411718913026') continue
+      // Sort messages chronologically (oldest first, newest last)
+      const sortedMsgs = [...rawMsgs].reverse()
+      const lastMsg = sortedMsgs[sortedMsgs.length - 1]
+      if (!lastMsg) continue
 
-      autoRepliedMsgIds.add(msgId)
-      console.log(`[AutoReplyScan] Processing new message from ${senderUsername}: "${messageText}"`)
+      const lastSenderId = lastMsg.from?.id
+      const lastSenderUsername = lastMsg.from?.username
+
+      // 1. Skip if the last message in the thread was sent by US (smritifyp)
+      if (lastSenderUsername === 'smritifyp' || lastSenderId === '17841411718913026') continue
+
+      // 2. Collect all consecutive unreplied user messages at the end of the thread
+      const unrepliedUserMsgs: any[] = []
+      for (let i = sortedMsgs.length - 1; i >= 0; i--) {
+        const m = sortedMsgs[i]
+        if (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') break
+        unrepliedUserMsgs.unshift(m)
+      }
+
+      if (unrepliedUserMsgs.length === 0) continue
+
+      const latestUserMsg = unrepliedUserMsgs[unrepliedUserMsgs.length - 1]
+      const senderId = latestUserMsg.from?.id
+      const senderUsername = latestUserMsg.from?.username || ''
+
+      // Skip if we already replied to this exact latest user message ID
+      if (!senderId || autoRepliedMsgIds.has(latestUserMsg.id)) continue
+      autoRepliedMsgIds.add(latestUserMsg.id)
+
+      // Combine text of all unreplied messages sent back-to-back by the user
+      const combinedUserText = unrepliedUserMsgs.map(m => m.message).filter(Boolean).join('\n')
+      console.log(`[AutoReplyScan] Found ${unrepliedUserMsgs.length} unreplied message(s) from ${senderUsername}: "${combinedUserText}"`)
 
       // 3. Send typing indicator
       try {
@@ -103,15 +128,20 @@ Link: https://smritishans.mywebsite.social/`
         await new Promise(res => setTimeout(res, Math.min(conversationDelay * 1000, 5000)))
       }
 
-      // 5. Build full conversation history (up to 10 past turns)
-      const convHistory = rawMessages
-        .slice(0, 10)
-        .reverse()
+      // 5. Build full conversation history for Gemini (previous turns + new user input)
+      const previousTurns = sortedMsgs.slice(0, sortedMsgs.length - unrepliedUserMsgs.length)
+      const convHistory = previousTurns
+        .slice(-10) // Take last 10 historical turns
         .map((m: any) => ({
           role: (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' : 'user',
           parts: [{ text: m.message || '' }]
         }))
         .filter((m: any) => m.parts[0].text.trim().length > 0)
+
+      convHistory.push({
+        role: 'user',
+        parts: [{ text: combinedUserText }]
+      })
 
       // 6. Generate reply content
       let replyText = ''
@@ -136,7 +166,7 @@ CRITICAL RULES (NEVER BREAK THESE):
 
         const { text } = await generateWithGemini({
           system_instruction: { parts: [{ text: prompt }] },
-          contents: convHistory.length > 0 ? convHistory : [{ role: 'user', parts: [{ text: messageText }] }],
+          contents: convHistory,
           generationConfig: { maxOutputTokens: maxTokens, temperature: 0.75 }
         }, apiKey)
 
@@ -144,7 +174,7 @@ CRITICAL RULES (NEVER BREAK THESE):
       }
 
       if (replyText) {
-        console.log(`[AutoReplyScan] Sending sanitized auto-reply to ${senderUsername}: "${replyText}"`)
+        console.log(`[AutoReplyScan] Sending DM reply to ${senderUsername}: "${replyText}"`)
         await InstagramService.sendDM(senderId, replyText)
         processedCount++
       }
