@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 
 // GET /api/meta/instagram/auto-reply
-// Returns auto-reply settings: rules, chatbot enabled status, chatbot persona, dynamic prompt instructions, and delays
+// Returns auto-reply settings: rules, chatbot enabled status, chatbot persona, dynamic prompt instructions, delays, max duration, and ending instructions
 export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
@@ -21,7 +21,9 @@ export async function GET() {
         'AI_FIRST_TURN_INSTRUCTION',
         'AI_ONGOING_TURN_INSTRUCTION',
         'AI_SYSTEM_RULES',
-        'AI_SUBSCRIPTION_LINK'
+        'AI_SUBSCRIPTION_LINK',
+        'AI_CONVERSATION_MAX_DURATION_MINS',
+        'AI_ENDING_TALK_INSTRUCTION'
       ])
 
     if (error) throw error
@@ -56,6 +58,8 @@ export async function GET() {
       ongoingTurnInstruction: settings.AI_ONGOING_TURN_INSTRUCTION || `CONTEXT: ONGOING CONVERSATION\nContinue the chat naturally based on the previous dialogue history.`,
       systemRules: settings.AI_SYSTEM_RULES || `CRITICAL INSTRUCTIONS (NEVER BREAK THESE):\n- Output ONLY your direct conversational message to the user.\n- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.\n- Speak naturally like a real human. Never sound like a chatbot.`,
       subscriptionLink: settings.AI_SUBSCRIPTION_LINK || `https://smritishans.mywebsite.social/`,
+      maxDurationMins: settings.AI_CONVERSATION_MAX_DURATION_MINS !== undefined ? Number(settings.AI_CONVERSATION_MAX_DURATION_MINS) : 3,
+      endingTalkInstruction: settings.AI_ENDING_TALK_INSTRUCTION || `CONTEXT: MAXIMUM CONVERSATION DURATION REACHED (3 MINUTES EXPIRED)\nWrap up the conversation warmly and naturally. Say you have to leave for some work or rest now and will chat later ("Arey g, abhi mujhe kaam hai! Bye bye, later baat karte hain ❤️✨"). Do not ask more open questions.`
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -63,7 +67,7 @@ export async function GET() {
 }
 
 // POST /api/meta/instagram/auto-reply
-// Saves rules, chatbot status, persona, dynamic prompt instructions, delays, or saved personas list
+// Saves rules, chatbot status, persona, dynamic prompt instructions, delays, max duration, or ending talk instructions
 export async function POST(req: NextRequest) {
   try {
     const { 
@@ -79,7 +83,9 @@ export async function POST(req: NextRequest) {
       firstTurnInstruction,
       ongoingTurnInstruction,
       systemRules,
-      subscriptionLink
+      subscriptionLink,
+      maxDurationMins,
+      endingTalkInstruction
     } = await req.json()
 
     const rows = []
@@ -196,6 +202,24 @@ export async function POST(req: NextRequest) {
       rows.push({
         key: 'AI_SUBSCRIPTION_LINK',
         value: subscriptionLink,
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    if (maxDurationMins !== undefined) {
+      rows.push({
+        key: 'AI_CONVERSATION_MAX_DURATION_MINS',
+        value: String(maxDurationMins),
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    if (endingTalkInstruction !== undefined) {
+      rows.push({
+        key: 'AI_ENDING_TALK_INSTRUCTION',
+        value: endingTalkInstruction,
         encrypted: false,
         updated_at: new Date().toISOString(),
       })

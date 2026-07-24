@@ -35,6 +35,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   const [firstTurnInst, setFirstTurnInst] = useState('')
   const [ongoingTurnInst, setOngoingTurnInst] = useState('')
   const [subscriptionLink, setSubscriptionLink] = useState('')
+  const [maxDurationMins, setMaxDurationMins] = useState(3)
+  const [endingTalkInstruction, setEndingTalkInstruction] = useState('')
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -176,6 +178,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
           if (globalData.firstTurnInstruction) setFirstTurnInst(globalData.firstTurnInstruction)
           if (globalData.ongoingTurnInstruction) setOngoingTurnInst(globalData.ongoingTurnInstruction)
           if (globalData.subscriptionLink) setSubscriptionLink(globalData.subscriptionLink)
+          if (globalData.maxDurationMins !== undefined) setMaxDurationMins(globalData.maxDurationMins)
+          if (globalData.endingTalkInstruction) setEndingTalkInstruction(globalData.endingTalkInstruction)
         }
 
         if (threadId) {
@@ -310,6 +314,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             firstTurnInstruction: firstTurnInst.trim(),
             ongoingTurnInstruction: ongoingTurnInst.trim(),
             subscriptionLink: subscriptionLink.trim(),
+            maxDurationMins,
+            endingTalkInstruction: endingTalkInstruction.trim(),
           }),
         })
       }
@@ -537,6 +543,33 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
                       />
                       <p className="text-[8px] text-slate-400 dark:text-gray-500">Delay for subsequent messages after the first reply</p>
                     </div>
+
+                    <div className="space-y-1 sm:col-span-2 pt-1 border-t border-gray-200 dark:border-[#2D2D30]/40">
+                      <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">⏳ Max Conversation Duration (Minutes)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={maxDurationMins}
+                        onChange={e => setMaxDurationMins(Number(e.target.value))}
+                        className="w-full bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-purple-500"
+                      />
+                      <p className="text-[8px] text-slate-400 dark:text-gray-500">After this duration (default: 3 mins), the bot politely wraps up the chat and stops asking questions.</p>
+                    </div>
+                  </div>
+
+                  {/* Conversation Closing / Ending Directive */}
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">
+                      👋 Conversation Closing / Ending Directive
+                    </label>
+                    <textarea
+                      value={endingTalkInstruction}
+                      onChange={e => setEndingTalkInstruction(e.target.value)}
+                      className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors resize-none leading-relaxed"
+                      rows={2}
+                      placeholder="How should the bot wrap up the talk when max duration is reached..."
+                    />
                   </div>
 
                   {/* Response Length */}

@@ -11,7 +11,7 @@ const autoRepliedMsgIds = new Set<string>()
 const lastRepliedTimestampMap = new Map<string, number>()
 
 // POST /api/meta/instagram/auto-reply-scan
-// Background polling worker that inspects full conversation threads, syncs DB memory, respects per-chat autopilot overrides, and dynamically builds AI prompts from meta_config DB settings
+// Background worker with strict multi-text anti-spam guards, per-chat autopilot overrides, and 3-minute max conversation duration capping
 export async function POST() {
   try {
     await ensureMetaConfig()
@@ -33,7 +33,9 @@ export async function POST() {
         'AI_FIRST_TURN_INSTRUCTION',
         'AI_ONGOING_TURN_INSTRUCTION',
         'AI_SYSTEM_RULES',
-        'AI_SUBSCRIPTION_LINK'
+        'AI_SUBSCRIPTION_LINK',
+        'AI_CONVERSATION_MAX_DURATION_MINS',
+        'AI_ENDING_TALK_INSTRUCTION'
       ])
 
     const settings: Record<string, string> = {}
@@ -54,6 +56,8 @@ export async function POST() {
     const systemRules = settings.AI_SYSTEM_RULES || `CRITICAL INSTRUCTIONS (NEVER BREAK THESE):\n- Output ONLY your direct conversational message to the user.\n- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.\n- Speak naturally like a real human. Never sound like a chatbot.`
 
     const subscriptionLink = settings.AI_SUBSCRIPTION_LINK || `https://smritishans.mywebsite.social/`
+    const maxDurationMins = Number(settings.AI_CONVERSATION_MAX_DURATION_MINS || 3)
+    const endingTalkInstruction = settings.AI_ENDING_TALK_INSTRUCTION || `CONTEXT: MAXIMUM CONVERSATION DURATION REACHED (${maxDurationMins} MINUTES EXPIRED)\nWrap up the conversation warmly and naturally. Say you have to leave for some work or rest now and will chat later ("Arey g, abhi mujhe kaam hai! Bye bye, later baat karte hain ❤️✨"). Do not ask more open questions.`
 
     const responseLength = (settings.AI_RESPONSE_LENGTH || 'small') as 'extra_small' | 'small' | 'medium' | 'large'
     const conversationDelay = Number(settings.AI_CONVERSATION_DELAY || 3)
@@ -79,13 +83,23 @@ export async function POST() {
     for (const conv of conversations) {
       const convId = conv.id
 
-      // Human timing guard: Avoid replying multiple times in less than 12 seconds to the same thread
+      // Human timing guard: Avoid replying multiple times in less than 20 seconds to the same thread
       const lastSentTime = lastRepliedTimestampMap.get(convId) || 0
-      if (Date.now() - lastSentTime < 12000) {
+      if (Date.now() - lastSentTime < 20000) {
         continue
       }
 
-      // Fetch complete thread messages to inspect full real-time message stream
+      // Check DB Chat Memory for strict anti-spam & last sender verification
+      const dbMem = await getChatMemory(convId)
+      if (dbMem.length > 0) {
+        const lastMemMsg = dbMem[dbMem.length - 1]
+        // STRICT GUARD #1: If the VERY LAST message in stored memory was sent by US (model), DO NOT SEND AGAIN!
+        if (lastMemMsg.role === 'model') {
+          continue
+        }
+      }
+
+      // Fetch complete thread messages to inspect full real-time message stream from Meta
       const msgsRes = await InstagramService.getConversationMessages(convId, 20)
       const rawMsgs = (msgsRes.success && msgsRes.data) 
         ? ((msgsRes.data as any).data || []) 
@@ -114,11 +128,10 @@ export async function POST() {
       const lastSenderId = lastMsg.from?.id
       const lastSenderUsername = lastMsg.from?.username
 
-      // 1. STRICT GUARD: Skip if the last message in the thread was sent by US (smritifyp)
-      // Never send double messages / >1 consecutive bot replies without the user replying back!
+      // STRICT GUARD #2: Skip if the last message in Meta API thread was sent by US (smritifyp)
       if (lastSenderUsername === 'smritifyp' || lastSenderId === '17841411718913026') continue
 
-      // Check consecutive bot messages count guard
+      // STRICT GUARD #3: Count consecutive bot replies. If >= 1, do NOT send another message!
       let consecutiveBotCount = 0
       for (let i = sortedMsgs.length - 1; i >= 0; i--) {
         const m = sortedMsgs[i]
@@ -130,7 +143,7 @@ export async function POST() {
       }
       if (consecutiveBotCount >= 1) continue
 
-      // 2. Collect all consecutive unreplied user messages at the end of the thread
+      // Collect all consecutive unreplied user messages at the end of the thread
       const unrepliedUserMsgs: any[] = []
       for (let i = sortedMsgs.length - 1; i >= 0; i--) {
         const m = sortedMsgs[i]
@@ -144,7 +157,7 @@ export async function POST() {
       const senderId = latestUserMsg.from?.id
       const senderUsername = latestUserMsg.from?.username || ''
 
-      // 3. Per-Chat Autopilot Override check: Skip if user turned off AI automation for this chat
+      // Per-Chat Autopilot Override check: Skip if user turned off AI automation for this chat
       const isAutopilotDisabled = 
         threadOverrides[convId] === false ||
         threadOverrides[`ig_${convId}`] === false ||
@@ -170,23 +183,9 @@ export async function POST() {
       if (userTextParts.length === 0) continue
       const combinedUserText = userTextParts.join('\n')
 
-      autoRepliedMsgIds.add(latestUserMsg.id)
-      lastRepliedTimestampMap.set(convId, Date.now())
-      console.log(`[AutoReplyScan] Processing ${unrepliedUserMsgs.length} unreplied message(s) from ${senderUsername}: "${combinedUserText}"`)
-
-      // 4. Send typing indicator
-      try {
-        await InstagramService.sendTypingIndicator(senderId, 'typing_on')
-      } catch {}
-
-      // 5. Delay wait according to conversationDelay
-      if (conversationDelay > 0) {
-        await new Promise(res => setTimeout(res, Math.min(conversationDelay * 1000, 5000)))
-      }
-
-      // 6. Build full conversation history for Gemini from DB memory
-      const dbMem = await getChatMemory(convId)
-      const convHistory = (dbMem.length > 0 ? dbMem : sortedMsgs)
+      // Build full conversation history for Gemini from DB memory
+      const fullHistory = (dbMem.length > 0 ? dbMem : sortedMsgs)
+      const convHistory = fullHistory
         .slice(-12) // Take last 12 historical turns
         .map((m: any) => ({
           role: m.role || ((m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' : 'user'),
@@ -201,13 +200,45 @@ export async function POST() {
         })
       }
 
+      // Check conversation duration (First message timestamp vs now)
+      let elapsedMins = 0
+      if (fullHistory.length > 0) {
+        const firstTimeStr = fullHistory[0].time || fullHistory[0].created_time
+        if (firstTimeStr) {
+          const firstMs = new Date(firstTimeStr).getTime()
+          if (!isNaN(firstMs) && firstMs > 0) {
+            elapsedMins = (Date.now() - firstMs) / 60000
+          }
+        }
+      }
+
+      const isDurationExpired = elapsedMins >= maxDurationMins
+
       // Check if this conversation thread has 0 previous replies from the bot/model
       const previousBotTurns = convHistory.filter(m => m.role === 'model')
       const isFirstTurn = previousBotTurns.length === 0
 
-      const dynamicTurnContext = isFirstTurn ? firstTurnInst : ongoingTurnInst
+      // Dynamically select directive: First turn vs Ongoing vs Duration Expired Wrap-Up
+      let dynamicTurnContext = isFirstTurn ? firstTurnInst : ongoingTurnInst
+      if (isDurationExpired) {
+        dynamicTurnContext = endingTalkInstruction
+      }
 
-      // 7. Generate reply content
+      autoRepliedMsgIds.add(latestUserMsg.id)
+      lastRepliedTimestampMap.set(convId, Date.now())
+      console.log(`[AutoReplyScan] Processing ${unrepliedUserMsgs.length} msg(s) from ${senderUsername} (${elapsedMins.toFixed(1)} mins elapsed, expired: ${isDurationExpired}): "${combinedUserText}"`)
+
+      // Send typing indicator
+      try {
+        await InstagramService.sendTypingIndicator(senderId, 'typing_on')
+      } catch {}
+
+      // Delay wait according to conversationDelay
+      if (conversationDelay > 0) {
+        await new Promise(res => setTimeout(res, Math.min(conversationDelay * 1000, 5000)))
+      }
+
+      // Generate reply content
       let replyText = ''
       if (staticReplyEnabled && staticReply.trim()) {
         replyText = staticReply.trim()
@@ -239,6 +270,12 @@ ${subscriptionLink ? `- Share link ${subscriptionLink} naturally when relevant.`
         replyText = sanitizeAiReply(text)
       }
 
+      // Check duplicate reply text guard: Don't send exact same message twice
+      if (dbMem.length > 0 && dbMem[dbMem.length - 1].text === replyText) {
+        console.log(`[AutoReplyScan] Discarding duplicate reply text for ${senderUsername}: "${replyText}"`)
+        continue
+      }
+
       if (replyText) {
         console.log(`[AutoReplyScan] Sending DM reply to ${senderUsername}: "${replyText}"`)
         const sendRes = await InstagramService.sendDM(senderId, replyText)
@@ -255,7 +292,7 @@ ${subscriptionLink ? `- Share link ${subscriptionLink} naturally when relevant.`
         }])
       }
 
-      // 8. Turn off typing indicator
+      // Turn off typing indicator
       try {
         await InstagramService.sendTypingIndicator(senderId, 'typing_off')
       } catch {}
