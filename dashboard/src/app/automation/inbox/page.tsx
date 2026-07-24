@@ -92,17 +92,73 @@ export default function SocialInboxPage() {
   const fetchThreads = useCallback(async () => {
     setLoadingThreads(true)
     try {
-      const res = await fetch('/api/meta/instagram/messages?limit=25')
-      const data = await res.json()
-      if (res.ok && data.threads) {
-        setThreads(data.threads)
+      const combinedThreads: Thread[] = []
+
+      // 1. Fetch Instagram Threads
+      try {
+        const igRes = await fetch('/api/meta/instagram/messages?limit=25')
+        const igData = await igRes.json()
+        const rawIgThreads = igData.data?.data || igData.data || []
+        
+        if (Array.isArray(rawIgThreads)) {
+          for (const item of rawIgThreads) {
+            const participants = item.participants?.data || item.participants || []
+            const leadParticipant = participants.find((p: any) => p.id !== activeAccountIgBizId) || participants[0] || {}
+            const name = leadParticipant.username || leadParticipant.name || 'Instagram User'
+            const lastMsg = item.messages?.data?.[0]?.message || 'Conversation'
+            const updatedTime = item.updated_time || item.messages?.data?.[0]?.created_time || new Date().toISOString()
+            
+            combinedThreads.push({
+              id: `ig_${item.id}`,
+              name: name,
+              platform: 'instagram',
+              lastMessage: lastMsg,
+              time: formatMessageTime(updatedTime),
+              unread: false,
+              participantId: leadParticipant.id
+            })
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching Instagram threads:', err)
       }
+
+      // 2. Fetch Facebook Messenger Threads
+      try {
+        const fbRes = await fetch('/api/meta/facebook/messages?limit=25')
+        const fbData = await fbRes.json()
+        const rawFbThreads = fbData.data?.data || fbData.data || []
+
+        if (Array.isArray(rawFbThreads)) {
+          for (const item of rawFbThreads) {
+            const participants = item.participants?.data || item.participants || []
+            const leadParticipant = participants.find((p: any) => p.id !== activeAccountPageId) || participants[0] || {}
+            const name = leadParticipant.name || 'Facebook User'
+            const lastMsg = item.messages?.data?.[0]?.message || 'Conversation'
+            const updatedTime = item.updated_time || item.messages?.data?.[0]?.created_time || new Date().toISOString()
+
+            combinedThreads.push({
+              id: `fb_${item.id}`,
+              name: name,
+              platform: 'messenger',
+              lastMessage: lastMsg,
+              time: formatMessageTime(updatedTime),
+              unread: false,
+              participantId: leadParticipant.id
+            })
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching Messenger threads:', err)
+      }
+
+      setThreads(combinedThreads)
     } catch (err) {
       console.error('Failed to load threads:', err)
     } finally {
       setLoadingThreads(false)
     }
-  }, [])
+  }, [activeAccountIgBizId, activeAccountPageId])
 
   useEffect(() => { fetchThreads() }, [fetchThreads])
 
@@ -110,7 +166,7 @@ export default function SocialInboxPage() {
   const fetchMessages = useCallback(async (thread: Thread) => {
     setLoadingMsgs(true)
     try {
-      const rawId = thread.id.replace('ig_', '')
+      const rawId = thread.id.replace('ig_', '').replace('fb_', '')
       const platform = thread.platform === 'instagram' ? 'instagram' : 'facebook'
       const res  = await fetch(`/api/meta/${platform}/messages/${rawId}?limit=50`)
       const data = await res.json()
@@ -120,7 +176,7 @@ export default function SocialInboxPage() {
         const mapped: Message[] = rawMsgs.map((m: any) => ({
           id: m.id || String(Math.random()),
           sender: (m.from?.id === activeAccountPageId || m.from?.id === activeAccountIgBizId) ? 'system' : 'lead',
-          body: m.message || (m.attachments?.data?.length ? '' : '(media)'),
+          body: m.message || (m.attachments?.data?.length ? '(attachment)' : '(media)'),
           time: m.created_time ? formatMessageTime(m.created_time) : '',
           rawTime: m.created_time,
           attachments: m.attachments?.data || [],
