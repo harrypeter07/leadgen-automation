@@ -17,11 +17,14 @@ async function getIgBizId() {
 }
 
 async function getIgToken() {
-  const active = await getActiveConnectedAccount('instagram')
-  if (active?.instagramToken) return active.instagramToken
   await ensureMetaConfig()
-  // For graph.instagram.com endpoints (profile, media read) use Instagram user token
-  return process.env.INSTAGRAM_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''
+  const storedIgToken = process.env.INSTAGRAM_ACCESS_TOKEN
+  if (storedIgToken && storedIgToken.startsWith('IGAA')) return storedIgToken
+
+  const active = await getActiveConnectedAccount('instagram')
+  if (active?.instagramToken && active.instagramToken.startsWith('IGAA')) return active.instagramToken
+
+  return storedIgToken || process.env.META_PAGE_ACCESS_TOKEN || ''
 }
 
 // Publishing to /{igId}/media on graph.facebook.com REQUIRES a Page Access Token (EAA...)
@@ -178,9 +181,16 @@ export const InstagramService = {
     return igPost<{ id: string }>(`/${commentId}/replies`, { message })
   },
   async getMessages(limit = 20) {
-    // Uses new Instagram API - /me/conversations
-    // NOTE: participants return 'username' not 'name' in live mode
-    return igGet<{ data: unknown[] }>(`/me/conversations?fields=id,participants{id,name,username},messages{id,message,from,created_time},updated_time&limit=${limit}`)
+    const res = await igGet<{ data: unknown[] }>(`/me/conversations?fields=id,participants{id,name,username},messages{id,message,from,created_time},updated_time&limit=${limit}`)
+    if (res.success && res.data) return res
+
+    const igId = await getIgBizId()
+    const token = await getPageToken()
+    if (igId && token) {
+      const fbGraphRes = await MetaClient.get<{ data: unknown[] }>(`/${igId}/conversations?platform=instagram&fields=id,participants,messages{id,message,from,created_time},updated_time&limit=${limit}`, { accessToken: token, source: SOURCE })
+      if (fbGraphRes.success && fbGraphRes.data) return fbGraphRes
+    }
+    return res
   },
   async getConversationMessages(conversationId: string, limit = 50) {
     // Fetch ALL messages for a specific conversation with attachments
