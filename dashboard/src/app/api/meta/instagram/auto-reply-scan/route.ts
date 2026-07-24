@@ -11,7 +11,7 @@ const autoRepliedMsgIds = new Set<string>()
 const lastRepliedTimestampMap = new Map<string, number>()
 
 // POST /api/meta/instagram/auto-reply-scan
-// Background worker with strict multi-text anti-spam guards, per-chat autopilot overrides, and 3-minute max conversation duration capping
+// Background worker with strict multi-text anti-spam guards, per-chat autopilot overrides, and 1-hour session inactivity reset window
 export async function POST() {
   try {
     await ensureMetaConfig()
@@ -35,6 +35,8 @@ export async function POST() {
         'AI_SYSTEM_RULES',
         'AI_SUBSCRIPTION_LINK',
         'AI_CONVERSATION_MAX_DURATION_MINS',
+        'AI_CONVERSATION_MAX_TURNS',
+        'AI_SESSION_INACTIVITY_HOURS',
         'AI_ENDING_TALK_INSTRUCTION'
       ])
 
@@ -57,7 +59,9 @@ export async function POST() {
 
     const subscriptionLink = settings.AI_SUBSCRIPTION_LINK || `https://smritishans.mywebsite.social/`
     const maxDurationMins = Number(settings.AI_CONVERSATION_MAX_DURATION_MINS || 3)
-    const endingTalkInstruction = settings.AI_ENDING_TALK_INSTRUCTION || `CONTEXT: MAXIMUM CONVERSATION DURATION REACHED (${maxDurationMins} MINUTES EXPIRED)\nWrap up the conversation warmly and naturally. Say you have to leave for some work or rest now and will chat later ("Arey g, abhi mujhe kaam hai! Bye bye, later baat karte hain ❤️✨"). Do not ask more open questions.`
+    const maxTurns = Number(settings.AI_CONVERSATION_MAX_TURNS || 6)
+    const inactivityHours = Number(settings.AI_SESSION_INACTIVITY_HOURS || 1)
+    const endingTalkInstruction = settings.AI_ENDING_TALK_INSTRUCTION || `CONTEXT: MAXIMUM CONVERSATION DURATION/TURNS REACHED FOR THIS CHAT SESSION\nWrap up the conversation warmly and naturally. Say you have to leave for some work or rest now and will chat later ("Arey g, abhi mujhe kaam hai! Bye bye, later baat karte hain ❤️✨"). Do not ask more open questions.`
 
     const responseLength = (settings.AI_RESPONSE_LENGTH || 'small') as 'extra_small' | 'small' | 'medium' | 'large'
     const conversationDelay = Number(settings.AI_CONVERSATION_DELAY || 3)
@@ -185,6 +189,50 @@ export async function POST() {
 
       // Build full conversation history for Gemini from DB memory
       const fullHistory = (dbMem.length > 0 ? dbMem : sortedMsgs)
+
+      // Calculate active session boundaries using the inactivity gap threshold (Default: 1 hour)
+      const inactivityGapMs = inactivityHours * 3600 * 1000
+      let sessionStartIndex = 0
+
+      for (let i = fullHistory.length - 1; i > 0; i--) {
+        const currentMsgTime = new Date(fullHistory[i].time || fullHistory[i].created_time).getTime()
+        const prevMsgTime = new Date(fullHistory[i-1].time || fullHistory[i-1].created_time).getTime()
+        
+        if (!isNaN(currentMsgTime) && !isNaN(prevMsgTime) && (currentMsgTime - prevMsgTime) >= inactivityGapMs) {
+          sessionStartIndex = i
+          break
+        }
+      }
+
+      const currentSessionMsgs = fullHistory.slice(sessionStartIndex)
+
+      // 1. Calculate active session duration
+      let sessionElapsedMins = 0
+      if (currentSessionMsgs.length > 0) {
+        const sessionStartMs = new Date(currentSessionMsgs[0].time || currentSessionMsgs[0].created_time).getTime()
+        if (!isNaN(sessionStartMs) && sessionStartMs > 0) {
+          sessionElapsedMins = (Date.now() - sessionStartMs) / 60000
+        }
+      }
+
+      // 2. Calculate active session bot turns count
+      const sessionBotTurns = currentSessionMsgs.filter((m: any) => 
+        m.role === 'model' || m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026'
+      ).length
+
+      const isDurationLimitReached = sessionElapsedMins >= maxDurationMins
+      const isTurnLimitReached = sessionBotTurns >= maxTurns
+      const isSessionLimitReached = isDurationLimitReached || isTurnLimitReached
+
+      // If session limit reached and last session message was ALREADY sent by the bot (ending wrap-up message), STOP replying!
+      if (isSessionLimitReached && currentSessionMsgs.length > 0) {
+        const lastSessionMsg = currentSessionMsgs[currentSessionMsgs.length - 1]
+        if (lastSessionMsg.role === 'model' || lastSessionMsg.from?.username === 'smritifyp') {
+          console.log(`[AutoReplyScan] Session limit reached for ${senderUsername} (${sessionElapsedMins.toFixed(1)} mins, ${sessionBotTurns} bot turns). Ending message already sent. Skipping.`)
+          continue
+        }
+      }
+
       const convHistory = fullHistory
         .slice(-12) // Take last 12 historical turns
         .map((m: any) => ({
@@ -200,33 +248,18 @@ export async function POST() {
         })
       }
 
-      // Check conversation duration (First message timestamp vs now)
-      let elapsedMins = 0
-      if (fullHistory.length > 0) {
-        const firstTimeStr = fullHistory[0].time || fullHistory[0].created_time
-        if (firstTimeStr) {
-          const firstMs = new Date(firstTimeStr).getTime()
-          if (!isNaN(firstMs) && firstMs > 0) {
-            elapsedMins = (Date.now() - firstMs) / 60000
-          }
-        }
-      }
+      // Check if this active session has 0 previous replies from the bot/model
+      const isFirstTurn = sessionBotTurns === 0
 
-      const isDurationExpired = elapsedMins >= maxDurationMins
-
-      // Check if this conversation thread has 0 previous replies from the bot/model
-      const previousBotTurns = convHistory.filter(m => m.role === 'model')
-      const isFirstTurn = previousBotTurns.length === 0
-
-      // Dynamically select directive: First turn vs Ongoing vs Duration Expired Wrap-Up
+      // Dynamically select directive: First turn vs Ongoing vs Duration/Turns Expired Wrap-Up
       let dynamicTurnContext = isFirstTurn ? firstTurnInst : ongoingTurnInst
-      if (isDurationExpired) {
+      if (isSessionLimitReached) {
         dynamicTurnContext = endingTalkInstruction
       }
 
       autoRepliedMsgIds.add(latestUserMsg.id)
       lastRepliedTimestampMap.set(convId, Date.now())
-      console.log(`[AutoReplyScan] Processing ${unrepliedUserMsgs.length} msg(s) from ${senderUsername} (${elapsedMins.toFixed(1)} mins elapsed, expired: ${isDurationExpired}): "${combinedUserText}"`)
+      console.log(`[AutoReplyScan] Processing ${unrepliedUserMsgs.length} msg(s) from ${senderUsername} (Session elapsed: ${sessionElapsedMins.toFixed(1)} mins, turns: ${sessionBotTurns}, limit reached: ${isSessionLimitReached}): "${combinedUserText}"`)
 
       // Send typing indicator
       try {

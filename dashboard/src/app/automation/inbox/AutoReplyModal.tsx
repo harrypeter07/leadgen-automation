@@ -36,6 +36,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   const [ongoingTurnInst, setOngoingTurnInst] = useState('')
   const [subscriptionLink, setSubscriptionLink] = useState('')
   const [maxDurationMins, setMaxDurationMins] = useState(3)
+  const [maxTurns, setMaxTurns] = useState(6)
+  const [inactivityHours, setInactivityHours] = useState(1)
   const [endingTalkInstruction, setEndingTalkInstruction] = useState('')
 
   const [loading, setLoading] = useState(true)
@@ -179,6 +181,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
           if (globalData.ongoingTurnInstruction) setOngoingTurnInst(globalData.ongoingTurnInstruction)
           if (globalData.subscriptionLink) setSubscriptionLink(globalData.subscriptionLink)
           if (globalData.maxDurationMins !== undefined) setMaxDurationMins(globalData.maxDurationMins)
+          if (globalData.maxTurns !== undefined) setMaxTurns(globalData.maxTurns)
+          if (globalData.inactivityHours !== undefined) setInactivityHours(globalData.inactivityHours)
           if (globalData.endingTalkInstruction) setEndingTalkInstruction(globalData.endingTalkInstruction)
         }
 
@@ -315,6 +319,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             ongoingTurnInstruction: ongoingTurnInst.trim(),
             subscriptionLink: subscriptionLink.trim(),
             maxDurationMins,
+            maxTurns,
+            inactivityHours,
             endingTalkInstruction: endingTalkInstruction.trim(),
           }),
         })
@@ -544,8 +550,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
                       <p className="text-[8px] text-slate-400 dark:text-gray-500">Delay for subsequent messages after the first reply</p>
                     </div>
 
-                    <div className="space-y-1 sm:col-span-2 pt-1 border-t border-gray-200 dark:border-[#2D2D30]/40">
-                      <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">⏳ Max Conversation Duration (Minutes)</label>
+                    <div className="space-y-1 pt-1 border-t border-gray-200 dark:border-[#2D2D30]/40">
+                      <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">⏳ Max Session Duration (Minutes)</label>
                       <input
                         type="number"
                         min="1"
@@ -554,7 +560,33 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
                         onChange={e => setMaxDurationMins(Number(e.target.value))}
                         className="w-full bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-purple-500"
                       />
-                      <p className="text-[8px] text-slate-400 dark:text-gray-500">After this duration (default: 3 mins), the bot politely wraps up the chat and stops asking questions.</p>
+                      <p className="text-[8px] text-slate-400 dark:text-gray-500">Max active chat duration (default: 3 mins)</p>
+                    </div>
+
+                    <div className="space-y-1 pt-1 border-t border-gray-200 dark:border-[#2D2D30]/40">
+                      <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">💬 Max Bot Turns Per Session</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="30"
+                        value={maxTurns}
+                        onChange={e => setMaxTurns(Number(e.target.value))}
+                        className="w-full bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-purple-500"
+                      />
+                      <p className="text-[8px] text-slate-400 dark:text-gray-500">Max bot replies per active chat (default: 6 replies)</p>
+                    </div>
+
+                    <div className="space-y-1 sm:col-span-2 pt-1 border-t border-gray-200 dark:border-[#2D2D30]/40">
+                      <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">⏸️ Session Reset Inactivity Window (Hours)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="24"
+                        value={inactivityHours}
+                        onChange={e => setInactivityHours(Number(e.target.value))}
+                        className="w-full bg-gray-50 dark:bg-[#141416] border border-gray-200 dark:border-[#2D2D30] rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-purple-500"
+                      />
+                      <p className="text-[8px] text-slate-400 dark:text-gray-500">Inactivity gap (default: 1 hour) before session & duration counters reset for fresh chatting.</p>
                     </div>
                   </div>
 
