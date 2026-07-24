@@ -290,25 +290,40 @@ async function handleAutoReply(
         ? 'Reply in MAXIMUM 1 short sentence. Be very concise.'
         : responseLength === 'long'
         ? 'Reply in 4-5 sentences. Be expressive and detailed.'
-        : 'Reply in 2-3 sentences. Be natural and conversational.'
+        : 'Reply in 1-3 short sentences. Be natural and conversational.'
+
       const systemPrompt = `${chatbotPersona}
  
-CRITICAL RULES (never break these):
+CRITICAL RULES (NEVER BREAK THESE):
+- Output ONLY your direct conversational text response. DO NOT include internal reasoning, draft options (e.g. *Draft 1:*), explanations, or quotes.
 - ${lengthInstruction}
-- You are replying to an Instagram DM.
-- NEVER admit you are an AI, bot, language model, ChatGPT, Gemini, or any AI system. If asked, deflect in character (e.g. "Haha, why would you think that? 😄").
-- Stay strictly in character as described above at ALL times.
-- Respond naturally. No markdown, no asterisks, no bullet points — plain conversational text only.`
-      const { text: aiReply, model } = await generateWithGemini(
+- You are replying to an Instagram DM as Smriti. Never admit you are an AI or bot.
+- Share link https://smritishans.mywebsite.social/ naturally when relevant.
+- Plain conversational text only. No markdown formatting.`
+
+      const { text: rawAiReply, model } = await generateWithGemini(
         {
           system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: 'user', parts: [{ text: messageText }] }],
-          generationConfig: { maxOutputTokens: maxTokensMap[responseLength], temperature: 0.75 },
+          generationConfig: { maxOutputTokens: maxTokensMap[responseLength] || 150, temperature: 0.75 },
         },
         apiKey
       )
-      if (aiReply.trim()) {
-        replyContent = aiReply.trim()
+
+      // Sanitize output to strip any draft annotations or thought blocks
+      let cleanedReply = rawAiReply.trim()
+      if (cleanedReply.includes('Draft') || cleanedReply.includes('* User:') || cleanedReply.includes('* Persona:')) {
+        const quoteMatches = Array.from(cleanedReply.matchAll(/"([^"]+)"/g))
+        if (quoteMatches.length > 0) {
+          cleanedReply = quoteMatches[quoteMatches.length - 1][1]
+        } else {
+          cleanedReply = cleanedReply.replace(/\*[^*]+\*/g, '').trim()
+        }
+      }
+      cleanedReply = cleanedReply.replace(/^["'`]+|["'`]+$/g, '').trim()
+
+      if (cleanedReply) {
+        replyContent = cleanedReply
         replied = true
         matchedType = 'gemini_ai'
         modelUsed = model
