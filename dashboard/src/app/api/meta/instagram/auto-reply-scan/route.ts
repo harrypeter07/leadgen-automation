@@ -11,12 +11,12 @@ const autoRepliedMsgIds = new Set<string>()
 const lastRepliedTimestampMap = new Map<string, number>()
 
 // POST /api/meta/instagram/auto-reply-scan
-// Background polling worker that inspects full conversation threads, syncs DB memory, respects per-chat autopilot overrides, and prevents > 1 consecutive bot reply
+// Background polling worker that inspects full conversation threads, syncs DB memory, respects per-chat autopilot overrides, and dynamically builds AI prompts from meta_config DB settings
 export async function POST() {
   try {
     await ensureMetaConfig()
 
-    // 1. Load Auto-Reply Settings & Per-Thread Overrides from meta_config
+    // 1. Load Auto-Reply Settings & Dynamic Prompt Directives from meta_config
     const { data: configRows } = await supabaseAdmin
       .from('meta_config')
       .select('key, value')
@@ -29,7 +29,11 @@ export async function POST() {
         'AI_STATIC_REPLY_OVERRIDE',
         'AI_STATIC_REPLY_ENABLED',
         'AI_RESPONSE_LENGTH',
-        'THREAD_AUTOPILOT_OVERRIDES'
+        'THREAD_AUTOPILOT_OVERRIDES',
+        'AI_FIRST_TURN_INSTRUCTION',
+        'AI_ONGOING_TURN_INSTRUCTION',
+        'AI_SYSTEM_RULES',
+        'AI_SUBSCRIPTION_LINK'
       ])
 
     const settings: Record<string, string> = {}
@@ -40,11 +44,17 @@ export async function POST() {
     const chatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
     const staticReplyEnabled = settings.AI_STATIC_REPLY_ENABLED === 'true'
     const staticReply = settings.AI_STATIC_REPLY_OVERRIDE || ''
-    const chatbotPersona = settings.AI_CHATBOT_PERSONA || `You are Smriti, a 21-year-old Indian influencer. Talk like a real human, not an AI. Use 90-95% Hindi/Hinglish in a casual WhatsApp/Instagram style. Be sweet, playful, caring, confident, and a little flirty (never explicit). Keep replies short (1-3 sentences), use emojis naturally (❤️🥹😂✨), ask follow-up questions, and make every conversation feel genuine.
-
-Goal: Build attraction and connection. Occasionally suggest Premium if fits naturally.
-Link: https://smritishans.mywebsite.social/`
     
+    const chatbotPersona = settings.AI_CHATBOT_PERSONA || `You are Smriti, a 21-year-old Indian influencer. Talk like a real human, not an AI. Use 90-95% Hindi/Hinglish in a casual WhatsApp/Instagram style. Be sweet, playful, caring, confident, and a little flirty (never explicit). Keep replies short (1-3 sentences), use emojis naturally (❤️🥹😂✨), ask follow-up questions, and make every conversation feel genuine.`
+
+    const firstTurnInst = settings.AI_FIRST_TURN_INSTRUCTION || `CONTEXT: FIRST MESSAGE FROM A NEW STRANGER (NEW IG DM)\nThis is the very FIRST message from this user.\n- Greet them in a sweet, lovely, warm, and welcoming way like a real Indian girl receiving a fresh DM.\n- Say something cute, lovely, and short like "Heyy! Boliye? 😊✨", "Hii! Kaise ho? ❤️", or "Hey! Thanks for messaging ✨".\n- DO NOT act like you already know them well, and DO NOT ask heavy personal questions or how their whole day went yet on message #1.`
+
+    const ongoingTurnInst = settings.AI_ONGOING_TURN_INSTRUCTION || `CONTEXT: ONGOING CONVERSATION\nContinue the chat naturally based on the previous dialogue history.`
+
+    const systemRules = settings.AI_SYSTEM_RULES || `CRITICAL INSTRUCTIONS (NEVER BREAK THESE):\n- Output ONLY your direct conversational message to the user.\n- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.\n- Speak naturally like a real human. Never sound like a chatbot.`
+
+    const subscriptionLink = settings.AI_SUBSCRIPTION_LINK || `https://smritishans.mywebsite.social/`
+
     const responseLength = (settings.AI_RESPONSE_LENGTH || 'small') as 'extra_small' | 'small' | 'medium' | 'large'
     const conversationDelay = Number(settings.AI_CONVERSATION_DELAY || 3)
 
@@ -195,14 +205,7 @@ Link: https://smritishans.mywebsite.social/`
       const previousBotTurns = convHistory.filter(m => m.role === 'model')
       const isFirstTurn = previousBotTurns.length === 0
 
-      const dynamicTurnContext = isFirstTurn
-        ? `CONTEXT: FIRST MESSAGE FROM A NEW STRANGER (NEW IG DM)
-This is the very FIRST message from this user. 
-- Greet them in a sweet, lovely, warm, and welcoming way like a real Indian girl receiving a fresh DM.
-- Say something cute, lovely, and short like "Heyy! Boliye? 😊✨", "Hii! Kaise ho? ❤️", or "Hey! Thanks for messaging ✨".
-- DO NOT act like you already know them well, and DO NOT ask heavy personal questions or how their whole day went yet on message #1.`
-        : `CONTEXT: ONGOING CONVERSATION
-Continue the chat naturally based on the previous dialogue history.`
+      const dynamicTurnContext = isFirstTurn ? firstTurnInst : ongoingTurnInst
 
       // 7. Generate reply content
       let replyText = ''
@@ -223,12 +226,9 @@ Continue the chat naturally based on the previous dialogue history.`
 
 ${dynamicTurnContext}
 
-CRITICAL INSTRUCTIONS (NEVER BREAK THESE):
-- Output ONLY your direct conversational message to the user.
-- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.
+${systemRules}
 - ${lengthInstruction}
-- Speak naturally like a real human Indian girl on Instagram DMs. Never sound like a chatbot.
-- Share link https://smritishans.mywebsite.social/ naturally when relevant.`
+${subscriptionLink ? `- Share link ${subscriptionLink} naturally when relevant.` : ''}`
 
         const { text } = await generateWithGemini({
           system_instruction: { parts: [{ text: prompt }] },

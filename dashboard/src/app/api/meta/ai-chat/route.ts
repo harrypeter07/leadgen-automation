@@ -5,7 +5,7 @@ import { sanitizeAiReply } from '@/lib/meta/chat-memory'
 
 // POST /api/meta/ai-chat
 // body: { message, conversationHistory?, persona? }
-// Returns AI-generated reply for DMs/comments using Gemini with memory & persona rules
+// Returns AI-generated reply for DMs/comments using Gemini with dynamic DB memory & persona rules
 export async function POST(req: NextRequest) {
   try {
     await ensureMetaConfig()
@@ -17,42 +17,39 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
 
-    // Fetch saved persona from DB if not provided in payload
-    let activePersona = persona
-    if (!activePersona) {
-      const { data } = await supabaseAdmin
-        .from('meta_config')
-        .select('value')
-        .eq('key', 'AI_CHATBOT_PERSONA')
-        .single()
-      activePersona = data?.value || ''
+    // Fetch dynamic AI chatbot config settings from meta_config DB
+    const { data: configRows } = await supabaseAdmin
+      .from('meta_config')
+      .select('key, value')
+      .in('key', [
+        'AI_CHATBOT_PERSONA',
+        'AI_FIRST_TURN_INSTRUCTION',
+        'AI_ONGOING_TURN_INSTRUCTION',
+        'AI_SYSTEM_RULES',
+        'AI_SUBSCRIPTION_LINK'
+      ])
+
+    const dbSettings: Record<string, string> = {}
+    for (const r of configRows || []) {
+      dbSettings[r.key] = r.value || ''
     }
 
-    const defaultPersona = `You are Smriti, a 21-year-old Indian influencer. Talk like a real human, not an AI. Use 90-95% Hindi/Hinglish in a casual WhatsApp/Instagram style. Be sweet, playful, caring, confident, and a little flirty (never explicit). Keep replies short (1-3 sentences), use emojis naturally (❤️🥹😂✨), ask follow-up questions, and make every conversation feel genuine.
-
-Goal: Build attraction and connection. Occasionally suggest Premium if fits naturally.
-Link: https://smritishans.mywebsite.social/`
+    const activePersona = persona || dbSettings.AI_CHATBOT_PERSONA || `You are a friendly AI assistant representing our business...`
+    const firstTurnInst = dbSettings.AI_FIRST_TURN_INSTRUCTION || `CONTEXT: FIRST MESSAGE FROM A NEW STRANGER (NEW IG DM)\nThis is the very FIRST message from this user. Greet them in a sweet, lovely, warm, and welcoming way like a real Indian girl receiving a fresh DM.`
+    const ongoingTurnInst = dbSettings.AI_ONGOING_TURN_INSTRUCTION || `CONTEXT: ONGOING CONVERSATION\nContinue the chat naturally based on the previous dialogue history.`
+    const systemRules = dbSettings.AI_SYSTEM_RULES || `CRITICAL INSTRUCTIONS (NEVER BREAK THESE):\n- Output ONLY your direct conversational message to the user.\n- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.\n- Speak naturally like a real human. Never sound like a chatbot.`
+    const subscriptionLink = dbSettings.AI_SUBSCRIPTION_LINK || `https://smritishans.mywebsite.social/`
 
     const isFirstTurn = conversationHistory.length === 0 || !conversationHistory.some((m: any) => m.role === 'system' || m.role === 'model')
+    const dynamicTurnContext = isFirstTurn ? firstTurnInst : ongoingTurnInst
 
-    const dynamicTurnContext = isFirstTurn
-      ? `CONTEXT: FIRST MESSAGE FROM A NEW STRANGER (NEW IG DM)
-This is the very FIRST message from this user. 
-- Greet them in a sweet, lovely, warm, and welcoming way like a real Indian girl receiving a fresh DM.
-- Say something cute, lovely, and short like "Heyy! Boliye? 😊✨", "Hii! Kaise ho? ❤️", or "Hey! Thanks for messaging ✨".
-- DO NOT act like you already know them well, and DO NOT ask heavy personal questions or how their whole day went yet on message #1.`
-      : `CONTEXT: ONGOING CONVERSATION
-Continue the chat naturally based on the previous dialogue history.`
-
-    const systemPrompt = `${activePersona || defaultPersona}
+    const systemPrompt = `${activePersona}
 
 ${dynamicTurnContext}
 
-CRITICAL RULES (NEVER BREAK THESE):
-- Output ONLY your direct text response. DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, or quotes.
+${systemRules}
 - Keep reply short (1-2 sentences max). Be quick and concise.
-- Speak naturally like a real human Indian girl on Instagram DMs. Never sound like an AI or chatbot.
-- Share link https://smritishans.mywebsite.social/ naturally when relevant.`
+${subscriptionLink ? `- Share link ${subscriptionLink} naturally when relevant.` : ''}`
 
     // Build conversation memory history for Gemini
     const contents = [

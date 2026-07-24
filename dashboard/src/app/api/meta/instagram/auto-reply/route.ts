@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 
 // GET /api/meta/instagram/auto-reply
-// Returns auto-reply settings: rules, chatbot enabled status, chatbot persona, and delays
+// Returns auto-reply settings: rules, chatbot enabled status, chatbot persona, dynamic prompt instructions, and delays
 export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
@@ -17,7 +17,11 @@ export async function GET() {
         'AI_CONVERSATION_DELAY',
         'AI_STATIC_REPLY_OVERRIDE',
         'AI_STATIC_REPLY_ENABLED',
-        'AI_RESPONSE_LENGTH'
+        'AI_RESPONSE_LENGTH',
+        'AI_FIRST_TURN_INSTRUCTION',
+        'AI_ONGOING_TURN_INSTRUCTION',
+        'AI_SYSTEM_RULES',
+        'AI_SUBSCRIPTION_LINK'
       ])
 
     if (error) throw error
@@ -47,7 +51,11 @@ export async function GET() {
       conversationDelay: settings.AI_CONVERSATION_DELAY !== undefined ? Number(settings.AI_CONVERSATION_DELAY) : 2,
       staticReply: settings.AI_STATIC_REPLY_OVERRIDE || '',
       staticReplyEnabled: settings.AI_STATIC_REPLY_ENABLED === 'true',
-      responseLength: settings.AI_RESPONSE_LENGTH || 'medium',
+      responseLength: settings.AI_RESPONSE_LENGTH || 'small',
+      firstTurnInstruction: settings.AI_FIRST_TURN_INSTRUCTION || `CONTEXT: FIRST MESSAGE FROM A NEW STRANGER (NEW IG DM)\nThis is the very FIRST message from this user. Greet them in a sweet, lovely, warm, and welcoming way like a real Indian girl receiving a fresh DM. Say something cute, lovely, and short like "Heyy! Boliye? 😊✨", "Hii! Kaise ho? ❤️", or "Hey! Thanks for messaging ✨". DO NOT act like you already know them well, and DO NOT ask heavy personal questions or how their whole day went yet on message #1.`,
+      ongoingTurnInstruction: settings.AI_ONGOING_TURN_INSTRUCTION || `CONTEXT: ONGOING CONVERSATION\nContinue the chat naturally based on the previous dialogue history.`,
+      systemRules: settings.AI_SYSTEM_RULES || `CRITICAL INSTRUCTIONS (NEVER BREAK THESE):\n- Output ONLY your direct conversational message to the user.\n- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.\n- Speak naturally like a real human. Never sound like a chatbot.`,
+      subscriptionLink: settings.AI_SUBSCRIPTION_LINK || `https://smritishans.mywebsite.social/`,
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -55,10 +63,24 @@ export async function GET() {
 }
 
 // POST /api/meta/instagram/auto-reply
-// Saves rules, chatbot status, persona, delays, or saved personas list
+// Saves rules, chatbot status, persona, dynamic prompt instructions, delays, or saved personas list
 export async function POST(req: NextRequest) {
   try {
-    const { rules, chatbotEnabled, chatbotPersona, personas, firstReplyDelay, conversationDelay, staticReply, staticReplyEnabled, responseLength } = await req.json()
+    const { 
+      rules, 
+      chatbotEnabled, 
+      chatbotPersona, 
+      personas, 
+      firstReplyDelay, 
+      conversationDelay, 
+      staticReply, 
+      staticReplyEnabled, 
+      responseLength,
+      firstTurnInstruction,
+      ongoingTurnInstruction,
+      systemRules,
+      subscriptionLink
+    } = await req.json()
 
     const rows = []
 
@@ -143,15 +165,48 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    if (rows.length > 0) {
-      const { error } = await supabaseAdmin
-        .from('meta_config')
-        .upsert(rows, { onConflict: 'key' })
+    if (firstTurnInstruction !== undefined) {
+      rows.push({
+        key: 'AI_FIRST_TURN_INSTRUCTION',
+        value: firstTurnInstruction,
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      })
+    }
 
+    if (ongoingTurnInstruction !== undefined) {
+      rows.push({
+        key: 'AI_ONGOING_TURN_INSTRUCTION',
+        value: ongoingTurnInstruction,
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    if (systemRules !== undefined) {
+      rows.push({
+        key: 'AI_SYSTEM_RULES',
+        value: systemRules,
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    if (subscriptionLink !== undefined) {
+      rows.push({
+        key: 'AI_SUBSCRIPTION_LINK',
+        value: subscriptionLink,
+        encrypted: false,
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    if (rows.length > 0) {
+      const { error } = await supabaseAdmin.from('meta_config').upsert(rows, { onConflict: 'key' })
       if (error) throw error
     }
 
-    return NextResponse.json({ success: true, message: 'Settings saved successfully' })
+    return NextResponse.json({ success: true })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

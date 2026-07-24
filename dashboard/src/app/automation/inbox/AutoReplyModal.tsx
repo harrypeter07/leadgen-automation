@@ -30,6 +30,12 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   const [staticReply, setStaticReply] = useState('')
   const [staticReplyEnabled, setStaticReplyEnabled] = useState(false)
   const [responseLength, setResponseLength] = useState<'extra_small' | 'short' | 'medium' | 'long'>('medium')
+  
+  // Dynamic Turn Directives & Business Link States
+  const [firstTurnInst, setFirstTurnInst] = useState('')
+  const [ongoingTurnInst, setOngoingTurnInst] = useState('')
+  const [subscriptionLink, setSubscriptionLink] = useState('')
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [availableModels, setAvailableModels] = useState<string[]>([])
@@ -167,6 +173,9 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
           initialStaticReply = globalData.staticReply || ''
           initialStaticReplyEnabled = globalData.staticReplyEnabled || false
           if (globalData.responseLength) setResponseLength(globalData.responseLength)
+          if (globalData.firstTurnInstruction) setFirstTurnInst(globalData.firstTurnInstruction)
+          if (globalData.ongoingTurnInstruction) setOngoingTurnInst(globalData.ongoingTurnInstruction)
+          if (globalData.subscriptionLink) setSubscriptionLink(globalData.subscriptionLink)
         }
 
         if (threadId) {
@@ -298,6 +307,9 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
             staticReply: staticReply.trim(),
             staticReplyEnabled,
             responseLength,
+            firstTurnInstruction: firstTurnInst.trim(),
+            ongoingTurnInstruction: ongoingTurnInst.trim(),
+            subscriptionLink: subscriptionLink.trim(),
           }),
         })
       }
@@ -582,13 +594,55 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
 
                   {/* Active instructions text area */}
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">Active AI Chatbot Instructions</label>
+                    <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">Active AI Chatbot Persona & Tone</label>
                     <textarea
                       value={chatbotPersona}
                       onChange={e => setChatbotPersona(e.target.value)}
                       className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors resize-none leading-relaxed"
                       rows={3}
                       placeholder="Write active prompt instructions..."
+                    />
+                  </div>
+
+                  {/* First Turn Stranger Directive */}
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">
+                      👋 First-Time Stranger DM Greeting Directive
+                    </label>
+                    <textarea
+                      value={firstTurnInst}
+                      onChange={e => setFirstTurnInst(e.target.value)}
+                      className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors resize-none leading-relaxed"
+                      rows={2}
+                      placeholder="Instruction for welcoming new first-time strangers..."
+                    />
+                  </div>
+
+                  {/* Ongoing Turn Directive */}
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">
+                      💬 Ongoing Conversation Directive
+                    </label>
+                    <textarea
+                      value={ongoingTurnInst}
+                      onChange={e => setOngoingTurnInst(e.target.value)}
+                      className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors resize-none leading-relaxed"
+                      rows={2}
+                      placeholder="Instruction for ongoing dialogue..."
+                    />
+                  </div>
+
+                  {/* Business / Subscription Link */}
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider block">
+                      🔗 Business / Offer / Call-To-Action Link
+                    </label>
+                    <input
+                      type="url"
+                      value={subscriptionLink}
+                      onChange={e => setSubscriptionLink(e.target.value)}
+                      className="w-full bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+                      placeholder="e.g. https://yourbusiness.com/link"
                     />
                   </div>
 
