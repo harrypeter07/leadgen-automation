@@ -78,25 +78,34 @@ export async function POST() {
       return NextResponse.json({ success: true, message: 'Auto-reply bot disabled' })
     }
 
-    // 2. Fetch latest conversations
+    // 2. Fetch latest conversations (messages already embedded in this call)
     const convsRes = await InstagramService.getMessages(10)
     if (!convsRes.success || !convsRes.data) {
       return NextResponse.json({ success: false, error: 'Could not fetch Instagram conversations' })
     }
 
     const conversations = (convsRes.data as any).data || []
+    const botIgId = process.env.INSTAGRAM_BUSINESS_ID || '17841441378827572'
     let processedCount = 0
 
     for (const conv of conversations) {
       const convId = conv.id
 
       // -----------------------------------------------------------
-      // STEP A: Fetch real-time messages from Meta API
+      // STEP A: Use messages already embedded in getMessages() response.
+      // Do NOT call getConversationMessages() per-conv — that hits rate limits fast.
+      // Embedded messages are sufficient for last-sender guard checks.
+      // Only fetch detailed thread if embedding has no messages at all.
       // -----------------------------------------------------------
-      const msgsRes = await InstagramService.getConversationMessages(convId, 20)
-      const rawMsgs = (msgsRes.success && msgsRes.data)
-        ? ((msgsRes.data as any).data || [])
-        : (conv.messages?.data || [])
+      let rawMsgs: any[] = conv.messages?.data || []
+
+      if (rawMsgs.length === 0) {
+        // Fallback: only fetch if truly no embedded data (rare)
+        const msgsRes = await InstagramService.getConversationMessages(convId, 10)
+        if (msgsRes.success && msgsRes.data) {
+          rawMsgs = (msgsRes.data as any).data || []
+        }
+      }
 
       if (rawMsgs.length === 0) continue
 
@@ -110,9 +119,10 @@ export async function POST() {
 
       // -----------------------------------------------------------
       // GUARD #1 (Real-time): Last message in thread must be from USER (not bot)
-      // This uses the live Meta API data, NOT the DB memory
+      // Uses live Meta API data embedded in getMessages() response
       // -----------------------------------------------------------
-      if (lastSenderUsername === 'smritifyp' || lastSenderId === '17841411718913026') {
+      const isOurMsg = (m: any) => m.from?.username === 'smritifyp' || m.from?.id === botIgId
+      if (isOurMsg(lastMsg)) {
         continue
       }
 
@@ -121,12 +131,8 @@ export async function POST() {
       // -----------------------------------------------------------
       let consecutiveBotCount = 0
       for (let i = sortedMsgs.length - 1; i >= 0; i--) {
-        const m = sortedMsgs[i]
-        if (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') {
-          consecutiveBotCount++
-        } else {
-          break
-        }
+        if (isOurMsg(sortedMsgs[i])) consecutiveBotCount++
+        else break
       }
       if (consecutiveBotCount >= 1) continue
 
@@ -143,9 +149,8 @@ export async function POST() {
       // -----------------------------------------------------------
       const unrepliedUserMsgs: any[] = []
       for (let i = sortedMsgs.length - 1; i >= 0; i--) {
-        const m = sortedMsgs[i]
-        if (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') break
-        unrepliedUserMsgs.unshift(m)
+        if (isOurMsg(sortedMsgs[i])) break
+        unrepliedUserMsgs.unshift(sortedMsgs[i])
       }
 
       if (unrepliedUserMsgs.length === 0) continue
