@@ -49,8 +49,12 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
-    // 2. Set override
+    // 2. Set override for both raw and clean ID
+    const cleanId = String(senderId).replace('ig_', '').replace('fb_', '')
     overrides[senderId] = enabled
+    overrides[cleanId] = enabled
+    overrides[`ig_${cleanId}`] = enabled
+    overrides[`fb_${cleanId}`] = enabled
 
     // 3. Save back to meta_config
     const { error } = await supabaseAdmin

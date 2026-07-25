@@ -205,9 +205,34 @@ async function handleAutoReply(
       overrides = settings.THREAD_AUTOPILOT_OVERRIDES ? JSON.parse(settings.THREAD_AUTOPILOT_OVERRIDES) : {}
     } catch {}
 
+    const cleanSenderId = String(senderId).replace('ig_', '').replace('fb_', '')
+
     const chatbotEnabled = threadConfig.enabled !== undefined
       ? threadConfig.enabled
-      : (overrides[senderId] !== undefined ? overrides[senderId] : globalChatbotEnabled)
+      : (overrides[senderId] !== undefined
+          ? overrides[senderId]
+          : (overrides[cleanSenderId] !== undefined
+              ? overrides[cleanSenderId]
+              : (overrides[`ig_${cleanSenderId}`] !== undefined
+                  ? overrides[`ig_${cleanSenderId}`]
+                  : (overrides[`fb_${cleanSenderId}`] !== undefined
+                      ? overrides[`fb_${cleanSenderId}`]
+                      : globalChatbotEnabled))))
+
+    // CRITICAL: If Autopilot/Auto-Reply is turned OFF for this thread (or globally), skip ALL auto-replies!
+    if (!chatbotEnabled) {
+      console.log(`[AutoReply] Autopilot is OFF for sender ${senderId} (cleanId: ${cleanSenderId}). Skipping auto-reply.`)
+      await logAutoReplyEvent({
+        timestamp: new Date().toISOString(),
+        platform,
+        senderId,
+        message: messageText,
+        matchedType: 'none',
+        replyContent: '',
+        status: 'skipped'
+      })
+      return
+    }
 
     // 2. Persona override
     let chatbotPersona = 'You are a helpful, professional business assistant.'
