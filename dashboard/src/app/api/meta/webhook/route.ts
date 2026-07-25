@@ -626,18 +626,34 @@ export async function POST(req: NextRequest) {
 
             const recipientId = msgEvent.recipient?.id || entry.id
             if (senderId && text && recipientId) {
-              // Trigger asynchronously to avoid blocking the HTTP response, 
-              // which completely prevents Meta webhook retries/duplicates.
-              handleAutoReply(platform, senderId, text, recipientId).catch(err => {
-                console.error('[Meta Webhook] handleAutoReply failed:', err.message)
-              })
+              // MUST await handleAutoReply on Vercel Serverless, otherwise execution freezes 
+              // when the HTTP response returns and auto-replies fail when frontend tab is closed.
+              try {
+                await handleAutoReply(platform, senderId, text, recipientId)
+              } catch (err: any) {
+                console.error('[Meta Webhook] handleAutoReply error:', err.message)
+              }
             }
           }
         }
 
-        // 2. Instagram changes (comments, feed mentions)
+        // 2. Instagram changes (direct messages, comments, feed mentions)
         if (entry.changes && Array.isArray(entry.changes)) {
           for (const change of entry.changes) {
+            // Instagram Direct Messages delivered via changes field
+            if (change.field === 'messages' && change.value) {
+              const senderId = change.value.from?.id || change.value.sender?.id
+              const text = change.value.text || change.value.message?.text
+              const recipientId = entry.id
+              if (senderId && text && recipientId) {
+                try {
+                  await handleAutoReply('instagram', senderId, text, recipientId)
+                } catch (err: any) {
+                  console.error('[Meta Webhook] handleAutoReply via changes error:', err.message)
+                }
+              }
+            }
+
             // Instagram Comments
             if (change.field === 'comments' && change.value) {
               const commentId = change.value.id
@@ -645,7 +661,8 @@ export async function POST(req: NextRequest) {
               const fromId = change.value.from?.id
               if (commentId && text && fromId) {
                 // Auto-reply to comment if configured
-                ensureMetaConfig().then(async () => {
+                try {
+                  await ensureMetaConfig()
                   const myIgId = process.env.INSTAGRAM_BUSINESS_ID || '17841411718913026'
                   if (fromId !== myIgId) {
                     const { data: configRows } = await supabaseAdmin
@@ -663,7 +680,7 @@ export async function POST(req: NextRequest) {
                       }
                     }
                   }
-                }).catch(() => {})
+                } catch {}
               }
             }
           }
