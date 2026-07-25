@@ -107,6 +107,9 @@ export async function POST() {
     let threadOverrides: Record<string, boolean> = {}
     try { threadOverrides = settings.THREAD_AUTOPILOT_OVERRIDES ? JSON.parse(settings.THREAD_AUTOPILOT_OVERRIDES) : {} } catch {}
 
+    let threadConfigs: Record<string, any> = {}
+    try { threadConfigs = settings.THREAD_AI_CONFIGS ? JSON.parse(settings.THREAD_AI_CONFIGS) : {} } catch {}
+
     // 2. Load DB-based reply lock — which message ID did we last reply to per thread
     const lastRepliedIds = await getLastRepliedIds()
 
@@ -157,8 +160,15 @@ export async function POST() {
       // ── GUARD 4: Autopilot override ──
       const autopilotOff =
         threadOverrides[convId] === false ||
+        threadOverrides[`ig_${convId}`] === false ||
         threadOverrides[senderId] === false ||
-        threadOverrides[senderUsername] === false
+        threadOverrides[`ig_${senderId}`] === false ||
+        (senderUsername && threadOverrides[senderUsername] === false) ||
+        (threadConfigs[convId] && threadConfigs[convId].enabled === false) ||
+        (threadConfigs[`ig_${convId}`] && threadConfigs[`ig_${convId}`].enabled === false) ||
+        (threadConfigs[senderId] && threadConfigs[senderId].enabled === false) ||
+        (senderUsername && threadConfigs[senderUsername] && threadConfigs[senderUsername].enabled === false)
+
       if (autopilotOff) continue
 
       // Collect unreplied user messages

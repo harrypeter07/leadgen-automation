@@ -207,6 +207,30 @@ async function handleAutoReply(
 
     const cleanSenderId = String(senderId).replace('ig_', '').replace('fb_', '')
 
+    // CRITICAL: Check if explicitly disabled anywhere in overrides or threadConfigs
+    const isExplicitlyDisabled = 
+      overrides[senderId] === false ||
+      overrides[cleanSenderId] === false ||
+      overrides[`ig_${cleanSenderId}`] === false ||
+      overrides[`fb_${cleanSenderId}`] === false ||
+      (threadConfig && threadConfig.enabled === false) ||
+      (threadConfigs[cleanSenderId] && threadConfigs[cleanSenderId].enabled === false) ||
+      (threadConfigs[`ig_${cleanSenderId}`] && threadConfigs[`ig_${cleanSenderId}`].enabled === false)
+
+    if (isExplicitlyDisabled) {
+      console.log(`[AutoReply] Autopilot is explicitly OFF for sender ${senderId} (cleanId: ${cleanSenderId}). Skipping auto-reply.`)
+      await logAutoReplyEvent({
+        timestamp: new Date().toISOString(),
+        platform,
+        senderId,
+        message: messageText,
+        matchedType: 'none',
+        replyContent: '',
+        status: 'skipped'
+      })
+      return
+    }
+
     const chatbotEnabled = threadConfig.enabled !== undefined
       ? threadConfig.enabled
       : (overrides[senderId] !== undefined
@@ -219,7 +243,6 @@ async function handleAutoReply(
                       ? overrides[`fb_${cleanSenderId}`]
                       : globalChatbotEnabled))))
 
-    // CRITICAL: If Autopilot/Auto-Reply is turned OFF for this thread (or globally), skip ALL auto-replies!
     if (!chatbotEnabled) {
       console.log(`[AutoReply] Autopilot is OFF for sender ${senderId} (cleanId: ${cleanSenderId}). Skipping auto-reply.`)
       await logAutoReplyEvent({

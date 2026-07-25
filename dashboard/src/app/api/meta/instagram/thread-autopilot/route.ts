@@ -73,7 +73,32 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error
 
-    return NextResponse.json({ success: true, overrides })
+    // 4. Also sync enabled state into THREAD_AI_CONFIGS for all variations
+    const { data: configsRow } = await supabaseAdmin
+      .from('meta_config').select('value').eq('key', 'THREAD_AI_CONFIGS').single()
+    let configs: Record<string, any> = {}
+    if (configsRow?.value) {
+      try { configs = JSON.parse(configsRow.value) } catch {}
+    }
+
+    for (const id of idsToSet) {
+      const cleanId = String(id).replace('ig_', '').replace('fb_', '').trim()
+      if (cleanId) {
+        configs[id] = { ...configs[id], enabled }
+        configs[cleanId] = { ...configs[cleanId], enabled }
+        configs[`ig_${cleanId}`] = { ...configs[`ig_${cleanId}`], enabled }
+        configs[`fb_${cleanId}`] = { ...configs[`fb_${cleanId}`], enabled }
+      }
+    }
+
+    await supabaseAdmin.from('meta_config').upsert({
+      key: 'THREAD_AI_CONFIGS',
+      value: JSON.stringify(configs),
+      encrypted: false,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' })
+
+    return NextResponse.json({ success: true, overrides, configs })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
