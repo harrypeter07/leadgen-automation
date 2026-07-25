@@ -200,19 +200,29 @@ export async function POST() {
       // -----------------------------------------------------------
       const inactivityGapMs = inactivityHours * 3600 * 1000
       
-      // Build a combined timeline from DB memory + live messages for session detection
+      // Build a combined timeline from live messages for session detection
       const liveAsMemory: MemoryMessage[] = sortedMsgs
         .map((m: any) => ({
           id: m.id || String(Math.random()),
-          role: (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' as const : 'user' as const,
+          role: isOurMsg(m) ? 'model' as const : 'user' as const,
           text: m.message || (m.attachments?.data?.length ? '[Photo/Attachment]' : ''),
           time: m.created_time || new Date().toISOString(),
           fromUsername: m.from?.username,
         }))
         .filter((m: MemoryMessage) => m.text.trim().length > 0)
 
-      // Use DB mem if available (richer history), else use live messages
-      const fullHistory: MemoryMessage[] = dbMem.length > 0 ? dbMem : liveAsMemory
+      // Safety valve: if the last DB memory message is older than inactivityHours,
+      // the user came back after a break — start a completely fresh session
+      let useDbMem = dbMem.length > 0
+      if (useDbMem) {
+        const lastDbTime = new Date(dbMem[dbMem.length - 1].time).getTime()
+        if (!isNaN(lastDbTime) && (Date.now() - lastDbTime) >= inactivityGapMs) {
+          useDbMem = false // treat as new session — ignore old DB memory for turn counting
+        }
+      }
+
+      // Use DB mem if recent (richer history), else use live embedded messages only
+      const fullHistory: MemoryMessage[] = useDbMem ? dbMem : liveAsMemory
 
       // Find the start of current session: look for the last big inactivity gap
       let sessionStartIndex = 0
