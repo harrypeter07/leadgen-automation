@@ -54,22 +54,38 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   const [newPersonaName, setNewPersonaName] = useState('')
   const [newPersonaInst, setNewPersonaInst] = useState('')
 
-  // Auto Reply Webhook Execution Logs State
-  const [logs, setLogs] = useState<any[]>([])
+  // Auto Reply Webhook Execution & Raw Webhook Logs State
+  const [autoReplyLogs, setAutoReplyLogs] = useState<any[]>([])
+  const [incomingLogs, setIncomingLogs] = useState<any[]>([])
+  const [logTab, setLogTab] = useState<'auto_reply' | 'incoming'>('auto_reply')
   const [loadingLogs, setLoadingLogs] = useState(false)
 
   const fetchLogs = async () => {
     setLoadingLogs(true)
     try {
-      const res = await fetch('/api/meta/instagram/auto-reply-logs')
+      const res = await fetch('/api/meta/webhook/logs')
       const data = await res.json()
       if (res.ok && data.success) {
-        setLogs(data.logs || [])
+        setAutoReplyLogs(data.autoReplyLogs || [])
+        setIncomingLogs(data.incomingLogs || [])
       }
     } catch (err) {
-      console.error('Failed to load auto-reply logs:', err)
+      console.error('Failed to load webhook logs:', err)
     } finally {
       setLoadingLogs(false)
+    }
+  }
+
+  const handleClearLogs = async () => {
+    try {
+      const res = await fetch('/api/meta/webhook/logs?target=all', { method: 'DELETE' })
+      if (res.ok) {
+        setAutoReplyLogs([])
+        setIncomingLogs([])
+        toast.success('Webhook logs cleared!')
+      }
+    } catch (err: any) {
+      toast.error('Failed to clear logs')
     }
   }
 
@@ -797,66 +813,136 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
               </div>
             )}
 
-            {/* Live Webhook Execution Logs */}
+            {/* Live Webhook Execution & Incoming Event Logs */}
             <div className="p-4 rounded-xl border border-gray-200 dark:border-[#2D2D30] bg-gray-50 dark:bg-[#141416] space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h3 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                    📜 Live Auto-Reply Execution Logs
+                    📜 Live Meta Webhook Logs
                   </h3>
                   <p className="text-[10px] text-slate-500 dark:text-gray-500 mt-0.5">
-                    View real-time decision logs showing exactly why the bot replied or skipped a message.
+                    View real-time incoming events and automated bot reply decision logs.
                   </p>
                 </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleClearLogs}
+                    className="px-2 py-1 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold transition-all active:scale-95"
+                  >
+                    Clear Logs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={fetchLogs}
+                    className="px-2.5 py-1 rounded-lg bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] hover:bg-gray-100 dark:hover:bg-[#1a1a1c] text-[10px] font-bold text-slate-700 dark:text-white transition-all active:scale-95 flex items-center gap-1"
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              {/* Sub Tabs */}
+              <div className="flex gap-2 border-b border-gray-200 dark:border-[#2D2D30] pb-2">
                 <button
                   type="button"
-                  onClick={fetchLogs}
-                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] hover:bg-gray-100 dark:hover:bg-[#1a1a1c] text-[10px] font-bold text-slate-700 dark:text-white transition-all active:scale-95 flex items-center gap-1"
+                  onClick={() => setLogTab('auto_reply')}
+                  className={`text-[10px] font-bold uppercase px-3 py-1 rounded-lg transition-colors ${
+                    logTab === 'auto_reply'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] text-slate-600 dark:text-gray-400'
+                  }`}
                 >
-                  Refresh Logs
+                  🤖 Bot Decisions ({autoReplyLogs.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLogTab('incoming')}
+                  className={`text-[10px] font-bold uppercase px-3 py-1 rounded-lg transition-colors ${
+                    logTab === 'incoming'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-white dark:bg-[#0E0E10] border border-gray-200 dark:border-[#2D2D30] text-slate-600 dark:text-gray-400'
+                  }`}
+                >
+                  📥 Incoming Webhooks ({incomingLogs.length})
                 </button>
               </div>
 
               {loadingLogs ? (
-                <div className="text-center py-4 text-slate-400 text-xs animate-pulse">Loading execution logs...</div>
-              ) : logs.length === 0 ? (
-                <div className="text-center py-4 text-slate-400 text-xs border border-dashed border-gray-200 dark:border-[#2D2D30] rounded-xl">
-                  No auto-reply events logged yet.
-                </div>
+                <div className="text-center py-4 text-slate-400 text-xs animate-pulse">Loading webhook logs...</div>
+              ) : logTab === 'auto_reply' ? (
+                autoReplyLogs.length === 0 ? (
+                  <div className="text-center py-4 text-slate-400 text-xs border border-dashed border-gray-200 dark:border-[#2D2D30] rounded-xl">
+                    No auto-reply decision events logged yet.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {autoReplyLogs.map((log: any, idx: number) => (
+                      <div key={idx} className="p-2.5 rounded-lg border border-gray-100 dark:border-[#1E1E22] bg-white dark:bg-[#0E0E10] text-[10px] space-y-1 font-mono">
+                        <div className="flex items-center justify-between text-[8px] text-slate-400">
+                          <span>{new Date(log.timestamp).toLocaleString()}</span>
+                          <span className={`px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                            log.status === 'sent' ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400' :
+                            log.status === 'skipped' ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' :
+                            'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
+                          }`}>
+                            {log.status}
+                          </span>
+                        </div>
+                        <div className="text-slate-700 dark:text-gray-300">
+                          <span className="font-semibold text-purple-600 dark:text-purple-400">User:</span> {log.message}
+                        </div>
+                        <div className="text-slate-700 dark:text-gray-300">
+                          <span className="font-semibold text-[#E3B859]">Match:</span> <span className="underline">{log.matchedType}</span>
+                          {log.modelUsed && <span className="text-[8px] text-slate-400 ml-1.5">({log.modelUsed})</span>}
+                        </div>
+                        {log.replyContent && (
+                          <div className="text-slate-600 dark:text-gray-400 whitespace-pre-line bg-gray-50 dark:bg-[#141416] p-1.5 rounded-md mt-1 border border-gray-100 dark:border-[#1c1c1f]">
+                            <span className="font-semibold text-green-600">Reply:</span> {log.replyContent}
+                          </div>
+                        )}
+                        {log.error && (
+                          <div className="text-red-500 bg-red-50 dark:bg-red-950/20 p-1.5 rounded-md mt-1 border border-red-100">
+                            <span className="font-semibold">Error:</span> {log.error}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
               ) : (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {logs.map((log: any, idx: number) => (
-                    <div key={idx} className="p-2.5 rounded-lg border border-gray-100 dark:border-[#1E1E22] bg-white dark:bg-[#0E0E10] text-[10px] space-y-1 font-mono">
-                      <div className="flex items-center justify-between text-[8px] text-slate-400">
-                        <span>{new Date(log.timestamp).toLocaleString()}</span>
-                        <span className={`px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
-                          log.status === 'sent' ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400' :
-                          log.status === 'skipped' ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' :
-                          'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
-                        }`}>
-                          {log.status}
-                        </span>
-                      </div>
-                      <div className="text-slate-700 dark:text-gray-300">
-                        <span className="font-semibold text-purple-600 dark:text-purple-400">User:</span> {log.message}
-                      </div>
-                      <div className="text-slate-700 dark:text-gray-300">
-                        <span className="font-semibold text-[#E3B859]">Match:</span> <span className="underline">{log.matchedType}</span>
-                        {log.modelUsed && <span className="text-[8px] text-slate-400 ml-1.5">({log.modelUsed})</span>}
-                      </div>
-                      {log.replyContent && (
-                        <div className="text-slate-600 dark:text-gray-400 whitespace-pre-line bg-gray-50 dark:bg-[#141416] p-1.5 rounded-md mt-1 border border-gray-100 dark:border-[#1c1c1f]">
-                          <span className="font-semibold text-green-600">Reply:</span> {log.replyContent}
+                incomingLogs.length === 0 ? (
+                  <div className="text-center py-4 text-slate-400 text-xs border border-dashed border-gray-200 dark:border-[#2D2D30] rounded-xl">
+                    No incoming webhook events received yet. Send a message on IG/Messenger to trigger.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {incomingLogs.map((log: any, idx: number) => (
+                      <div key={idx} className="p-2.5 rounded-lg border border-gray-100 dark:border-[#1E1E22] bg-white dark:bg-[#0E0E10] text-[10px] space-y-1 font-mono">
+                        <div className="flex items-center justify-between text-[8px] text-slate-400">
+                          <span>{new Date(log.timestamp).toLocaleString()}</span>
+                          <span className="px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
+                            {log.object}
+                          </span>
                         </div>
-                      )}
-                      {log.error && (
-                        <div className="text-red-500 bg-red-50 dark:bg-red-950/20 p-1.5 rounded-md mt-1 border border-red-100">
-                          <span className="font-semibold">Error:</span> {log.error}
+                        <div className="text-slate-700 dark:text-gray-300">
+                          <span className="font-semibold text-purple-600 dark:text-purple-400">Sender ID:</span> {log.senderId}
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                        {log.snippet && (
+                          <div className="text-slate-700 dark:text-gray-300">
+                            <span className="font-semibold text-[#E3B859]">Snippet:</span> {log.snippet}
+                          </div>
+                        )}
+                        <details className="mt-1 cursor-pointer">
+                          <summary className="text-[9px] text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white">View Raw Payload</summary>
+                          <pre className="text-[8px] bg-gray-50 dark:bg-[#141416] p-2 rounded border border-gray-200 dark:border-[#2D2D30] overflow-x-auto mt-1 max-h-32 text-slate-600 dark:text-gray-300">
+                            {JSON.stringify(log.payload, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
 
