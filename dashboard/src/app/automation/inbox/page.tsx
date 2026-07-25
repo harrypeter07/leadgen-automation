@@ -207,12 +207,12 @@ export default function SocialInboxPage() {
 
   useEffect(() => { fetchThreads() }, [fetchThreads])
 
-  // Background polling for thread list and auto-reply scanner (8s interval to prevent 403 Meta limits)
+  // Background polling for thread list and auto-reply scanner (4s interval)
   useEffect(() => {
-    const threadTimer = setInterval(() => fetchThreads(true), 8000)
+    const threadTimer = setInterval(() => fetchThreads(true), 4000)
     const botTimer = setInterval(() => {
       fetch('/api/meta/instagram/auto-reply-scan', { method: 'POST' }).catch(() => {})
-    }, 8000)
+    }, 4000)
     return () => {
       clearInterval(threadTimer)
       clearInterval(botTimer)
@@ -258,10 +258,10 @@ export default function SocialInboxPage() {
     }
   }, [activeAccountPageId, activeAccountIgBizId])
 
-  // Background polling for active thread messages (6s interval)
+  // Background polling for active thread messages (3s interval)
   useEffect(() => {
     if (!selectedThread) return
-    const msgTimer = setInterval(() => fetchMessages(selectedThread, true), 6000)
+    const msgTimer = setInterval(() => fetchMessages(selectedThread, true), 3000)
     return () => clearInterval(msgTimer)
   }, [selectedThread, fetchMessages])
 

@@ -250,13 +250,13 @@ async function handleAutoReply(
       ? Number(threadConfig.firstReplyDelay)
       : (matchedAccount && matchedAccount.first_reply_delay !== undefined && matchedAccount.first_reply_delay !== null
           ? Number(matchedAccount.first_reply_delay)
-          : (settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 8))
+          : (settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 2))
 
     const conversationDelay = threadConfig.conversationDelay !== undefined
       ? Number(threadConfig.conversationDelay)
       : (matchedAccount && matchedAccount.conversation_delay !== undefined && matchedAccount.conversation_delay !== null
           ? Number(matchedAccount.conversation_delay)
-          : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 4))
+          : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 1))
 
     // 4. Static test reply override
     const staticReplyEnabled = threadConfig.staticReplyEnabled !== undefined
