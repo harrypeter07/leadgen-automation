@@ -95,9 +95,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
 
   // Seeded default personas if none exist
   const DEFAULT_PERSONAS: Persona[] = [
-    { name: 'Friendly Assistant', instructions: 'You are a warm, helpful, and concise customer support agent. Answer questions simply and invite them to leave their contact details.' },
-    { name: 'Direct Sales Rep', instructions: 'You are a results-oriented sales representative. Highlight the benefits of our smart automation solutions starting at $99, and push for a scheduled demo or email address.' },
-    { name: 'Technical Support', instructions: 'You are a clear, technical agent. Assist with troubleshooting API configurations, SMTP server checks, and Google Scraper parameters in a helpful tone.' },
+    { name: 'Casual Human Texting', instructions: 'You text like a real young person on Instagram DMs — casual, warm, relaxed, in lowercase letters. Keep replies short (5-10 words). DO NOT use emojis. DO NOT use exclamation marks. DO NOT mention links or subscriptions unless asked.' },
+    { name: 'Friendly Support', instructions: 'You are a helpful, concise assistant. Answer questions simply in casual lowercase text. Keep replies under 1 sentence. No emojis, no link pushing.' },
   ]
 
   // Lock background body scroll when modal is open

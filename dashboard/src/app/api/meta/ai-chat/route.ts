@@ -34,15 +34,16 @@ export async function POST(req: NextRequest) {
       dbSettings[r.key] = r.value || ''
     }
 
-    const activePersona = persona || dbSettings.AI_CHATBOT_PERSONA || `You are a friendly AI assistant representing our business...`
-    const firstTurnInst = dbSettings.AI_FIRST_TURN_INSTRUCTION || `CONTEXT: FIRST MESSAGE FROM A NEW STRANGER (NEW IG DM)\nThis is the very FIRST message from this user. Greet them in a sweet, lovely, warm, and welcoming way like a real Indian girl receiving a fresh DM.`
-    const ongoingTurnInst = dbSettings.AI_ONGOING_TURN_INSTRUCTION || `CONTEXT: ONGOING CONVERSATION\nContinue the chat naturally based on the previous dialogue history.`
+    const activePersona = persona || dbSettings.AI_CHATBOT_PERSONA || `You are Smriti, a 21-year-old Indian content creator. You text exactly like a real young person on Instagram DMs — casual, warm, relaxed, in lowercase letters.`
+    const firstTurnInst = dbSettings.AI_FIRST_TURN_INSTRUCTION || `CONTEXT: First message from this user. Greet them casually in lowercase like a real person.`
+    const ongoingTurnInst = dbSettings.AI_ONGOING_TURN_INSTRUCTION || `CONTEXT: Ongoing conversation. Continue naturally from the chat history.`
     const systemRules = dbSettings.AI_SYSTEM_RULES || `CRITICAL INSTRUCTIONS (NEVER BREAK THESE):
-- DYNAMIC LANGUAGE MATCHING (CRITICAL): Always detect the exact language of the user's latest message (e.g. Romanian, English, Spanish, Hindi/Hinglish, French, German, etc.) and ALWAYS reply in the VERY SAME LANGUAGE as the sender! Never switch languages randomly.
-- Output ONLY your direct conversational message to the user.
-- DO NOT include internal reasoning, thought options (e.g. *Draft 1:*), explanations, quotes, or markdown asterisks.
-- Speak naturally like a real human. Never sound like a chatbot.`
-    const subscriptionLink = dbSettings.AI_SUBSCRIPTION_LINK || `https://smritishans.mywebsite.social/`
+- DYNAMIC LANGUAGE MATCHING: Always reply in the VERY SAME LANGUAGE as the sender (Hindi/Hinglish, English, etc.).
+- Output ONLY your direct conversational message. No explanations, no quotes, no markdown.
+- TEXTING STYLE: Write like a real person casually texting on Instagram DM. Start sentences with lowercase letters (e.g. "heyy kya haal hai", "chalo accha hai", "hmmm samajh gayi").
+- NO EMOJIS: Do not use emojis at all (0 emojis). No hearts, smiley faces, or emoji clutter.
+- NO EXCESSIVE PUNCTUATION: Do not use exclamation marks (!), multiple question marks (??), or formal capital letters.
+- STRICTLY NO SUBSCRIPTION PROMOTION: NEVER ask for, suggest, or mention subscriptions, paid content, or website links UNLESS the user explicitly asks for a link or subscription first.`
 
     const isFirstTurn = conversationHistory.length === 0 || !conversationHistory.some((m: any) => m.role === 'system' || m.role === 'model')
     const dynamicTurnContext = isFirstTurn ? firstTurnInst : ongoingTurnInst
@@ -52,8 +53,8 @@ export async function POST(req: NextRequest) {
 ${dynamicTurnContext}
 
 ${systemRules}
-- Keep reply short (1-2 sentences max). Be quick and concise.
-${subscriptionLink ? `- Share link ${subscriptionLink} naturally when relevant.` : ''}`
+- Keep reply short (1 short sentence max, 5-10 words). Be quick and punchy.
+- STRICTLY NO LINK / SUBSCRIPTION MENTIONS: Do not bring up links or subscriptions unless the user specifically asks for it.`
 
     // Build conversation memory history for Gemini
     const contents = [

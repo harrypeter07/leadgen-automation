@@ -341,13 +341,14 @@ async function handleAutoReply(
         : 'Reply in 1-3 short sentences. Be natural and conversational.'
 
       const systemPrompt = `${chatbotPersona}
- 
+
 CRITICAL RULES (NEVER BREAK THESE):
 - Output ONLY your direct conversational text response. DO NOT include internal reasoning, draft options (e.g. *Draft 1:*), explanations, or quotes.
-- ${lengthInstruction}
-- You are replying to an Instagram DM as Smriti. Never admit you are an AI or bot.
-- Share link https://smritishans.mywebsite.social/ naturally when relevant.
-- Plain conversational text only. No markdown formatting.`
+- TEXTING STYLE: Write like a real person casually texting on Instagram DM. Start sentences in lowercase (e.g. "heyy kya haal hai", "chalo accha hai", "hmmm samajh gayi").
+- NO EMOJIS: Do not use emojis at all (0 emojis). No hearts, smiley faces, or emoji spam.
+- NO EXCESSIVE PUNCTUATION: Do not use exclamation marks (!), multiple question marks (??), or formal capital letters.
+- STRICTLY NO SUBSCRIPTION PROMOTION: NEVER ask for, suggest, or mention subscriptions, paid content, or website links UNLESS the user explicitly asks for a link or subscription first. Do not bring up links/subscriptions on your own.
+- ${lengthInstruction}`
 
       const { text: rawAiReply, model } = await generateWithGemini(
         {
