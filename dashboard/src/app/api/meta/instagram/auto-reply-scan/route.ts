@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { InstagramService } from '@/lib/meta/instagram-service'
 import { ensureMetaConfig } from '@/lib/meta/runtime-config'
@@ -7,21 +7,20 @@ import { getChatMemory, saveChatMemory, sanitizeAiReply, MemoryMessage } from '@
 
 export const dynamic = 'force-dynamic'
 
-const autoRepliedMsgIds = new Set<string>()
+// In-memory map: msgId -> timestamp we replied (resets on server restart — that's fine, DB is source of truth)
 const lastRepliedTimestampMap = new Map<string, number>()
 
 // POST /api/meta/instagram/auto-reply-scan
-// Background worker with strict multi-text anti-spam guards, per-chat autopilot overrides, and 1-hour session inactivity reset window
+// Background worker: anti-spam, session inactivity window, turn limits, dynamic language matching
 export async function POST() {
   try {
     await ensureMetaConfig()
 
-    // 1. Load Auto-Reply Settings & Dynamic Prompt Directives from meta_config
+    // 1. Load settings from meta_config
     const { data: configRows } = await supabaseAdmin
       .from('meta_config')
       .select('key, value')
       .in('key', [
-        'AUTO_REPLY_RULES',
         'AI_CHATBOT_ENABLED',
         'AI_CHATBOT_PERSONA',
         'AI_FIRST_REPLY_DELAY',
@@ -48,7 +47,7 @@ export async function POST() {
     const chatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
     const staticReplyEnabled = settings.AI_STATIC_REPLY_ENABLED === 'true'
     const staticReply = settings.AI_STATIC_REPLY_OVERRIDE || ''
-    
+
     const chatbotPersona = settings.AI_CHATBOT_PERSONA || `You are Smriti, a 21-year-old Indian influencer. Talk like a real human, not an AI. Use 90-95% Hindi/Hinglish in a casual WhatsApp/Instagram style. Be sweet, playful, caring, confident, and a little flirty (never explicit). Keep replies short (1-3 sentences), use emojis naturally (❤️🥹😂✨), ask follow-up questions, and make every conversation feel genuine.`
 
     const firstTurnInst = settings.AI_FIRST_TURN_INSTRUCTION || `CONTEXT: FIRST MESSAGE FROM A NEW STRANGER (NEW IG DM)\nThis is the very FIRST message from this user.\n- Greet them in a sweet, lovely, warm, and welcoming way like a real Indian girl receiving a fresh DM.\n- Say something cute, lovely, and short like "Heyy! Boliye? 😊✨", "Hii! Kaise ho? ❤️", or "Hey! Thanks for messaging ✨".\n- DO NOT act like you already know them well, and DO NOT ask heavy personal questions or how their whole day went yet on message #1.`
@@ -91,55 +90,35 @@ export async function POST() {
     for (const conv of conversations) {
       const convId = conv.id
 
-      // Human timing guard: Avoid replying multiple times in less than 20 seconds to the same thread
-      const lastSentTime = lastRepliedTimestampMap.get(convId) || 0
-      if (Date.now() - lastSentTime < 20000) {
-        continue
-      }
-
-      // Check DB Chat Memory for strict anti-spam & last sender verification
-      const dbMem = await getChatMemory(convId)
-      if (dbMem.length > 0) {
-        const lastMemMsg = dbMem[dbMem.length - 1]
-        // STRICT GUARD #1: If the VERY LAST message in stored memory was sent by US (model), DO NOT SEND AGAIN!
-        if (lastMemMsg.role === 'model') {
-          continue
-        }
-      }
-
-      // Fetch complete thread messages to inspect full real-time message stream from Meta
+      // -----------------------------------------------------------
+      // STEP A: Fetch real-time messages from Meta API
+      // -----------------------------------------------------------
       const msgsRes = await InstagramService.getConversationMessages(convId, 20)
-      const rawMsgs = (msgsRes.success && msgsRes.data) 
-        ? ((msgsRes.data as any).data || []) 
+      const rawMsgs = (msgsRes.success && msgsRes.data)
+        ? ((msgsRes.data as any).data || [])
         : (conv.messages?.data || [])
 
       if (rawMsgs.length === 0) continue
 
-      // Sync fetched messages to DB chat memory
-      const memList: MemoryMessage[] = rawMsgs.map((m: any) => ({
-        id: m.id || String(Math.random()),
-        role: (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' : 'user',
-        text: m.message || (m.attachments?.data?.length ? '[Photo/Attachment]' : ''),
-        time: m.created_time || new Date().toISOString(),
-        fromUsername: m.from?.username,
-      })).filter((m: MemoryMessage) => m.text.trim().length > 0)
-
-      if (memList.length > 0) {
-        await saveChatMemory(convId, memList)
-      }
-
-      // Sort messages chronologically (oldest first, newest last)
+      // Sort chronologically: oldest first, newest last
       const sortedMsgs = [...rawMsgs].reverse()
       const lastMsg = sortedMsgs[sortedMsgs.length - 1]
       if (!lastMsg) continue
 
-      const lastSenderId = lastMsg.from?.id
       const lastSenderUsername = lastMsg.from?.username
+      const lastSenderId = lastMsg.from?.id
 
-      // STRICT GUARD #2: Skip if the last message in Meta API thread was sent by US (smritifyp)
-      if (lastSenderUsername === 'smritifyp' || lastSenderId === '17841411718913026') continue
+      // -----------------------------------------------------------
+      // GUARD #1 (Real-time): Last message in thread must be from USER (not bot)
+      // This uses the live Meta API data, NOT the DB memory
+      // -----------------------------------------------------------
+      if (lastSenderUsername === 'smritifyp' || lastSenderId === '17841411718913026') {
+        continue
+      }
 
-      // STRICT GUARD #3: Count consecutive bot replies. If >= 1, do NOT send another message!
+      // -----------------------------------------------------------
+      // GUARD #2: No consecutive bot messages (check live thread)
+      // -----------------------------------------------------------
       let consecutiveBotCount = 0
       for (let i = sortedMsgs.length - 1; i >= 0; i--) {
         const m = sortedMsgs[i]
@@ -151,7 +130,17 @@ export async function POST() {
       }
       if (consecutiveBotCount >= 1) continue
 
-      // Collect all consecutive unreplied user messages at the end of the thread
+      // -----------------------------------------------------------
+      // GUARD #3: 20-second per-thread timing guard
+      // -----------------------------------------------------------
+      const lastSentTime = lastRepliedTimestampMap.get(convId) || 0
+      if (Date.now() - lastSentTime < 20000) {
+        continue
+      }
+
+      // -----------------------------------------------------------
+      // Collect all consecutive unreplied user messages at the end
+      // -----------------------------------------------------------
       const unrepliedUserMsgs: any[] = []
       for (let i = sortedMsgs.length - 1; i >= 0; i--) {
         const m = sortedMsgs[i]
@@ -165,22 +154,25 @@ export async function POST() {
       const senderId = latestUserMsg.from?.id
       const senderUsername = latestUserMsg.from?.username || ''
 
-      // Per-Chat Autopilot Override check: Skip if user turned off AI automation for this chat
-      const isAutopilotDisabled = 
+      if (!senderId) continue
+
+      // -----------------------------------------------------------
+      // GUARD #4: Per-chat autopilot override
+      // -----------------------------------------------------------
+      const isAutopilotDisabled =
         threadOverrides[convId] === false ||
         threadOverrides[`ig_${convId}`] === false ||
         (senderId && threadOverrides[senderId] === false) ||
         (senderUsername && threadOverrides[senderUsername] === false)
 
       if (isAutopilotDisabled) {
-        console.log(`[AutoReplyScan] AI Autopilot disabled for thread ${convId} (${senderUsername}). Skipping.`)
+        console.log(`[AutoReplyScan] Autopilot disabled for thread ${convId} (${senderUsername}). Skipping.`)
         continue
       }
 
-      // Skip if we already replied to this exact latest user message ID
-      if (!senderId || autoRepliedMsgIds.has(latestUserMsg.id)) continue
-
-      // Combine text of all unreplied messages (substituting photos/attachments if text is empty)
+      // -----------------------------------------------------------
+      // Combine unreplied user messages into one text block
+      // -----------------------------------------------------------
       const userTextParts = unrepliedUserMsgs.map(m => {
         const txt = (m.message || '').trim()
         if (txt) return txt
@@ -191,18 +183,38 @@ export async function POST() {
       if (userTextParts.length === 0) continue
       const combinedUserText = userTextParts.join('\n')
 
-      // Build full conversation history for Gemini from DB memory
-      const fullHistory = (dbMem.length > 0 ? dbMem : sortedMsgs)
+      // -----------------------------------------------------------
+      // Load DB memory ONLY for building conversation history & session tracking
+      // DB memory is NOT used as a reply gate (that's the fixed bug)
+      // -----------------------------------------------------------
+      const dbMem = await getChatMemory(convId)
 
-      // Calculate active session boundaries using the inactivity gap threshold (Default: 1 hour)
+      // -----------------------------------------------------------
+      // Session detection: find the start of current active session
+      // using the inactivity gap between messages (default: 1 hour)
+      // -----------------------------------------------------------
       const inactivityGapMs = inactivityHours * 3600 * 1000
-      let sessionStartIndex = 0
+      
+      // Build a combined timeline from DB memory + live messages for session detection
+      const liveAsMemory: MemoryMessage[] = sortedMsgs
+        .map((m: any) => ({
+          id: m.id || String(Math.random()),
+          role: (m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' as const : 'user' as const,
+          text: m.message || (m.attachments?.data?.length ? '[Photo/Attachment]' : ''),
+          time: m.created_time || new Date().toISOString(),
+          fromUsername: m.from?.username,
+        }))
+        .filter((m: MemoryMessage) => m.text.trim().length > 0)
 
+      // Use DB mem if available (richer history), else use live messages
+      const fullHistory: MemoryMessage[] = dbMem.length > 0 ? dbMem : liveAsMemory
+
+      // Find the start of current session: look for the last big inactivity gap
+      let sessionStartIndex = 0
       for (let i = fullHistory.length - 1; i > 0; i--) {
-        const currentMsgTime = new Date(fullHistory[i].time || fullHistory[i].created_time).getTime()
-        const prevMsgTime = new Date(fullHistory[i-1].time || fullHistory[i-1].created_time).getTime()
-        
-        if (!isNaN(currentMsgTime) && !isNaN(prevMsgTime) && (currentMsgTime - prevMsgTime) >= inactivityGapMs) {
+        const currentTime = new Date(fullHistory[i].time).getTime()
+        const prevTime = new Date(fullHistory[i - 1].time).getTime()
+        if (!isNaN(currentTime) && !isNaN(prevTime) && (currentTime - prevTime) >= inactivityGapMs) {
           sessionStartIndex = i
           break
         }
@@ -210,79 +222,80 @@ export async function POST() {
 
       const currentSessionMsgs = fullHistory.slice(sessionStartIndex)
 
-      // 1. Calculate active session duration
+      // -----------------------------------------------------------
+      // Session duration: measure from FIRST msg of current session
+      // to the LAST user msg time (NOT to now — avoids stale sessions)
+      // -----------------------------------------------------------
       let sessionElapsedMins = 0
-      if (currentSessionMsgs.length > 0) {
-        const sessionStartMs = new Date(currentSessionMsgs[0].time || currentSessionMsgs[0].created_time).getTime()
-        if (!isNaN(sessionStartMs) && sessionStartMs > 0) {
-          sessionElapsedMins = (Date.now() - sessionStartMs) / 60000
+      if (currentSessionMsgs.length >= 2) {
+        const sessionStartMs = new Date(currentSessionMsgs[0].time).getTime()
+        // Use the timestamp of the last message, not Date.now()
+        const sessionLastMsgMs = new Date(currentSessionMsgs[currentSessionMsgs.length - 1].time).getTime()
+        if (!isNaN(sessionStartMs) && !isNaN(sessionLastMsgMs) && sessionLastMsgMs > sessionStartMs) {
+          sessionElapsedMins = (sessionLastMsgMs - sessionStartMs) / 60000
         }
       }
 
-      // 2. Calculate active session bot turns count
-      const sessionBotTurns = currentSessionMsgs.filter((m: any) => 
-        m.role === 'model' || m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026'
-      ).length
+      // Count bot turns in current session
+      const sessionBotTurns = currentSessionMsgs.filter((m: MemoryMessage) => m.role === 'model').length
 
       const isDurationLimitReached = sessionElapsedMins >= maxDurationMins
       const isTurnLimitReached = sessionBotTurns >= maxTurns
       const isSessionLimitReached = isDurationLimitReached || isTurnLimitReached
 
-      // If session limit reached and last session message was ALREADY sent by the bot (ending wrap-up message), STOP replying!
-      if (isSessionLimitReached && currentSessionMsgs.length > 0) {
+      // If session limit reached AND bot already sent the wrap-up message (last session msg is model), stop
+      if (isSessionLimitReached) {
         const lastSessionMsg = currentSessionMsgs[currentSessionMsgs.length - 1]
-        if (lastSessionMsg.role === 'model' || lastSessionMsg.from?.username === 'smritifyp') {
-          console.log(`[AutoReplyScan] Session limit reached for ${senderUsername} (${sessionElapsedMins.toFixed(1)} mins, ${sessionBotTurns} bot turns). Ending message already sent. Skipping.`)
+        if (lastSessionMsg && lastSessionMsg.role === 'model') {
+          console.log(`[AutoReplyScan] Session limit for ${senderUsername} (${sessionElapsedMins.toFixed(1)} mins, ${sessionBotTurns} bot turns). Wrap-up already sent. Skipping.`)
           continue
         }
       }
 
+      // -----------------------------------------------------------
+      // Build conversation history for Gemini
+      // -----------------------------------------------------------
       const convHistory = fullHistory
-        .slice(-12) // Take last 12 historical turns
-        .map((m: any) => ({
-          role: m.role || ((m.from?.username === 'smritifyp' || m.from?.id === '17841411718913026') ? 'model' : 'user'),
-          parts: [{ text: m.text || m.message || '' }]
+        .slice(-12)
+        .map((m: MemoryMessage) => ({
+          role: m.role,
+          parts: [{ text: m.text || '' }]
         }))
         .filter((m: any) => m.parts[0].text.trim().length > 0)
 
-      if (convHistory.length === 0 || convHistory[convHistory.length - 1].parts[0].text !== combinedUserText) {
-        convHistory.push({
-          role: 'user',
-          parts: [{ text: combinedUserText }]
-        })
+      // Ensure the last entry is the user's current message
+      const lastHistoryParts = convHistory[convHistory.length - 1]?.parts[0]?.text
+      if (!lastHistoryParts || lastHistoryParts !== combinedUserText) {
+        convHistory.push({ role: 'user', parts: [{ text: combinedUserText }] })
       }
 
-      // Check if this active session has 0 previous replies from the bot/model
+      // Select the right system context directive
       const isFirstTurn = sessionBotTurns === 0
-
-      // Dynamically select directive: First turn vs Ongoing vs Duration/Turns Expired Wrap-Up
       let dynamicTurnContext = isFirstTurn ? firstTurnInst : ongoingTurnInst
       if (isSessionLimitReached) {
         dynamicTurnContext = endingTalkInstruction
       }
 
-      autoRepliedMsgIds.add(latestUserMsg.id)
+      // Mark as being processed
       lastRepliedTimestampMap.set(convId, Date.now())
-      console.log(`[AutoReplyScan] Processing ${unrepliedUserMsgs.length} msg(s) from ${senderUsername} (Session elapsed: ${sessionElapsedMins.toFixed(1)} mins, turns: ${sessionBotTurns}, limit reached: ${isSessionLimitReached}): "${combinedUserText}"`)
+      console.log(`[AutoReplyScan] Processing reply for ${senderUsername} (session: ${sessionElapsedMins.toFixed(1)} mins, turns: ${sessionBotTurns}, limitReached: ${isSessionLimitReached}): "${combinedUserText.slice(0, 80)}"`)
 
       // Send typing indicator
-      try {
-        await InstagramService.sendTypingIndicator(senderId, 'typing_on')
-      } catch {}
+      try { await InstagramService.sendTypingIndicator(senderId, 'typing_on') } catch {}
 
-      // Delay wait according to conversationDelay
+      // Apply conversation delay
       if (conversationDelay > 0) {
         await new Promise(res => setTimeout(res, Math.min(conversationDelay * 1000, 5000)))
       }
 
-      // Generate reply content
+      // -----------------------------------------------------------
+      // Generate reply
+      // -----------------------------------------------------------
       let replyText = ''
       if (staticReplyEnabled && staticReply.trim()) {
         replyText = staticReply.trim()
       } else {
         const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
-        
-        // Strict token limit & instructions based on selected response length
         const maxTokens = responseLength === 'extra_small' ? 25 : responseLength === 'small' ? 45 : responseLength === 'medium' ? 85 : 180
         const lengthInstruction = responseLength === 'extra_small'
           ? 'Reply in MAXIMUM 1 short sentence (5-8 words total).'
@@ -307,32 +320,33 @@ ${subscriptionLink ? `- Share link ${subscriptionLink} naturally when relevant.`
         replyText = sanitizeAiReply(text)
       }
 
-      // Check duplicate reply text guard: Don't send exact same message twice
-      if (dbMem.length > 0 && dbMem[dbMem.length - 1].text === replyText) {
-        console.log(`[AutoReplyScan] Discarding duplicate reply text for ${senderUsername}: "${replyText}"`)
+      if (!replyText) {
+        console.log(`[AutoReplyScan] Empty reply generated for ${senderUsername}, skipping send.`)
+        try { await InstagramService.sendTypingIndicator(senderId, 'typing_off') } catch {}
         continue
       }
 
-      if (replyText) {
-        console.log(`[AutoReplyScan] Sending DM reply to ${senderUsername}: "${replyText}"`)
-        const sendRes = await InstagramService.sendDM(senderId, replyText)
-        processedCount++
+      // -----------------------------------------------------------
+      // Send and save to DB memory
+      // -----------------------------------------------------------
+      console.log(`[AutoReplyScan] Sending DM to ${senderUsername}: "${replyText}"`)
+      const sendRes = await InstagramService.sendDM(senderId, replyText)
+      processedCount++
 
-        // Save generated bot reply to DB memory
-        const botMsgId = (sendRes.data as any)?.message_id || `bot_${Date.now()}`
-        await saveChatMemory(convId, [{
-          id: botMsgId,
-          role: 'model',
-          text: replyText,
-          time: new Date().toISOString(),
-          fromUsername: 'smritifyp',
-        }])
+      // Sync all live messages into DB memory first, then append our bot reply
+      if (liveAsMemory.length > 0) {
+        await saveChatMemory(convId, liveAsMemory)
       }
+      const botMsgId = (sendRes.data as any)?.message_id || `bot_${Date.now()}`
+      await saveChatMemory(convId, [{
+        id: botMsgId,
+        role: 'model',
+        text: replyText,
+        time: new Date().toISOString(),
+        fromUsername: 'smritifyp',
+      }])
 
-      // Turn off typing indicator
-      try {
-        await InstagramService.sendTypingIndicator(senderId, 'typing_off')
-      } catch {}
+      try { await InstagramService.sendTypingIndicator(senderId, 'typing_off') } catch {}
     }
 
     return NextResponse.json({ success: true, processedCount })
