@@ -30,9 +30,9 @@ export async function GET() {
 // Updates or toggles autopilot override for a specific conversation/thread
 export async function POST(req: NextRequest) {
   try {
-    const { senderId, enabled } = await req.json()
-    if (!senderId) {
-      return NextResponse.json({ error: 'senderId is required' }, { status: 400 })
+    const { senderId, participantId, username, enabled } = await req.json()
+    if (!senderId && !participantId) {
+      return NextResponse.json({ error: 'senderId or participantId is required' }, { status: 400 })
     }
 
     // 1. Fetch current overrides
@@ -49,12 +49,17 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
-    // 2. Set override for both raw and clean ID
-    const cleanId = String(senderId).replace('ig_', '').replace('fb_', '')
-    overrides[senderId] = enabled
-    overrides[cleanId] = enabled
-    overrides[`ig_${cleanId}`] = enabled
-    overrides[`fb_${cleanId}`] = enabled
+    // 2. Set override for all possible thread ID variations
+    const idsToSet = [senderId, participantId, username].filter(Boolean)
+    for (const id of idsToSet) {
+      const cleanId = String(id).replace('ig_', '').replace('fb_', '').trim()
+      if (cleanId) {
+        overrides[id] = enabled
+        overrides[cleanId] = enabled
+        overrides[`ig_${cleanId}`] = enabled
+        overrides[`fb_${cleanId}`] = enabled
+      }
+    }
 
     // 3. Save back to meta_config
     const { error } = await supabaseAdmin

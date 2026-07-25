@@ -94,18 +94,32 @@ export default function SocialInboxPage() {
       .catch(() => {})
   }, [])
 
-  async function toggleThreadAutopilot(threadId: string, currentEnabled: boolean) {
+  async function toggleThreadAutopilot(thread: Thread, currentEnabled: boolean) {
     const newStatus = !currentEnabled
-    const cleanId = threadId.replace('ig_', '').replace('fb_', '')
-    setAutopilotOverrides(prev => ({ ...prev, [threadId]: newStatus, [cleanId]: newStatus }))
+    const cleanId = thread.id.replace('ig_', '').replace('fb_', '')
+    const participantId = thread.participantId ? thread.participantId.replace('ig_', '').replace('fb_', '') : ''
+    const username = thread.name.trim()
+
+    setAutopilotOverrides(prev => ({
+      ...prev,
+      [thread.id]: newStatus,
+      [cleanId]: newStatus,
+      ...(participantId ? { [participantId]: newStatus, [`ig_${participantId}`]: newStatus, [`fb_${participantId}`]: newStatus } : {}),
+      ...(username ? { [username]: newStatus } : {})
+    }))
 
     try {
       await fetch('/api/meta/instagram/thread-autopilot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ senderId: threadId, enabled: newStatus }),
+        body: JSON.stringify({
+          senderId: thread.id,
+          participantId: thread.participantId,
+          username: thread.name,
+          enabled: newStatus
+        }),
       })
-      toast.success(`AI Autopilot ${newStatus ? 'ENABLED' : 'DISABLED'} for this chat`)
+      toast.success(`AI Autopilot ${newStatus ? 'ENABLED' : 'DISABLED'} for @${thread.name}`)
     } catch (err) {
       toast.error('Failed to toggle thread autopilot')
     }
@@ -490,12 +504,13 @@ export default function SocialInboxPage() {
                     const cleanId = selectedThread.id.replace('ig_', '').replace('fb_', '')
                     const isAutopilotOn = autopilotOverrides[selectedThread.id] !== false && 
                                          autopilotOverrides[cleanId] !== false &&
-                                         (!selectedThread.participantId || autopilotOverrides[selectedThread.participantId] !== false)
+                                         (!selectedThread.participantId || autopilotOverrides[selectedThread.participantId] !== false) &&
+                                         (!selectedThread.name || autopilotOverrides[selectedThread.name.trim()] !== false)
                     return (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => toggleThreadAutopilot(selectedThread.id, isAutopilotOn)}
+                        onClick={() => toggleThreadAutopilot(selectedThread, isAutopilotOn)}
                         className={`gap-1.5 text-xs transition-all ${
                           isAutopilotOn 
                             ? 'border-emerald-500/40 text-emerald-400 bg-emerald-950/20 hover:bg-emerald-900/30' 
