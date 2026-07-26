@@ -42,8 +42,7 @@ export async function POST(req: NextRequest) {
 - Output ONLY your direct conversational message. No explanations, no quotes, no markdown.
 - TEXTING STYLE: Write like a real person casually texting on Instagram DM. Start sentences with lowercase letters (e.g. "heyy kya haal hai", "chalo accha hai", "hmmm samajh gayi").
 - NO EMOJIS: Do not use emojis at all (0 emojis). No hearts, smiley faces, or emoji clutter.
-- NO EXCESSIVE PUNCTUATION: Do not use exclamation marks (!), multiple question marks (??), or formal capital letters.
-- STRICTLY NO SUBSCRIPTION PROMOTION: NEVER ask for, suggest, or mention subscriptions, paid content, or website links UNLESS the user explicitly asks for a link or subscription first.`
+- SUBSCRIPTION LINK RULE: You may mention the subscription link naturally ONCE when relevant. DO NOT repeat or spam the link multiple times if it was already mentioned or if unrelated.`
 
     const isFirstTurn = conversationHistory.length === 0 || !conversationHistory.some((m: any) => m.role === 'system' || m.role === 'model')
     const dynamicTurnContext = isFirstTurn ? firstTurnInst : ongoingTurnInst
@@ -54,7 +53,7 @@ ${dynamicTurnContext}
 
 ${systemRules}
 - Keep reply short (1 short sentence max, 5-10 words). Be quick and punchy.
-- STRICTLY NO LINK / SUBSCRIPTION MENTIONS: Do not bring up links or subscriptions unless the user specifically asks for it.`
+- Mention link naturally ONCE when relevant. Do not repeat or push the link.`
 
     // Build conversation memory history for Gemini
     const contents = [

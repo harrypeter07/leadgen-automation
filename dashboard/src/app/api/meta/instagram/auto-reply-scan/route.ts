@@ -92,8 +92,7 @@ export async function POST() {
 - Output ONLY your reply message. No explanations, no internal notes, no asterisks, no quotes.
 - Start sentences with lowercase letters (casual DM style, e.g. "heyy kya kar rahe ho", "accha aisa hai kya").
 - NO EMOJIS: Do not use any emojis at all (0 emojis).
-- NO EXCESSIVE PUNCTUATION: Do not use exclamation marks (!), multiple question marks (??), or ALL CAPS.
-- STRICTLY NO SUBSCRIPTION PROMOTION: NEVER ask for, suggest, or mention subscriptions, paid content, or website links UNLESS the user explicitly asks for a link or subscription first.`
+- SUBSCRIPTION LINK RULE: You may mention the subscription link naturally ONCE when relevant. DO NOT repeat or spam the link multiple times if it was already mentioned or if unrelated.`
 
     const subscriptionLink = settings.AI_SUBSCRIPTION_LINK || ''
     const maxDurationMins = Number(settings.AI_CONVERSATION_MAX_DURATION_MINS || 30)
@@ -296,7 +295,7 @@ ${dynamicTurnContext}
 
 ${systemRules}
 - ${lengthInstruction}
-- STRICTLY NO LINK / SUBSCRIPTION MENTIONS: Do not bring up links or subscriptions unless the user specifically asks for it.`
+${subscriptionLink ? `- Mention ${subscriptionLink} naturally ONCE when relevant. Do not repeat or spam the link.` : ''}`
 
         const { text } = await generateWithGemini({
           system_instruction: { parts: [{ text: prompt }] },

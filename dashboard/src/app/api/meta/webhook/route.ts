@@ -347,7 +347,7 @@ CRITICAL RULES (NEVER BREAK THESE):
 - TEXTING STYLE: Write like a real person casually texting on Instagram DM. Start sentences in lowercase (e.g. "heyy kya haal hai", "chalo accha hai", "hmmm samajh gayi").
 - NO EMOJIS: Do not use emojis at all (0 emojis). No hearts, smiley faces, or emoji spam.
 - NO EXCESSIVE PUNCTUATION: Do not use exclamation marks (!), multiple question marks (??), or formal capital letters.
-- STRICTLY NO SUBSCRIPTION PROMOTION: NEVER ask for, suggest, or mention subscriptions, paid content, or website links UNLESS the user explicitly asks for a link or subscription first. Do not bring up links/subscriptions on your own.
+- SUBSCRIPTION LINK RULE: You may mention the subscription link (https://smritishans.mywebsite.social/) naturally ONCE when relevant. DO NOT repeat or spam the link multiple times if it was already mentioned or if unrelated.
 - ${lengthInstruction}`
 
       const { text: rawAiReply, model } = await generateWithGemini(
