@@ -39,10 +39,10 @@ export const LEAD_STATUSES: LeadStatus[] = [
 ]
 
 export const STATUS_COLORS: Record<LeadStatus, string> = {
-  new: 'bg-gray-800/60 text-gray-300 border border-gray-700/50',
-  whatsapp_sent: 'bg-blue-950/40 text-blue-300 border border-blue-800/50',
-  email_sent: 'bg-violet-950/40 text-violet-300 border border-violet-850/50',
-  replied: 'bg-amber-950/40 text-amber-300 border border-amber-800/50',
-  converted: 'bg-green-950/40 text-green-300 border border-green-800/50',
-  skip: 'bg-red-950/40 text-red-300 border border-red-800/50',
+  new: 'bg-blue-500/15 text-blue-300 border border-blue-500/30 font-mono',
+  whatsapp_sent: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono',
+  email_sent: 'bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono',
+  replied: 'bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono',
+  converted: 'bg-blue-600/25 text-blue-200 border border-blue-400/40 font-mono font-bold shadow-sm shadow-blue-500/20',
+  skip: 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/60 font-mono',
 }
