@@ -7,6 +7,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { QRCodeSVG } from 'qrcode.react'
 import { supabaseBrowser } from '@/lib/supabase'
 import type { Lead } from '@/types/lead'
+import { Smartphone, Play, Square, RefreshCw, Terminal, Send, AlertTriangle, ShieldCheck, CheckCircle2 } from 'lucide-react'
 
 export default function WhatsappManagerPage() {
   const [connected, setConnected] = useState<boolean | null>(null)
@@ -82,102 +83,114 @@ export default function WhatsappManagerPage() {
     }
   }
 
-  // 2. Fetch QR code
-  async function fetchQrCode() {
-    try {
-      const res = await fetch('/api/whatsapp/qr')
-      if (res.ok) {
-        const data = await res.json()
-        setQrCode(data.qr)
-        setQrMessage(data.message || '')
-      }
-    } catch {
-      setQrMessage('Failed to fetch QR')
-    }
-  }
-
-  // 3. Fetch recent sent messages
-  async function fetchRecentSent() {
-    try {
-      const { data, error } = await supabaseBrowser
-        .from('leads')
-        .select('*')
-        .not('whatsapp_sent_at', 'is', null)
-        .order('whatsapp_sent_at', { ascending: false })
-        .limit(10)
-
-      if (error) throw error
-      setRecentSent((data ?? []) as Lead[])
-    } catch (err) {
-      console.error('Error fetching recent sent messages:', err)
-    } finally {
-      setLoadingRecent(false)
-    }
-  }
-
-  // 3b. Fetch detailed session status
+  // 2. Fetch session status details
   async function fetchSessionStatus() {
     try {
       const res = await fetch('/api/whatsapp/status')
       if (res.ok) {
-        const data = await res.json()
+        const data: SessionStatus = await res.json()
         setSessionStatus(data)
+
+        if (data.serviceStartedAt) {
+          const diff = Math.max(0, Date.now() - new Date(data.serviceStartedAt).getTime())
+          const hrs = String(Math.floor(diff / 3600000)).padStart(2, '0')
+          const mins = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0')
+          const secs = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0')
+          setUptimeStr(`${hrs}:${mins}:${secs}`)
+        }
+
+        if (data.qrGeneratedAt) {
+          setQrAgeStr(formatDistanceToNow(new Date(data.qrGeneratedAt), { addSuffix: true }))
+        }
       }
-    } catch (err) {
-      console.error('Error fetching session status:', err)
+    } catch {
+      // Ignore transient network errors
     }
   }
 
-  // 3c. Fetch logs
+  // 3. Fetch logs
   async function fetchLogs() {
     if (isPausedRef.current) return
     try {
       const res = await fetch('/api/whatsapp/logs')
       if (res.ok) {
         const data = await res.json()
-        setLogs(data.logs || [])
+        if (data.logs) {
+          setLogs(data.logs)
+        }
       }
-    } catch (err) {
-      console.error('Error fetching logs:', err)
+    } catch {
+      // Ignore transient log fetching errors
     }
   }
 
-  // Uptime Timer Effect
-  useEffect(() => {
-    if (!sessionStatus?.serviceStartedAt) return
-    const start = new Date(sessionStatus.serviceStartedAt).getTime()
-    const timer = setInterval(() => {
-      const diff = Date.now() - start
-      if (diff < 0) return
-      const secs = Math.floor(diff / 1000)
-      const h = Math.floor(secs / 3600).toString().padStart(2, '0')
-      const m = Math.floor((secs % 3600) / 60).toString().padStart(2, '0')
-      const s = (secs % 60).toString().padStart(2, '0')
-      setUptimeStr(`${h}:${m}:${s}`)
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [sessionStatus?.serviceStartedAt])
+  // 4. Fetch QR Code from backend API
+  async function fetchQrCode() {
+    try {
+      const res = await fetch('/api/whatsapp/qr')
+      const data = await res.json()
 
-  // QR Age Timer Effect
-  useEffect(() => {
-    if (!sessionStatus?.qrGeneratedAt || !sessionStatus.qrFileExists) {
-      setQrAgeStr('')
-      return
+      if (data.ready) {
+        setConnected(true)
+        setQrCode(null)
+      } else if (data.qrCode) {
+        setQrCode(data.qrCode)
+        setQrMessage('')
+      } else {
+        setQrMessage(data.message || 'Waiting for QR Code...')
+      }
+    } catch {
+      setQrMessage('Failed to fetch QR Code')
     }
-    const qrTime = new Date(sessionStatus.qrGeneratedAt).getTime()
-    const timer = setInterval(() => {
-      const diff = Date.now() - qrTime
-      const secs = Math.floor(Math.max(0, diff / 1000))
-      setQrAgeStr(`${secs}s ago`)
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [sessionStatus?.qrGeneratedAt, sessionStatus?.qrFileExists])
+  }
 
-  // Reconnect Action Handler
+  // 5. Fetch Recent Sent Messages
+  async function fetchRecentSent() {
+    try {
+      const { data, error } = await supabaseBrowser
+        .from('leads')
+        .select('*')
+        .eq('status', 'whatsapp_sent')
+        .order('whatsapp_sent_at', { ascending: false })
+        .limit(10)
+
+      if (error) throw error
+      setRecentSent((data ?? []) as Lead[])
+    } catch {
+      // Ignore
+    } finally {
+      setLoadingRecent(false)
+    }
+  }
+
+  // Disconnect Handler
+  async function handleDisconnectService() {
+    if (!confirm('Are you sure you want to stop the WhatsApp connection service?')) return
+
+    setDisconnecting(true)
+    const toastId = toast.loading('Stopping WhatsApp connection...')
+
+    try {
+      const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' })
+      if (res.ok) {
+        toast.success('WhatsApp service stopped.', { id: toastId })
+        setConnected(false)
+        setQrCode(null)
+        fetchSessionStatus()
+        fetchLogs()
+      } else {
+        toast.error('Failed to stop service.', { id: toastId })
+      }
+    } catch {
+      toast.error('Error stopping service.', { id: toastId })
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
+  // Reconnect Handler
   async function handleReconnect() {
-    if (!confirm('This will log out the current WhatsApp session. Continue?')) {
-      return
-    }
+    if (reconnecting) return
     setReconnecting(true)
     const toastId = toast.loading('Initiating reconnect...')
     try {
@@ -229,7 +242,7 @@ export default function WhatsappManagerPage() {
     }
   }, [logs])
 
-  // Polling rates optimized to decrease load on backend (30s+ intervals)
+  // Polling rates optimized
   useEffect(() => {
     fetchStatus()
     fetchRecentSent()
@@ -256,7 +269,7 @@ export default function WhatsappManagerPage() {
     }
   }, [])
 
-  // QR refresh loop (runs only when disconnected)
+  // QR refresh loop
   useEffect(() => {
     if (connected === true) {
       setQrCode(null)
@@ -292,26 +305,22 @@ export default function WhatsappManagerPage() {
     setSendingTest(true)
     const toastId = toast.loading('Sending test message...')
     
-    // Create new abort controller
     sendAbortRef.current = new AbortController()
 
-    // Normalize phone number
     let finalPhone = testPhone.trim()
     if (!finalPhone.startsWith('+')) {
-      // Remove any leading zeroes and non-digit characters
-      finalPhone = finalPhone.replace(/^0+/, '').replace(/\D/g, '')
-      finalPhone = `${countryCode}${finalPhone}`
+      finalPhone = countryCode + finalPhone.replace(/^0+/, '')
     }
-    
+
     try {
       const res = await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: finalPhone,
-          message: testMessage.trim()
+          message: testMessage.trim(),
         }),
-        signal: sendAbortRef.current.signal
+        signal: sendAbortRef.current.signal,
       })
 
       const data = await res.json()
@@ -322,12 +331,13 @@ export default function WhatsappManagerPage() {
       toast.success('Test message sent successfully!', { id: toastId })
       setTestMessage('')
       fetchRecentSent()
+      fetchLogs()
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
-        toast.error('Message transmission cancelled', { id: toastId })
+        toast.error('Message send operation aborted', { id: toastId })
       } else {
-        const msg = err instanceof Error ? err.message : 'Error sending message'
-        toast.error(msg, { id: toastId })
+        const message = err instanceof Error ? err.message : 'Failed to send test message'
+        toast.error(message, { id: toastId })
       }
     } finally {
       setSendingTest(false)
@@ -335,76 +345,58 @@ export default function WhatsappManagerPage() {
     }
   }
 
-  // Abort active message transmission
   function handleAbortMessage() {
     if (sendAbortRef.current) {
       sendAbortRef.current.abort()
     }
   }
 
-  // Force disconnect handler
-  async function handleDisconnectService() {
-    if (!confirm('Warning: This will terminate the entire underlying WhatsApp service. You will need to re-authenticate. Continue?')) {
-      return
-    }
-    setDisconnecting(true)
-    const toastId = toast.loading('Disconnecting service...')
-    try {
-      const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' })
-      if (!res.ok) throw new Error('Failed to disconnect service')
-      toast.success('WhatsApp service stopped successfully!', { id: toastId })
-      setConnected(false)
-      setQrCode(null)
-      fetchSessionStatus()
-      fetchLogs()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to disconnect'
-      toast.error(msg, { id: toastId })
-    } finally {
-      setDisconnecting(false)
-    }
-  }
-
   return (
-    <div className="space-y-8 text-[#2D2D2D] select-none">
+    <div className="p-4 sm:p-8 space-y-8 select-none text-foreground max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-blue-500/15 pb-6">
         <div>
-          <h1 className="text-3xl font-black text-[#1C1C1E] tracking-tight">WhatsApp Engine Manager</h1>
-          <p className="mt-1 text-sm text-gray-500 font-medium">Configure automated outreach channels, verify QR authentication sheets, and monitor active socket links.</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+            <Smartphone className="w-7 h-7 text-blue-400" /> WhatsApp Engine Manager
+          </h1>
+          <p className="mt-1 text-xs sm:text-sm text-zinc-400 font-medium">Configure automated outreach channels, verify QR authentication sheets, and monitor active socket links.</p>
         </div>
         <div className="flex gap-2">
           {(!sessionStatus || sessionStatus.state === 'idle' || sessionStatus.state === 'disconnected') ? (
             <button
               onClick={handleConnectService}
               disabled={connecting}
-              className="flex items-center gap-2 rounded-xl bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-4 py-2.5 text-xs font-bold uppercase font-mono tracking-wider disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20"
             >
-              {connecting ? 'Connecting...' : '▶ Start Connection'}
+              <Play className="w-3.5 h-3.5 fill-current" />
+              {connecting ? 'Connecting...' : 'Start Connection'}
             </button>
           ) : (sessionStatus.state === 'connecting' || sessionStatus.state === 'qr_waiting') ? (
             <button
               onClick={handleDisconnectService}
               disabled={disconnecting}
-              className="flex items-center gap-2 rounded-xl bg-red-650 hover:bg-red-700 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white px-4 py-2.5 text-xs font-bold uppercase font-mono tracking-wider disabled:opacity-50 transition-all shadow-lg shadow-rose-500/20"
             >
-              {disconnecting ? 'Stopping...' : '⏹ Stop Connection'}
+              <Square className="w-3.5 h-3.5 fill-current" />
+              {disconnecting ? 'Stopping...' : 'Stop Connection'}
             </button>
           ) : (
             <>
               <button
                 onClick={handleReconnect}
                 disabled={reconnecting}
-                className="flex items-center gap-2 rounded-xl bg-[#1C1C1E] hover:bg-[#252528] text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 rounded-xl glass glow-border hover:bg-blue-600/20 text-blue-300 px-4 py-2.5 text-xs font-bold uppercase font-mono tracking-wider disabled:opacity-50 transition-all shadow-md"
               >
-                {reconnecting ? 'Resetting...' : '🔄 Reset Session'}
+                <RefreshCw className={`w-3.5 h-3.5 ${reconnecting ? 'animate-spin' : ''}`} />
+                {reconnecting ? 'Resetting...' : 'Reset Session'}
               </button>
               <button
                 onClick={handleDisconnectService}
                 disabled={disconnecting}
-                className="flex items-center gap-2 rounded-xl bg-red-650 hover:bg-red-700 text-white px-4 py-2.5 text-xs font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white px-4 py-2.5 text-xs font-bold uppercase font-mono tracking-wider disabled:opacity-50 transition-all shadow-md shadow-rose-500/20"
               >
-                {disconnecting ? 'Stopping...' : '⏹ Disconnect'}
+                <Square className="w-3.5 h-3.5 fill-current" />
+                {disconnecting ? 'Stopping...' : 'Disconnect'}
               </button>
             </>
           )}
@@ -415,34 +407,38 @@ export default function WhatsappManagerPage() {
         {/* Left column: Bot status and controls */}
         <div className="lg:col-span-1 space-y-6">
           {/* Status Box */}
-          <div className={`rounded-2xl p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] border ${
+          <div className={`rounded-2xl glass glow-border p-6 shadow-xl border ${
             connected === null
-              ? 'bg-[#ECEAE4] border-[#E4E3DD]'
+              ? 'border-blue-500/20 bg-blue-950/20'
               : connected
-                ? 'bg-[#D4E0CD] border-[#B8C8B0]'
-                : 'bg-red-50 border-red-200'
+                ? 'border-emerald-500/30 bg-emerald-950/20'
+                : 'border-rose-500/30 bg-rose-950/20'
           }`}>
             <div className="flex justify-between items-start">
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${connected ? 'text-[#3B4D3C]' : 'text-gray-500'}`}>
+              <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${connected ? 'text-emerald-300' : 'text-zinc-400'}`}>
                 Engine Socket Connection
               </span>
-              <span className="text-[10px] bg-white/40 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Status</span>
+              <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-md font-mono font-bold uppercase tracking-wider text-zinc-300">Status</span>
             </div>
 
             {loadingStatus ? (
-              <h3 className="mt-4 text-3xl font-black text-gray-700 tracking-tight">Checking Status...</h3>
+              <h3 className="mt-4 text-3xl font-black text-zinc-300 tracking-tight font-mono">Checking Status...</h3>
             ) : connected ? (
               <div className="space-y-4">
-                <h3 className="mt-4 text-3xl font-black text-[#2E3A2F] tracking-tight">Connected</h3>
-                <div className="text-[11px] text-[#3B4D3C]/80 font-semibold space-y-1">
+                <h3 className="mt-4 text-3xl font-black text-emerald-400 tracking-tight font-mono flex items-center gap-2">
+                  <CheckCircle2 className="w-7 h-7" /> Connected
+                </h3>
+                <div className="text-[11px] text-emerald-300/90 font-mono space-y-1">
                   <p>✓ Automated outreach channels are active</p>
                   <p>✓ Uptime: {uptimeStr}</p>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
-                <h3 className="mt-4 text-3xl font-black text-red-700 tracking-tight">Disconnected</h3>
-                <div className="text-[11px] text-red-650 font-semibold space-y-1">
+                <h3 className="mt-4 text-3xl font-black text-rose-400 tracking-tight font-mono flex items-center gap-2">
+                  <AlertTriangle className="w-7 h-7" /> Disconnected
+                </h3>
+                <div className="text-[11px] text-rose-300/90 font-mono space-y-1">
                   <p>⚠️ Bot socket link is currently down</p>
                   <p>⚠️ Authenticate QR sheet to log back in</p>
                 </div>
@@ -450,7 +446,7 @@ export default function WhatsappManagerPage() {
             )}
             
             {lastChecked && (
-              <span className="text-[9px] text-gray-400 block mt-5 font-bold uppercase tracking-wider">
+              <span className="text-[9px] text-zinc-500 block mt-5 font-mono font-bold uppercase tracking-wider">
                 Last checked: {lastChecked.toLocaleTimeString()}
               </span>
             )}
@@ -458,27 +454,27 @@ export default function WhatsappManagerPage() {
 
           {/* QR Authentication scanner */}
           {connected === false && (
-            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] space-y-4 flex flex-col items-center">
-              <h4 className="font-bold text-[#1C1C1E] text-xs uppercase tracking-wider self-start text-gray-500">Scan QR Code</h4>
+            <div className="rounded-2xl glass glow-border p-6 shadow-xl space-y-4 flex flex-col items-center">
+              <h4 className="font-bold text-white text-xs uppercase tracking-wider self-start text-zinc-400 font-mono">Scan QR Code</h4>
               
               {(!sessionStatus || sessionStatus.state === 'idle' || sessionStatus.state === 'disconnected') ? (
-                <div className="w-[232px] h-[232px] rounded-2xl bg-gray-50 border border-[#E4E3DD] flex flex-col items-center justify-center text-center p-6 text-xs text-gray-400 font-semibold space-y-3">
+                <div className="w-[232px] h-[232px] rounded-2xl bg-black/40 border border-blue-500/20 flex flex-col items-center justify-center text-center p-6 text-xs text-zinc-400 font-semibold space-y-3">
                   <span className="text-xl">💤</span>
                   <p>WhatsApp connection is stopped.</p>
                   <button
                     onClick={handleConnectService}
                     disabled={connecting}
-                    className="rounded-xl bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 transition-colors"
+                    className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 transition-all font-mono"
                   >
                     {connecting ? 'Connecting...' : 'Start Connection'}
                   </button>
                 </div>
               ) : qrCode ? (
-                <div className="bg-white p-4 rounded-2xl border border-[#E4E3DD] shadow-inner">
+                <div className="bg-white p-4 rounded-2xl border border-blue-500/30 shadow-inner">
                   <QRCodeSVG value={qrCode} size={200} />
                 </div>
               ) : (
-                <div className="w-[232px] h-[232px] rounded-2xl bg-gray-50 border border-[#E4E3DD] flex items-center justify-center text-center p-6 text-xs text-gray-400 font-semibold">
+                <div className="w-[232px] h-[232px] rounded-2xl bg-black/40 border border-blue-500/20 flex items-center justify-center text-center p-6 text-xs text-zinc-400 font-semibold font-mono">
                   {qrMessage || 'Generating connection code...'}
                 </div>
               )}
@@ -486,12 +482,12 @@ export default function WhatsappManagerPage() {
               {(sessionStatus && sessionStatus.state !== 'idle' && sessionStatus.state !== 'disconnected') && (
                 <>
                   <div className="text-center w-full">
-                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">QR Code Refresh In</span>
-                    <p className="text-xl font-black text-gray-800 tracking-tight font-mono">{qrCountdown}s</p>
-                    {qrAgeStr && <span className="text-[9px] text-gray-400 font-medium">Generated: {qrAgeStr}</span>}
+                    <span className="text-[9px] font-mono font-bold text-zinc-400 uppercase tracking-wider">QR Code Refresh In</span>
+                    <p className="text-xl font-black text-blue-400 tracking-tight font-mono">{qrCountdown}s</p>
+                    {qrAgeStr && <span className="text-[9px] text-zinc-400 font-mono">Generated: {qrAgeStr}</span>}
                   </div>
 
-                  <div className="w-full text-[10px] text-gray-400 leading-relaxed bg-[#F4F3EF] p-4 rounded-xl border border-[#E4E3DD] font-medium">
+                  <div className="w-full text-[10px] text-zinc-300 leading-relaxed bg-blue-950/30 p-3.5 rounded-xl border border-blue-500/20 font-mono">
                     Open WhatsApp on your phone &rarr; Tap Menu or Settings &rarr; Select Linked Devices &rarr; Tap Link a Device.
                   </div>
                 </>
@@ -500,16 +496,18 @@ export default function WhatsappManagerPage() {
           )}
 
           {/* Manual Test Message Input */}
-          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-            <h3 className="font-bold text-[#1C1C1E] text-md mb-4 uppercase tracking-wider text-[11px] text-gray-500">⚙️ Manual Socket Send</h3>
+          <div className="rounded-2xl glass glow-border p-6 shadow-xl">
+            <h3 className="font-bold text-white text-md mb-4 uppercase tracking-wider text-[11px] text-zinc-400 font-mono flex items-center gap-1.5">
+              <Send className="w-3.5 h-3.5 text-blue-400" /> Manual Socket Send
+            </h3>
             <form onSubmit={handleSendTestMessage} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Recipient Phone</label>
+                <label className="block text-[10px] font-mono font-bold text-zinc-400 mb-1 uppercase tracking-wider">Recipient Phone</label>
                 <div className="flex gap-2">
                   <select
                     value={countryCode}
                     onChange={(e) => setCountryCode(e.target.value)}
-                    className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 cursor-pointer"
+                    className="rounded-xl bg-black/50 border border-white/10 px-3 py-2.5 text-xs text-zinc-200 font-mono focus:outline-none focus:border-blue-500 cursor-pointer"
                   >
                     <option value="+91">🇮🇳 +91 (IN)</option>
                     <option value="+1">🇺🇸 +1 (US)</option>
@@ -532,19 +530,19 @@ export default function WhatsappManagerPage() {
                       'Enter phone number digits...'
                     }
                     required
-                    className="flex-1 rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
+                    className="flex-1 rounded-xl bg-black/50 border border-white/10 px-3.5 py-2.5 text-xs text-zinc-200 font-mono focus:outline-none focus:border-blue-500 placeholder-zinc-500"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Message Content</label>
+                <label className="block text-[10px] font-mono font-bold text-zinc-400 mb-1 uppercase tracking-wider">Message Content</label>
                 <textarea
                   value={testMessage}
                   onChange={(e) => setTestMessage(e.target.value)}
                   placeholder="Type test message details..."
                   required
                   rows={3}
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400 resize-none leading-relaxed"
+                  className="w-full rounded-xl bg-black/50 border border-white/10 px-3.5 py-2.5 text-xs text-zinc-200 font-mono focus:outline-none focus:border-blue-500 placeholder-zinc-500 resize-none leading-relaxed"
                 />
               </div>
 
@@ -552,7 +550,7 @@ export default function WhatsappManagerPage() {
                 <button
                   type="submit"
                   disabled={sendingTest || connected === false}
-                  className="flex-1 rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white py-3.5 shadow-sm transition-colors"
+                  className="flex-1 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider font-mono text-white py-3 shadow-md shadow-blue-500/20 transition-all"
                 >
                   {sendingTest ? 'Sending...' : 'Send Message'}
                 </button>
@@ -560,7 +558,7 @@ export default function WhatsappManagerPage() {
                   <button
                     type="button"
                     onClick={handleAbortMessage}
-                    className="px-4 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 text-xs font-bold uppercase tracking-wider"
+                    className="px-4 rounded-xl bg-rose-950/40 hover:bg-rose-900/40 border border-rose-500/30 text-rose-300 text-xs font-mono font-bold uppercase tracking-wider"
                   >
                     Abort
                   </button>
@@ -570,13 +568,13 @@ export default function WhatsappManagerPage() {
           </div>
 
           {/* Service Disconnect Control */}
-          <div className="rounded-2xl border border-red-100 bg-red-50/20 p-5 space-y-3 shadow-sm text-xs">
-            <h4 className="font-bold text-red-950 uppercase text-[9px] tracking-wider">Danger Controls</h4>
-            <p className="text-[10px] text-red-650 leading-relaxed font-semibold">Terminate underlying Puppeteer worker. This stops all socket loops.</p>
+          <div className="rounded-2xl glass border border-rose-500/30 bg-rose-950/20 p-5 space-y-3 shadow-xl text-xs">
+            <h4 className="font-bold text-rose-300 uppercase text-[10px] font-mono tracking-wider">Danger Controls</h4>
+            <p className="text-[10px] text-rose-300/80 leading-relaxed font-medium">Terminate underlying Puppeteer worker. This stops all socket loops.</p>
             <button
               onClick={handleDisconnectService}
               disabled={disconnecting}
-              className="w-full rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white font-bold uppercase tracking-wider py-3 text-[10px] transition-colors"
+              className="w-full rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white font-bold uppercase font-mono tracking-wider py-3 text-[10px] transition-all shadow-md shadow-rose-500/20"
             >
               {disconnecting ? 'Stopping Service...' : 'Force Disconnect Service'}
             </button>
@@ -586,13 +584,15 @@ export default function WhatsappManagerPage() {
         {/* Right column: Logs & Send History */}
         <div className="lg:col-span-2 space-y-6">
           {/* Logs terminal */}
-          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] flex flex-col h-[320px]">
-            <div className="flex items-center justify-between border-b border-[#E4E3DD] pb-3 mb-4">
-              <h3 className="font-bold text-[#1C1C1E] text-md uppercase tracking-wider text-[11px] text-gray-500">📟 Active WhatsApp Event Logs</h3>
+          <div className="rounded-2xl glass glow-border p-6 shadow-xl flex flex-col h-[320px]">
+            <div className="flex items-center justify-between border-b border-blue-500/15 pb-3 mb-4">
+              <h3 className="font-bold text-white text-md uppercase tracking-wider text-[11px] text-zinc-400 font-mono flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-blue-400" /> Active WhatsApp Event Logs
+              </h3>
               <button
                 onClick={() => setIsPaused(!isPaused)}
-                className={`px-3 py-1 rounded-lg border text-[9px] font-bold uppercase tracking-wider transition-colors ${
-                  isPaused ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-gray-50 text-gray-500 border-[#E4E3DD] hover:bg-gray-100'
+                className={`px-3 py-1 rounded-lg border text-[9px] font-bold uppercase tracking-wider font-mono transition-colors ${
+                  isPaused ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-blue-500/10 text-blue-300 border-blue-500/20 hover:bg-blue-500/20'
                 }`}
               >
                 {isPaused ? '⏸ Paused' : '⚡ Live'}
@@ -601,28 +601,28 @@ export default function WhatsappManagerPage() {
 
             <div
               ref={logsContainerRef}
-              className="flex-1 overflow-y-auto p-4 rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] font-mono text-[10px] text-gray-600 space-y-2 leading-relaxed"
+              className="flex-1 overflow-y-auto p-4 rounded-xl bg-zinc-950 border border-white/10 font-mono text-[10px] text-zinc-300 space-y-2 leading-relaxed"
             >
               {logs.length === 0 ? (
-                <p className="text-gray-400 italic">No console events captured yet.</p>
+                <p className="text-zinc-500 italic">No console events captured yet.</p>
               ) : (
                 logs.map((log, idx) => (
                   <div key={idx} className="break-all">
-                    <span className="text-gray-400 font-semibold mr-1.5">
+                    <span className="text-zinc-500 font-semibold mr-1.5">
                       [{new Date(log.timestamp).toLocaleTimeString()}]
                     </span>
                     <span className={`uppercase font-bold text-[8px] px-1 py-0.2 rounded border mr-1.5 ${
-                      log.level === 'error' ? 'bg-red-50 text-red-700 border-red-200' :
-                      log.level === 'warn' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                      log.level === 'success' ? 'bg-green-50 text-green-700 border-green-250' :
-                      'bg-gray-100 text-gray-500 border-gray-200'
+                      log.level === 'error' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
+                      log.level === 'warn' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+                      log.level === 'success' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
+                      'bg-blue-500/15 text-blue-300 border-blue-500/30'
                     }`}>
                       {log.level}
                     </span>
                     <span className={
-                      log.level === 'error' ? 'text-red-650 font-bold' :
-                      log.level === 'success' ? 'text-green-750 font-medium' :
-                      'text-gray-700'
+                      log.level === 'error' ? 'text-rose-300 font-bold' :
+                      log.level === 'success' ? 'text-emerald-300 font-medium' :
+                      'text-zinc-200'
                     }>
                       {log.message}
                     </span>
@@ -633,39 +633,39 @@ export default function WhatsappManagerPage() {
           </div>
 
           {/* Send history */}
-          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-            <h3 className="font-bold text-[#1C1C1E] text-md mb-4 uppercase tracking-wider text-[11px] text-gray-500">📜 Recent Outreach Logs</h3>
+          <div className="rounded-2xl glass glow-border p-6 shadow-xl">
+            <h3 className="font-bold text-white text-md mb-4 uppercase tracking-wider text-[11px] text-zinc-400 font-mono">📜 Recent Outreach Logs</h3>
 
             <div className="overflow-x-auto">
               <table className="min-w-full text-xs">
                 <thead>
-                  <tr className="border-b border-[#E4E3DD] text-left text-gray-400 uppercase tracking-wider text-[9px] font-bold">
+                  <tr className="border-b border-blue-500/15 text-left text-zinc-400 uppercase tracking-wider text-[9px] font-mono font-bold">
                     <th className="pb-3.5 pr-4">Recipient</th>
                     <th className="pb-3.5 pr-4">Phone</th>
                     <th className="pb-3.5 pr-4">Status</th>
                     <th className="pb-3.5">Sent At</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#E4E3DD]/60 text-gray-700">
+                <tbody className="divide-y divide-blue-500/10 text-zinc-300">
                   {loadingRecent ? (
                     <tr>
-                      <td colSpan={4} className="py-6 text-center text-gray-400">Loading history...</td>
+                      <td colSpan={4} className="py-6 text-center text-zinc-500 font-mono">Loading history...</td>
                     </tr>
                   ) : recentSent.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-6 text-center text-gray-400 font-semibold">No recent outreach messages found.</td>
+                      <td colSpan={4} className="py-6 text-center text-zinc-500 font-medium">No recent outreach messages found.</td>
                     </tr>
                   ) : (
                     recentSent.map((lead) => (
-                      <tr key={lead.id} className="hover:bg-[#F4F3EF]/30 transition-colors">
-                        <td className="py-3 pr-4 font-bold text-gray-900">{lead.name}</td>
-                        <td className="py-3 pr-4 font-mono text-[10px] text-gray-500">{lead.phone || '—'}</td>
+                      <tr key={lead.id} className="hover:bg-blue-500/10 transition-colors">
+                        <td className="py-3 pr-4 font-bold text-white">{lead.name}</td>
+                        <td className="py-3 pr-4 font-mono text-[10px] text-zinc-400">{lead.phone || '—'}</td>
                         <td className="py-3 pr-4">
-                          <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-green-50 border border-green-200 text-green-700">
+                          <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
                             Sent
                           </span>
                         </td>
-                        <td className="py-3 text-gray-405 font-medium">
+                        <td className="py-3 text-zinc-400 font-mono text-[10px]">
                           {lead.whatsapp_sent_at ? (() => {
                             try {
                               const d = new Date(lead.whatsapp_sent_at);

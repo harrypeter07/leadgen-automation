@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { supabaseBrowser } from '@/lib/supabase'
+import { RefreshCw, Brain, Send, Copy, Database, Sparkles, Zap, Link as LinkIcon } from 'lucide-react'
 
 export default function WorkflowsPage() {
   const [totalLeads, setTotalLeads] = useState<number | null>(null)
@@ -52,7 +53,6 @@ export default function WorkflowsPage() {
     setLastAiTrigger(localStorage.getItem('leadgen_last_ai_trigger'))
     setLastOutreachTrigger(localStorage.getItem('leadgen_last_outreach_trigger'))
 
-    // Optimized polling (poll stats every 35s to reduce DB load)
     const interval = setInterval(fetchCounts, 35000)
     return () => clearInterval(interval)
   }, [])
@@ -109,32 +109,40 @@ export default function WorkflowsPage() {
   }
 
   return (
-    <div className="space-y-8 text-[#2D2D2D] select-none">
+    <div className="p-4 sm:p-8 space-y-8 select-none text-foreground max-w-7xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-black text-[#1C1C1E] tracking-tight">Automated Workflows</h1>
-        <p className="mt-1 text-sm text-gray-500 font-medium">Orchestrate automated campaign pipelines, trigger AI copywriting, and verify n8n webhook nodes.</p>
+      <div className="border-b border-blue-500/15 pb-6">
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+          <RefreshCw className="w-7 h-7 text-blue-400" /> Automated Workflows
+        </h1>
+        <p className="mt-1 text-xs sm:text-sm text-zinc-400 font-medium">Orchestrate automated campaign pipelines, trigger AI copywriting, and verify n8n webhook nodes.</p>
       </div>
 
       {/* Grid count cards */}
       <div className="grid gap-6 sm:grid-cols-3">
-        <div className="rounded-2xl bg-[#D4E0CD] p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)] border border-[#B8C8B0] flex flex-col justify-between min-h-[120px]">
-          <span className="text-[10px] font-bold text-[#3B4D3C] uppercase tracking-wider">Total Leads in DB</span>
-          <h3 className="text-3xl font-black text-[#2E3A2F] mt-3">
+        <div className="rounded-2xl glass glow-border p-6 shadow-xl flex flex-col justify-between min-h-[130px]">
+          <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Database className="w-3.5 h-3.5 text-blue-400" /> Total Leads in DB
+          </span>
+          <h3 className="text-3xl font-black text-white mt-3 font-mono">
             {totalLeads === null ? '...' : totalLeads.toLocaleString()}
           </h3>
         </div>
 
-        <div className="rounded-2xl bg-[#F9D99A] p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)] border border-[#E8C584] flex flex-col justify-between min-h-[120px]">
-          <span className="text-[10px] font-bold text-[#5C451F] uppercase tracking-wider">Pending AI copy generation</span>
-          <h3 className="text-3xl font-black text-[#4A391D] mt-3">
+        <div className="rounded-2xl glass glow-border p-6 shadow-xl flex flex-col justify-between min-h-[130px]">
+          <span className="text-[10px] font-mono font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Pending AI Copy Generation
+          </span>
+          <h3 className="text-3xl font-black text-amber-300 mt-3 font-mono">
             {pendingAi === null ? '...' : pendingAi.toLocaleString()}
           </h3>
         </div>
 
-        <div className="rounded-2xl bg-white border border-[#E4E3DD] p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[120px]">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ready for outreach campaigns</span>
-          <h3 className="text-3xl font-black text-gray-800 mt-3">
+        <div className="rounded-2xl glass glow-border p-6 shadow-xl flex flex-col justify-between min-h-[130px]">
+          <span className="text-[10px] font-mono font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5 text-emerald-400" /> Ready for Outreach
+          </span>
+          <h3 className="text-3xl font-black text-emerald-400 mt-3 font-mono">
             {readyOutreach === null ? '...' : readyOutreach.toLocaleString()}
           </h3>
         </div>
@@ -143,64 +151,72 @@ export default function WorkflowsPage() {
       {/* Workflow trigger cards */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Gemini AI Trigger Card */}
-        <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] space-y-4 flex flex-col justify-between">
+        <div className="rounded-2xl glass glow-border p-6 shadow-xl space-y-4 flex flex-col justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2.5">
-              <span className="text-xl">🤖</span>
-              <h3 className="text-lg font-bold text-[#1C1C1E] tracking-tight">Gemini AI Copywriting</h3>
+              <div className="p-2 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300">
+                <Brain className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-bold text-white tracking-tight">Gemini AI Copywriting</h3>
             </div>
-            <p className="text-xs text-gray-500 leading-relaxed font-semibold">
+            <p className="text-xs text-zinc-400 leading-relaxed font-medium">
               Scrapes detailed profile metadata for new leads, runs personalization templates, and generates highly targeted WhatsApp messages and email copies.
             </p>
           </div>
 
-          <div className="space-y-4 pt-4 border-t border-[#E4E3DD]/60">
+          <div className="space-y-4 pt-4 border-t border-blue-500/15">
             {lastAiTrigger && (
-              <div className="text-[10px] text-gray-450 font-bold uppercase tracking-wider">
-                Last Triggered: <span className="text-gray-700">{lastAiTrigger}</span>
+              <div className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-wider">
+                Last Triggered: <span className="text-blue-300">{lastAiTrigger}</span>
               </div>
             )}
 
             <button
               onClick={handleTriggerAi}
               disabled={triggeringAi || pendingAi === 0}
-              className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white py-3.5 shadow-sm transition-colors flex items-center justify-center gap-2"
+              className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase font-mono tracking-wider text-white py-3.5 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
             >
               {triggeringAi ? (
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : null}
+              ) : (
+                <Brain className="w-4 h-4" />
+              )}
               Trigger AI Copywriting
             </button>
           </div>
         </div>
 
         {/* Automated outreach campaign card */}
-        <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] space-y-4 flex flex-col justify-between">
+        <div className="rounded-2xl glass glow-border p-6 shadow-xl space-y-4 flex flex-col justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2.5">
-              <span className="text-xl">📤</span>
-              <h3 className="text-lg font-bold text-[#1C1C1E] tracking-tight">Automated Outreach Campaign</h3>
+              <div className="p-2 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300">
+                <Send className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-bold text-white tracking-tight">Automated Outreach Campaign</h3>
             </div>
-            <p className="text-xs text-gray-500 leading-relaxed font-semibold">
+            <p className="text-xs text-zinc-400 leading-relaxed font-medium">
               Triggers the outreach pipeline for ready leads. Automatically schedules messages, launches WhatsApp client sockets, and dispatches email copy structures.
             </p>
           </div>
 
-          <div className="space-y-4 pt-4 border-t border-[#E4E3DD]/60">
+          <div className="space-y-4 pt-4 border-t border-blue-500/15">
             {lastOutreachTrigger && (
-              <div className="text-[10px] text-gray-450 font-bold uppercase tracking-wider">
-                Last Triggered: <span className="text-gray-700">{lastOutreachTrigger}</span>
+              <div className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-wider">
+                Last Triggered: <span className="text-blue-300">{lastOutreachTrigger}</span>
               </div>
             )}
 
             <button
               onClick={handleTriggerOutreach}
               disabled={triggeringOutreach || readyOutreach === 0}
-              className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white py-3.5 shadow-sm transition-colors flex items-center justify-center gap-2"
+              className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase font-mono tracking-wider text-white py-3.5 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
             >
               {triggeringOutreach ? (
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : null}
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
               Trigger Outreach Campaign
             </button>
           </div>
@@ -208,19 +224,21 @@ export default function WorkflowsPage() {
       </div>
 
       {/* Webhook Integrations info card */}
-      <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] space-y-4">
-        <h3 className="font-bold text-[#1C1C1E] text-md uppercase tracking-wider text-[11px] text-gray-500">🔗 Webhook Integrations (n8n Node Link)</h3>
-        <p className="text-xs text-gray-500 leading-relaxed font-semibold">
+      <div className="rounded-2xl glass glow-border p-6 shadow-xl space-y-4">
+        <h3 className="font-bold text-white text-md uppercase tracking-wider text-[11px] text-zinc-400 font-mono flex items-center gap-1.5">
+          <LinkIcon className="w-3.5 h-3.5 text-blue-400" /> Webhook Integrations (n8n Node Link)
+        </h3>
+        <p className="text-xs text-zinc-400 leading-relaxed font-medium">
           Configure external ingestion nodes to send leads directly to n8n pipelines in real-time. Use the following webhook link inside your scrape workflows.
         </p>
 
-        <div className="flex gap-3 bg-[#F4F3EF] border border-[#E4E3DD] p-3 rounded-xl items-center text-xs">
-          <span className="font-mono text-gray-650 flex-1 truncate select-all">{webhookUrl}</span>
+        <div className="flex gap-3 bg-black/50 border border-white/10 p-3 rounded-xl items-center text-xs">
+          <span className="font-mono text-zinc-300 flex-1 truncate select-all">{webhookUrl}</span>
           <button
             onClick={handleCopyWebhook}
-            className="px-3.5 py-1.5 rounded-lg bg-white border border-[#E4E3DD] text-[10px] font-bold uppercase tracking-wider text-gray-750 hover:bg-gray-50 transition-colors shadow-sm"
+            className="px-3.5 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-300 text-[10px] font-mono font-bold uppercase tracking-wider hover:bg-blue-600/30 transition-all shadow-sm flex items-center gap-1"
           >
-            Copy
+            <Copy className="w-3 h-3" /> Copy
           </button>
         </div>
       </div>

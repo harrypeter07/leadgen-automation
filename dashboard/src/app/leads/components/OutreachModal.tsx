@@ -4,6 +4,7 @@
 import React from 'react'
 import type { Lead } from '@/types/lead'
 import ConversationTimeline from './ConversationTimeline'
+import { X, Send, Sparkles, MessageSquare, Mail, Calendar } from 'lucide-react'
 
 interface OutreachModalProps {
   lead: Lead
@@ -24,108 +25,126 @@ export default function OutreachModal({
 }: OutreachModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
       
-      <div className="relative w-full max-w-lg rounded-2xl border border-[#E4E3DD] bg-white shadow-2xl overflow-hidden animate-fade-in text-[#2D2D2D]">
+      <div className="relative w-full max-w-lg rounded-2xl glass glow-border bg-[#0b1324] shadow-2xl overflow-hidden animate-fade-in text-foreground border border-blue-500/30">
         {/* Modal Header */}
-        <div className="border-b border-[#E4E3DD] px-6 py-4 flex items-center justify-between bg-gray-50/50">
+        <div className="border-b border-blue-500/20 px-6 py-4 flex items-center justify-between bg-blue-950/30">
           <div>
-            <h3 className="text-lg font-black text-gray-900">AI Outreach Editor</h3>
-            <p className="text-xs text-gray-400 mt-0.5 font-bold uppercase tracking-wider">{lead.name}</p>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-blue-400" /> AI Outreach Editor
+            </h3>
+            <p className="text-xs text-blue-300 font-mono mt-0.5">{lead.name}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-650 transition-colors"
+            className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
             aria-label="Close modal"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Tabs */}
-        <div className="flex border-b border-[#E4E3DD] text-xs font-bold uppercase tracking-wider">
+        <div className="flex border-b border-blue-500/20 text-xs font-mono">
           <button
             onClick={() => onSetTab('whatsapp')}
-            className={`flex-1 text-center py-3.5 border-b-2 transition-all ${
+            className={`flex-1 text-center py-3 border-b-2 transition-all flex items-center justify-center gap-1.5 ${
               modalTab === 'whatsapp'
-                ? 'border-[#1C1C1E] text-gray-900 bg-gray-50/30'
-                : 'border-transparent text-gray-450 hover:text-gray-700'
+                ? 'border-blue-400 text-blue-300 bg-blue-500/10 font-bold'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            💬 WhatsApp
+            <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
           </button>
           <button
             onClick={() => onSetTab('email')}
-            className={`flex-1 text-center py-3.5 border-b-2 transition-all ${
+            className={`flex-1 text-center py-3 border-b-2 transition-all flex items-center justify-center gap-1.5 ${
               modalTab === 'email'
-                ? 'border-[#1C1C1E] text-gray-900 bg-gray-50/30'
-                : 'border-transparent text-gray-450 hover:text-gray-700'
+                ? 'border-blue-400 text-blue-300 bg-blue-500/10 font-bold'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            📧 Email Copy
+            <Mail className="w-3.5 h-3.5" /> Email Copy
           </button>
           <button
             onClick={() => onSetTab('timeline')}
-            className={`flex-1 text-center py-3.5 border-b-2 transition-all ${
+            className={`flex-1 text-center py-3 border-b-2 transition-all flex items-center justify-center gap-1.5 ${
               modalTab === 'timeline'
-                ? 'border-[#1C1C1E] text-gray-900 bg-gray-50/30'
-                : 'border-transparent text-gray-450 hover:text-gray-700'
+                ? 'border-blue-400 text-blue-300 bg-blue-500/10 font-bold'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            📅 Timeline
+            <Calendar className="w-3.5 h-3.5" /> Timeline
           </button>
         </div>
 
-        {/* Modal Content */}
-        <div className="p-6 max-h-[350px] overflow-y-auto">
-          {modalTab === 'whatsapp' ? (
-            <div className="space-y-4">
-              {/* WhatsApp style preview bubble */}
-              <div className="rounded-xl bg-[#E5DDD5] p-4 border border-[#D8CFC7] shadow-inner">
-                <div className="max-w-[85%] rounded-xl bg-white p-3 text-xs text-gray-800 relative shadow-sm border border-white">
-                  <span className="block whitespace-pre-wrap leading-relaxed">{lead.ai_message_whatsapp || 'No WhatsApp Copy Generated'}</span>
-                  <span className="block text-[9px] text-gray-400 text-right mt-1.5 font-bold">just now</span>
-                </div>
+        {/* Tab Content */}
+        <div className="p-6 space-y-4">
+          {modalTab === 'whatsapp' && (
+            <div className="space-y-3">
+              <label className="text-xs font-semibold text-zinc-300 block">WhatsApp Personalized Copy</label>
+              <textarea
+                readOnly
+                value={lead.ai_message_whatsapp || 'No WhatsApp message generated yet.'}
+                className="w-full h-36 rounded-xl border border-white/10 bg-black/50 p-3 text-xs text-zinc-200 font-mono focus:outline-none resize-none"
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => onSendWhatsapp(lead)}
+                  disabled={!lead.phone || !lead.ai_message_whatsapp}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-xs font-bold text-white shadow-md shadow-blue-500/20 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" /> Send WhatsApp
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  onSendWhatsapp(lead)
-                  onClose()
-                }}
-                disabled={!lead.phone || !lead.ai_message_whatsapp}
-                className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 text-white font-bold uppercase tracking-wider py-3 text-xs transition-colors shadow-sm"
-              >
-                🚀 Send WhatsApp Now
-              </button>
             </div>
-          ) : modalTab === 'email' ? (
-            <div className="space-y-4">
-              <div className="space-y-3 rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-4 text-xs">
-                <div>
-                  <span className="text-[9px] text-gray-400 block font-bold uppercase tracking-wider">Subject</span>
-                  <p className="text-gray-900 font-bold mt-1 text-sm">{lead.ai_message_email_subject || 'No Subject Generated'}</p>
-                </div>
-                <hr className="border-[#E4E3DD]/60" />
-                <div>
-                  <span className="text-[9px] text-gray-400 block font-bold uppercase tracking-wider">Body</span>
-                  <p className="whitespace-pre-wrap text-gray-700 mt-1 text-xs leading-relaxed">{lead.ai_message_email_body || 'No Email Body Generated'}</p>
-                </div>
+          )}
+
+          {modalTab === 'email' && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1">Subject</label>
+                <input
+                  readOnly
+                  value={lead.ai_message_email_subject || 'No Subject'}
+                  className="w-full rounded-xl border border-white/10 bg-black/50 p-2.5 text-xs text-zinc-200 font-mono focus:outline-none"
+                />
               </div>
-              <button
-                onClick={() => {
-                  onSendEmail(lead)
-                  onClose()
-                }}
-                disabled={!lead.email || !lead.ai_message_email_subject}
-                className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 text-white font-bold uppercase tracking-wider py-3 text-xs transition-colors shadow-sm"
-              >
-                🚀 Send Email Now
-              </button>
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1">Body</label>
+                <textarea
+                  readOnly
+                  value={lead.ai_message_email_body || 'No Email body generated yet.'}
+                  className="w-full h-32 rounded-xl border border-white/10 bg-black/50 p-3 text-xs text-zinc-200 font-mono focus:outline-none resize-none"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => onSendEmail(lead)}
+                  disabled={!lead.email || !lead.ai_message_email_body}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-xs font-bold text-white shadow-md shadow-blue-500/20 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" /> Send Email
+                </button>
+              </div>
             </div>
-          ) : (
-            <ConversationTimeline leadId={lead.id} />
+          )}
+
+          {modalTab === 'timeline' && (
+            <ConversationTimeline lead={lead} />
           )}
         </div>
       </div>
