@@ -281,18 +281,12 @@ async function handleAutoReply(
           ? Number(matchedAccount.conversation_delay)
           : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 1))
 
-    // 4. Static test reply override
+    // 4. Static test reply override (ONLY if explicitly enabled for this specific thread)
     const staticReplyEnabled = threadConfig.staticReplyEnabled !== undefined
       ? !!threadConfig.staticReplyEnabled
-      : (matchedAccount && matchedAccount.static_reply_enabled !== undefined && matchedAccount.static_reply_enabled !== null
-          ? !!matchedAccount.static_reply_enabled
-          : (settings.AI_STATIC_REPLY_ENABLED === 'true'))
+      : false
 
-    const staticReply = threadConfig.staticReply !== undefined
-      ? threadConfig.staticReply
-      : (matchedAccount && matchedAccount.static_reply_override !== undefined && matchedAccount.static_reply_override !== null
-          ? matchedAccount.static_reply_override
-          : (settings.AI_STATIC_REPLY_OVERRIDE || ''))
+    const staticReply = threadConfig.staticReply || ''
 
     // Response length → token limits (default to short for concise responses)
     const responseLength: 'extra_small' | 'short' | 'medium' | 'long' = threadConfig.responseLength || settings.AI_RESPONSE_LENGTH || 'medium'
@@ -304,9 +298,9 @@ async function handleAutoReply(
     let matchedType: 'static_override' | 'keyword' | 'gemini_ai' | 'none' = 'none'
     let modelUsed = ''
 
-    // 0. Static Reply Override check
+    // 0. Static Reply Override check (only if explicitly enabled for this specific thread)
     if (staticReplyEnabled && staticReply.trim()) {
-      console.log(`[AutoReply] Static reply override matched: "${staticReply}"`)
+      console.log(`[AutoReply] Per-thread static reply override matched: "${staticReply}"`)
       replyContent = staticReply.trim()
       replied = true
       matchedType = 'static_override'
@@ -327,7 +321,7 @@ async function handleAutoReply(
       }
     }
 
-    // 2. AI Chatbot check
+    // 2. AI Chatbot check (Converses naturally as a human friend)
     if (!replied && chatbotEnabled) {
       console.log(`[AutoReply] Generating AI response for "${messageText}"...`)
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_KEY || ''
@@ -343,11 +337,12 @@ async function handleAutoReply(
       const systemPrompt = `${chatbotPersona}
 
 CRITICAL RULES (NEVER BREAK THESE):
-- Output ONLY your direct conversational text response. DO NOT include internal reasoning, draft options (e.g. *Draft 1:*), explanations, or quotes.
-- TEXTING STYLE: Write like a real person casually texting on Instagram DM. Start sentences in lowercase (e.g. "heyy kya haal hai", "chalo accha hai", "hmmm samajh gayi").
+- TALK AND CONVERSE NATURALLY: Talk like a real 21yo friend (Smriti) texting casually on Instagram DM. Reply to greetings ("hy", "heyy", "hi") with a casual greeting back like "heyy, kya haal hai" or "hey, bolo".
+- DO NOT SEND LINKS DIRECTLY: DO NOT include any links, URLs, or website addresses in your response UNLESS the user explicitly asks for a link or subscription details. Just chat like a normal human.
+- Output ONLY your direct conversational text response. DO NOT include internal reasoning, draft options, explanations, or quotes.
+- TEXTING STYLE: Write in casual lowercase text (e.g. "heyy kya haal hai", "chalo accha hai", "hmmm samajh gayi").
 - NO EMOJIS: Do not use emojis at all (0 emojis). No hearts, smiley faces, or emoji spam.
 - NO EXCESSIVE PUNCTUATION: Do not use exclamation marks (!), multiple question marks (??), or formal capital letters.
-- SUBSCRIPTION LINK RULE: You may mention the subscription link (https://smritishans.mywebsite.social/) naturally ONCE when relevant. DO NOT repeat or spam the link multiple times if it was already mentioned or if unrelated.
 - ${lengthInstruction}`
 
       const { text: rawAiReply, model } = await generateWithGemini(
