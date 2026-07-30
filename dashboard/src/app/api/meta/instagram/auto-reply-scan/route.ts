@@ -290,13 +290,22 @@ export async function POST() {
           ? 'Reply in 1 short sentence (10-15 words max).'
           : 'Reply in 1-2 short sentences.'
 
+        const subscriptionLink = settings.AI_SUBSCRIPTION_LINK || 'https://smritishans.mywebsite.social/'
+        const freeGalleryLink = settings.AI_FREE_GALLERY_LINK || 'https://smritishah.vercel.app/'
+
         const prompt = `${chatbotPersona}
 
 ${dynamicTurnContext}
 
 ${systemRules}
 - ${lengthInstruction}
-- DO NOT SEND LINKS: Converse naturally. Do not include website links unless requested by user.`
+- WHEN USER ASKS FOR PHOTOS, VIDEOS, PICS, EXCLUSIVE CONTENT, OR TO SEE YOU:
+  * Be lovely, sweet, and flirty in your response.
+  * Offer the Premium Content link (${subscriptionLink}) for exclusive/spicy content.
+  * ALSO offer the Free Daily Gallery link (${freeGalleryLink}) as a free trial to check out daily free uploads first!
+- WHEN USER SAYS THEY CAN'T PAY OR HAVE NO MONEY FOR PREMIUM:
+  * Be super sweet and understanding. Tell them no worries at all and invite them to check out your free daily gallery at ${freeGalleryLink}.
+- FOR NORMAL CHATS & GREETINGS: Just chat back naturally without link spam.`
 
         const { text } = await generateWithGemini({
           system_instruction: { parts: [{ text: prompt }] },

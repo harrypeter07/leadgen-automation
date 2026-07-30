@@ -34,7 +34,8 @@ export default function AutoReplyModal({ onClose, threadId, threadName }: AutoRe
   // Dynamic Turn Directives & Business Link States
   const [firstTurnInst, setFirstTurnInst] = useState('')
   const [ongoingTurnInst, setOngoingTurnInst] = useState('')
-  const [subscriptionLink, setSubscriptionLink] = useState('')
+  const [subscriptionLink, setSubscriptionLink] = useState('https://smritishans.mywebsite.social/')
+  const [freeGalleryLink, setFreeGalleryLink] = useState('https://smritishah.vercel.app/')
   const [maxDurationMins, setMaxDurationMins] = useState(3)
   const [maxTurns, setMaxTurns] = useState(6)
   const [inactivityHours, setInactivityHours] = useState(1)
