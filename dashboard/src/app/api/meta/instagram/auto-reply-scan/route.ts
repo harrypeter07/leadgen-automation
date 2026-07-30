@@ -313,6 +313,22 @@ ${systemRules}
         continue
       }
 
+      // Realistic human typing effect duration before sending (~70ms per char, clamped between 4s and 8s)
+      const dynamicTypingSec = Math.min(8, Math.max(4, Math.ceil(replyText.length * 0.07 + 2.5)))
+      console.log(`[AutoReplyScan] Showing typing indicator for ${dynamicTypingSec}s to ${senderUsername}...`)
+      try { await InstagramService.sendTypingIndicator(senderId, 'typing_on') } catch {}
+
+      const totalScanMs = dynamicTypingSec * 1000
+      let elapsedScanMs = 0
+      while (elapsedScanMs < totalScanMs) {
+        const waitMs = Math.min(2500, totalScanMs - elapsedScanMs)
+        await new Promise(resolve => setTimeout(resolve, waitMs))
+        elapsedScanMs += waitMs
+        if (elapsedScanMs < totalScanMs) {
+          try { await InstagramService.sendTypingIndicator(senderId, 'typing_on') } catch {}
+        }
+      }
+
       // Send
       console.log(`[AutoReplyScan] → ${senderUsername}: "${replyText}"`)
       const sendRes = await InstagramService.sendDM(senderId, replyText)

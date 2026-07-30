@@ -268,18 +268,18 @@ async function handleAutoReply(
       chatbotPersona = threadConfig.persona
     }
 
-    // 3. Delays override
+    // 3. Delays override (increased defaults for realistic human typing effect)
     const firstReplyDelay = threadConfig.firstReplyDelay !== undefined
       ? Number(threadConfig.firstReplyDelay)
       : (matchedAccount && matchedAccount.first_reply_delay !== undefined && matchedAccount.first_reply_delay !== null
           ? Number(matchedAccount.first_reply_delay)
-          : (settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 2))
+          : (settings.AI_FIRST_REPLY_DELAY ? Number(settings.AI_FIRST_REPLY_DELAY) : 6))
 
     const conversationDelay = threadConfig.conversationDelay !== undefined
       ? Number(threadConfig.conversationDelay)
       : (matchedAccount && matchedAccount.conversation_delay !== undefined && matchedAccount.conversation_delay !== null
           ? Number(matchedAccount.conversation_delay)
-          : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 1))
+          : (settings.AI_CONVERSATION_DELAY ? Number(settings.AI_CONVERSATION_DELAY) : 4))
 
     // 4. Static test reply override (ONLY if explicitly enabled for this specific thread)
     const staticReplyEnabled = threadConfig.staticReplyEnabled !== undefined
@@ -440,29 +440,32 @@ CRITICAL RULES (NEVER BREAK THESE):
 
       const delaySec = isFirstReply ? firstReplyDelay : conversationDelay
 
+      // Dynamic human typing effect duration based on reply text length (~70ms per character + 2.5s thinking time)
+      const dynamicTypingDurationSec = Math.max(
+        delaySec,
+        Math.min(10, Math.max(4, Math.ceil(replyContent.length * 0.07 + 2.5)))
+      )
+
       const tokenOverride = matchedAccount?.credentials?.access_token || undefined
 
-      // Show typing indicator to recipient (gives real-time "typing..." bubble) periodically during the delay to look natural
+      console.log(`[AutoReply] Showing realistic typing indicator for ${dynamicTypingDurationSec}s before sending...`)
+
+      // Show typing indicator on Instagram/Messenger
       if (platform === 'instagram') {
         await InstagramService.sendTypingIndicator(senderId, 'typing_on', tokenOverride).catch(() => {})
       }
 
-      if (delaySec > 0) {
-        console.log(`[AutoReply] Sleeping for ${delaySec} seconds before dispatching reply...`)
-        const intervalTime = 3000
-        const totalMs = delaySec * 1000
-        let elapsedMs = 0
+      // Keep typing_on indicator active in 2.5s loops so the "typing..." bubble stays on screen continuously
+      const totalMs = dynamicTypingDurationSec * 1000
+      let elapsedMs = 0
 
-        while (elapsedMs < totalMs) {
-          const waitMs = Math.min(intervalTime, totalMs - elapsedMs)
-          await new Promise(resolve => setTimeout(resolve, waitMs))
-          elapsedMs += waitMs
-          if (elapsedMs < totalMs && platform === 'instagram') {
-            await InstagramService.sendTypingIndicator(senderId, 'typing_on', tokenOverride).catch(() => {})
-          }
+      while (elapsedMs < totalMs) {
+        const waitMs = Math.min(2500, totalMs - elapsedMs)
+        await new Promise(resolve => setTimeout(resolve, waitMs))
+        elapsedMs += waitMs
+        if (elapsedMs < totalMs && platform === 'instagram') {
+          await InstagramService.sendTypingIndicator(senderId, 'typing_on', tokenOverride).catch(() => {})
         }
-      } else {
-        await new Promise(resolve => setTimeout(resolve, 800))
       }
 
       console.log(`[AutoReply] Sending reply: "${replyContent.slice(0, 60)}..."`)
