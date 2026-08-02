@@ -2,38 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
+:root {
+  /* Color System Tokens */
+  --bg-primary: #080c14;
+  --bg-secondary: #0d1424;
+  --bg-sidebar: #050810;
+  
+  --surface-primary: #0f172a;
+  --surface-elevated: #1e293b;
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  
+  --border-subtle: #1e293b;
+  --border-strong: #334155;
+  
+  --accent-primary: #3b82f6;
+  --accent-hover: #2563eb;
+  
+  --color-danger: #ef4444;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-info: #06b6d4;
 
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 98%;
+  /* HSL Color System for Tailwind */
+  --background: 222 47% 6%;
+  --foreground: 210 40% 98%;
 
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 98%;
+  --card: 222 47% 8%;
+  --card-foreground: 210 40% 98%;
 
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+  --popover: 222 47% 8%;
+  --popover-foreground: 210 40% 98%;
 
-    --secondary: 217.2 32.6% 15%;
-    --secondary-foreground: 210 40% 98%;
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 217.2 32.6% 14%;
-    --muted-foreground: 215 20.2% 65.1%;
+  --secondary: 217.2 32.6% 15%;
+  --secondary-foreground: 210 40% 98%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 14%;
+  --muted-foreground: 215 20.2% 65.1%;
 
-    --destructive: 0 62.8% 40%;
-    --destructive-foreground: 210 40% 98%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+  --destructive: 0 62.8% 40%;
+  --destructive-foreground: 210 40% 98%;
 
-    --radius: 0.75rem;
-  }
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 224.3 76.3% 48%;
+
+  /* Border Radius System */
+  --radius: 0.75rem;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-hero: 32px;
+  --radius-dialog: 28px;
+  --radius-pill: 9999px;
+
+  /* Component Sizing Rules */
+  --btn-height: 48px;
+  --input-height: 52px;
+  --card-padding: 32px;
+  --table-row-height: 56px;
+
+  /* Motion Curves */
+  --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-normal: 0.55s;
+  --duration-fast: 0.25s;
 }
 
 @layer base {
