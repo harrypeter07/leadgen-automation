@@ -15,6 +15,7 @@ interface ConnectedAccount {
   health_status: 'healthy' | 'degraded' | 'down'
   last_tested_at: string | null
   credentials_summary: Record<string, string>
+  is_active?: boolean
 }
 
 export default function ConnectedAccountsPage() {
@@ -142,6 +143,27 @@ export default function ConnectedAccountsPage() {
     }
   }
 
+  // Activate/Switch account
+  async function handleActivateAccount(id: string) {
+    const toastId = toast.loading('Switching active account...')
+    try {
+      const res = await fetch('/api/meta/active-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: id })
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success('Account activated & switched successfully!', { id: toastId })
+        fetchAccounts()
+      } else {
+        throw new Error(data.error || 'Failed to activate account.')
+      }
+    } catch (err: any) {
+      toast.error(err.message, { id: toastId })
+    }
+  }
+
   // Trigger reconnect / update credentials flow
   function handleReconnect(acc: ConnectedAccount) {
     setAccountId(acc.id)
@@ -259,7 +281,14 @@ export default function ConnectedAccountsPage() {
                         <div key={acc.id} className="p-4 bg-[#141416] border border-[#2D2D30]/60 rounded-xl space-y-3 text-xs">
                           <div className="flex justify-between items-start">
                             <div>
-                              <span className="font-bold text-white block">{acc.account_name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-white block">{acc.account_name}</span>
+                                {acc.is_active && (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-950/80 text-purple-300 border border-purple-500/40 shadow-sm animate-pulse">
+                                    ⚡ Active Bot Account
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[9px] text-gray-500 font-mono mt-0.5 block">ID: {acc.id}</span>
                             </div>
                             <div className="flex gap-2">
@@ -288,7 +317,15 @@ export default function ConnectedAccountsPage() {
                           )}
 
                           {/* Connection management buttons */}
-                          <div className="flex gap-2 pt-2 border-t border-[#2D2D30]/30">
+                          <div className="flex flex-wrap gap-2 pt-2 border-t border-[#2D2D30]/30">
+                            {!acc.is_active && (
+                              <button
+                                onClick={() => handleActivateAccount(acc.id)}
+                                className="w-full py-1.5 rounded bg-purple-900/30 border border-purple-500/40 hover:bg-purple-800/40 text-[10px] font-black uppercase tracking-wider text-purple-300 transition-all flex items-center justify-center gap-1 shadow-sm"
+                              >
+                                ⚡ Make Active Account
+                              </button>
+                            )}
                             <button
                               onClick={() => handleTestConnection(acc.id)}
                               disabled={testingId === acc.id}
