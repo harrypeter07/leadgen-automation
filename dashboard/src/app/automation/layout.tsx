@@ -252,13 +252,27 @@ export default function AutomationLayout({ children }: AutomationLayoutProps) {
 
           {/* Header Controls */}
           <div className="flex items-center gap-3">
-            {/* Active Account Status Badge */}
+            {/* Active Account Status Badge (Clickable link to Connected Accounts) */}
             {activeAccount && (
-              <Badge variant="outline" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>{activeAccount.accountName}</span>
-              </Badge>
+              <Link href="/automation/accounts" title="Click to switch Meta accounts & profiles">
+                <Badge variant="outline" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs border-emerald-500/30 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer transition-colors">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>⚡ Active: {activeAccount.accountName}</span>
+                </Badge>
+              </Link>
             )}
+
+            {/* Connected Accounts Header Button */}
+            <Link href="/automation/accounts">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+              >
+                <Key className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Connected Accounts</span>
+              </Button>
+            </Link>
 
             {/* Inline Gemini Key Button */}
             <Button

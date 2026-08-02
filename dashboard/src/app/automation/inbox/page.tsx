@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import toast from 'react-hot-toast'
 import AutoReplyModal from './AutoReplyModal'
 import { GeminiKeyModal } from '@/components/gemini-key-modal'
@@ -73,7 +74,23 @@ export default function SocialInboxPage() {
   const [activeAccountPageId, setActiveAccountPageId] = useState<string>('1165738093294228')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef    = useRef<HTMLTextAreaElement>(null)
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
+
+  const handleChatScroll = () => {
+    if (!chatContainerRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current
+    // If user is within 100px of bottom, allow auto-scroll
+    const isBottom = scrollHeight - scrollTop - clientHeight < 100
+    setShouldAutoScroll(isBottom)
+  }
+
+  useEffect(() => {
+    if (shouldAutoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, isTyping, shouldAutoScroll])
 
   useEffect(() => {
     fetch('/api/meta/active-account')
@@ -282,6 +299,7 @@ export default function SocialInboxPage() {
   async function openThread(thread: Thread) {
     setSelectedThread(thread)
     setMessages([])
+    setShouldAutoScroll(true)
     await fetchMessages(thread)
     setTimeout(() => textareaRef.current?.focus(), 100)
   }
@@ -292,6 +310,7 @@ export default function SocialInboxPage() {
     if (!replyText.trim() || !selectedThread) return
     setSending(true)
 
+    setShouldAutoScroll(true)
     const optimisticId = `opt_${Date.now()}`
     const optimisticMsg: Message = {
       id: optimisticId,
@@ -383,6 +402,18 @@ export default function SocialInboxPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Connected Accounts Quick Link Button */}
+          <Link href="/automation/accounts">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-emerald-500/30 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+            >
+              <Key className="w-3.5 h-3.5" />
+              <span>Connected Accounts</span>
+            </Button>
+          </Link>
+
           {/* Inline Gemini API Key button */}
           <Button
             variant="outline"
@@ -526,7 +557,7 @@ export default function SocialInboxPage() {
               </CardHeader>
 
               {/* Chat Messages */}
-              <CardContent className="p-4 flex-1 overflow-y-auto space-y-3">
+              <CardContent ref={chatContainerRef} onScroll={handleChatScroll} className="p-4 flex-1 overflow-y-auto space-y-3">
                 {loadingMsgs ? (
                   <div className="space-y-3 pt-4">
                     {[1,2,3].map(i => (
