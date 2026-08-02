@@ -144,7 +144,7 @@ export default function OutreachModal({
           )}
 
           {modalTab === 'timeline' && (
-            <ConversationTimeline lead={lead} />
+            <ConversationTimeline leadId={lead.id} />
           )}
         </div>
       </div>

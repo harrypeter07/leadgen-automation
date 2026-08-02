@@ -29,6 +29,7 @@ const buttonVariants = cva(
       },
       size: {
         default: 'h-12 px-5 text-sm rounded-md', // 48px height
+        sm: 'h-9 px-3 text-xs rounded-md',
         large: 'h-14 px-7 text-base rounded-md', // 56px height
         hero: 'h-16 px-8 text-lg rounded-hero',  // 64px height
         icon: 'h-12 w-12 rounded-md p-0',
@@ -47,10 +48,11 @@ export interface ButtonProps
   loading?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  asChild?: boolean;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, loading, leftIcon, rightIcon, children, disabled, ...props }, ref) => {
+  ({ className, variant, size, loading, leftIcon, rightIcon, children, disabled, asChild, ...props }, ref) => {
     return (
       <button
         ref={ref}

@@ -44,7 +44,7 @@ export class CacheManager {
    */
   static invalidateScope(scopeTag: string): void {
     let cleared = 0;
-    for (const [key, entry] of this.store.entries()) {
+    for (const [key, entry] of Array.from(this.store.entries())) {
       if (entry.scope === scopeTag || entry.scope.startsWith(scopeTag)) {
         this.store.delete(key);
         cleared++;

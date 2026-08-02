@@ -242,7 +242,7 @@ export default function OutreachCampaignsPage() {
               <ol className="list-decimal pl-4 text-xs text-gray-400 space-y-2">
                 <li>Go to the <Link href="/scraper" className="text-[#E3B859] hover:underline">Google Scraper</Link> page and launch a scraping run.</li>
                 <li>Once leads are extracted, go to <Link href="/automation/email-outreach" className="text-[#E3B859] hover:underline">Email Outreach</Link>.</li>
-                <li>Select the leads, generate the AI drafts, and click "Send Emails".</li>
+                <li>Select the leads, generate the AI drafts, and click &quot;Send Emails&quot;.</li>
                 <li>Return here to watch your active campaigns and sent logs update automatically!</li>
               </ol>
             </div>

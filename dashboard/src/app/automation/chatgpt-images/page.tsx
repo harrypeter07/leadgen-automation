@@ -512,7 +512,7 @@ export default function ChatGPTImageAutomationPage() {
                     className="w-full p-3 rounded-xl bg-slate-950 border border-slate-850 focus:border-rose-500/40 text-xs focus:outline-none text-slate-200"
                   />
                   <p className="text-[9px] text-slate-500 leading-relaxed">
-                    Instructions: Log in to chatgpt.com in your browser. Open DevTools (F12) -> Application -> Cookies -> Copy the value of the <code>__Secure-next-auth.session-token</code> cookie.
+                    Instructions: Log in to chatgpt.com in your browser. Open DevTools (F12) &rarr; Application &rarr; Cookies &rarr; Copy the value of the <code>__Secure-next-auth.session-token</code> cookie.
                   </p>
                 </div>
 

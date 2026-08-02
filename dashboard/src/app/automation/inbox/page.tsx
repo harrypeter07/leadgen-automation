@@ -264,7 +264,7 @@ export default function SocialInboxPage() {
         if (Array.isArray(rawMsgs) && rawMsgs.length > 0) {
           const mapped: Message[] = rawMsgs.map((m: any) => ({
             id: m.id || String(Math.random()),
-            sender: (m.from?.id === activeAccountPageId || m.from?.id === activeAccountIgBizId || m.from?.username === 'smritifyp') ? 'system' : 'lead',
+            sender: ((m.from?.id === activeAccountPageId || m.from?.id === activeAccountIgBizId || m.from?.username === 'smritifyp') ? 'system' : 'lead') as 'system' | 'lead',
             body: m.message || (m.attachments?.data?.length ? '(attachment)' : '(media)'),
             time: m.created_time ? formatMessageTime(m.created_time) : '',
             rawTime: m.created_time,
@@ -429,7 +429,7 @@ export default function SocialInboxPage() {
             <Bot className="w-3.5 h-3.5" />
             <span>AI Bot Rules</span>
           </Button>
-          <Button variant="secondary" size="sm" onClick={fetchThreads}>
+          <Button variant="secondary" size="sm" onClick={() => fetchThreads()}>
             <RefreshCw className="w-3.5 h-3.5" />
           </Button>
         </div>
