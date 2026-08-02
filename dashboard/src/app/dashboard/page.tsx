@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
-import { supabaseBrowser } from '@/lib/supabase'
+import { LeadRepository } from '@/modules/leads/repositories/lead-repository'
 import type { Lead } from '@/types/lead'
 import StatusBadge from '../leads/components/StatusBadge'
 import { 
@@ -56,17 +56,11 @@ export default function HomeDashboard() {
     }
   }
 
-  // 2. Fetch recent leads
+  // 2. Fetch recent leads via LeadRepository abstraction (no direct Supabase query in UI)
   async function fetchRecentLeads() {
     try {
-      const { data, error } = await supabaseBrowser
-        .from('leads')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      if (error) throw error
-      setRecentLeads((data ?? []) as Lead[])
+      const leads = await LeadRepository.getRecentLeads(5)
+      setRecentLeads(leads)
     } catch (err: unknown) {
       console.error('Error fetching recent leads:', err)
     } finally {
