@@ -1,8 +1,10 @@
-import { NextResponse } from 'next/server'
+// dashboard/src/app/api/logout/route.ts
+import { withApiHandler } from '@/server/api/handler';
+import { ok } from '@/server/api/response';
+import { SessionService } from '@/modules/auth/services/session-service';
 
-export async function POST() {
-  const response = NextResponse.json({ success: true })
-  // Delete the session cookie to log the user out
-  response.cookies.delete('zarss_session')
-  return response
-}
+export const POST = withApiHandler(async () => {
+  const response = ok({ success: true, message: 'Logged out successfully' });
+  SessionService.removeSessionCookie(response);
+  return response;
+});

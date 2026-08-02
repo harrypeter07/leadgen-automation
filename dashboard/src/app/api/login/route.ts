@@ -1,25 +1,18 @@
-import { NextResponse } from 'next/server'
+// dashboard/src/app/api/login/route.ts
+import { withApiHandler } from '@/server/api/handler';
+import { ok, unauthorized } from '@/server/api/response';
+import { AuthService } from '@/modules/auth/services/auth-service';
+import { SessionService } from '@/modules/auth/services/session-service';
 
-export async function POST(request: Request) {
+export const POST = withApiHandler(async (req: Request) => {
+  const { password } = await req.json();
+
   try {
-    const { password } = await request.json()
-    const expected = process.env.DASHBOARD_PASSWORD || 'wrongpassword'
-
-    if (password === expected) {
-      const response = NextResponse.json({ success: true })
-      // Set the HTTP-only session cookie
-      response.cookies.set('zarss_session', 'true', {
-        path: '/',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-      })
-      return response
-    }
-
-    return NextResponse.json({ error: 'Invalid password' }, { status: 401 })
+    AuthService.authenticatePassword(password);
+    const response = ok({ success: true, message: 'Authenticated successfully' });
+    SessionService.attachSessionCookie(response);
+    return response;
   } catch (err: any) {
-    return NextResponse.json({ error: 'Internal server error', message: err.message }, { status: 500 })
+    return unauthorized(err.message || 'Invalid password credentials');
   }
-}
+});
