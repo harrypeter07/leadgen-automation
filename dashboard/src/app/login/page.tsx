@@ -32,7 +32,8 @@ export default function LoginPage() {
         router.push('/')
         router.refresh()
       } else {
-        toast.error(data.error || 'Authentication failed. Incorrect password.')
+        const errorMsg = typeof data.error === 'object' ? (data.error?.message || 'Authentication failed.') : (data.error || 'Authentication failed. Incorrect password.')
+        toast.error(errorMsg)
       }
     } catch {
       toast.error('Unable to reach the authentication service.')

@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import "@/styles/tokens.css";
+import "@/styles/theme.css";
+import "@/styles/motion.css";
+import "@/styles/utilities.css";
+import "@/styles/components.css";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -25,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="light">
+    <html lang="en" className="dark">
       <body
         className={`${plusJakarta.variable} antialiased`}
       >
