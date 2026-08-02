@@ -1,0 +1,38 @@
+/* dashboard/src/styles/tokens.css */
+:root {
+  /* Color System */
+  --bg-primary: #F9F8F3;       /* Warm Ivory */
+  --bg-secondary: #EFECE6;     /* Soft Sage / Cream */
+  --bg-sidebar: #0D1F17;       /* Deep Forest Green */
+  
+  --surface-primary: #FFFFFF;   /* Soft White */
+  --surface-elevated: #F4F1EA;  /* Warm Cream */
+  
+  --text-primary: #14231B;      /* Very Dark Green */
+  --text-secondary: #4A584F;    /* Muted Olive */
+  
+  --border-subtle: #DCD8CE;     /* Soft Olive Border */
+  --border-strong: #B8B2A4;     /* Strong Border */
+  
+  --accent-primary: #52796F;    /* Muted Lime / Forest */
+  --accent-hover: #3A5A40;      /* Soft Dark Lime */
+  
+  --color-danger: #BC4749;     /* Muted Red */
+  --color-success: #386641;    /* Muted Green */
+  --color-warning: #D4A373;    /* Muted Amber */
+  --color-info: #457B9D;       /* Muted Blue */
+
+  /* Border Radius System */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-hero: 32px;
+  --radius-dialog: 28px;
+  --radius-pill: 9999px;
+
+  /* Component Sizing Rules */
+  --btn-height: 48px;
+  --input-height: 52px;
+  --card-padding: 32px;
+  --table-row-height: 56px;
+}

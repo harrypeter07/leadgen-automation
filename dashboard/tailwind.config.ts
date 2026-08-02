@@ -6,13 +6,15 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/modules/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/providers/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     container: {
       center: true,
       padding: "2rem",
       screens: {
-        "2xl": "1400px",
+        "2xl": "1440px",
       },
     },
     extend: {
@@ -50,29 +52,32 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Editorial Token Extensions
+        editorial: {
+          bgPrimary: "var(--bg-primary)",
+          bgSecondary: "var(--bg-secondary)",
+          bgSidebar: "var(--bg-sidebar)",
+          surfacePrimary: "var(--surface-primary)",
+          surfaceElevated: "var(--surface-elevated)",
+          textPrimary: "var(--text-primary)",
+          textSecondary: "var(--text-secondary)",
+          borderSubtle: "var(--border-subtle)",
+          borderStrong: "var(--border-strong)",
+          accentPrimary: "var(--accent-primary)",
+          accentHover: "var(--accent-hover)",
+        },
+      },
+      borderRadius: {
+        sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+        hero: "var(--radius-hero)",
+        dialog: "var(--radius-dialog)",
+        pill: "var(--radius-pill)",
       },
       boxShadow: {
         glow: "0 0 20px -3px rgba(59, 130, 246, 0.3)",
         "glow-lg": "0 0 30px -5px rgba(59, 130, 246, 0.45)",
-      },
-      borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-      },
-      keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
-      },
-      animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
       },
     },
   },

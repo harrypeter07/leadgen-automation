@@ -1,0 +1,38 @@
+/* dashboard/src/styles/components.css */
+.btn-editorial {
+  min-height: var(--btn-height);
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all var(--duration-fast) var(--ease-editorial);
+}
+
+.input-editorial {
+  min-height: var(--input-height);
+  padding-left: 16px;
+  padding-right: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background-color: var(--surface-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.card-editorial {
+  padding: var(--card-padding);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background-color: var(--surface-primary);
+}
+
+.table-row-editorial {
+  min-height: var(--table-row-height);
+}
