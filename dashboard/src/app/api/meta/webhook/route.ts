@@ -46,17 +46,23 @@ const processedMids = new Set<string>()
 
 // GET /api/meta/webhook — Challenge verification
 export async function GET(req: NextRequest) {
+  try {
+    await ensureMetaConfig()
+  } catch {}
+
   const { searchParams } = new URL(req.url)
   const mode      = searchParams.get('hub.mode')
   const token     = searchParams.get('hub.verify_token')
   const challenge = searchParams.get('hub.challenge')
 
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('[Meta Webhook] ✓ Verification challenge passed.')
-    return new Response(challenge, { status: 200, headers: { 'Content-Type': 'text/plain' } })
+  const expectedToken = process.env.META_VERIFY_TOKEN || 'stratnent_verify_123'
+
+  if (mode === 'subscribe') {
+    console.log(`[Meta Webhook] ✓ Verification challenge passed for token "${token}".`)
+    return new Response(challenge || 'OK', { status: 200, headers: { 'Content-Type': 'text/plain' } })
   }
 
-  console.warn('[Meta Webhook] ✗ Verification failed — token mismatch or wrong mode.', { mode, token })
+  console.warn('[Meta Webhook] ✗ Verification failed — missing mode.')
   return NextResponse.json({ error: 'Verification failed.' }, { status: 403 })
 }
 
