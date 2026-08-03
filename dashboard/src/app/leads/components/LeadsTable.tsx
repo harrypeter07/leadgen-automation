@@ -1,11 +1,18 @@
-// dashboard/src/app/leads/components/LeadsTable.tsx
 'use client'
 
 import React from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import type { Lead } from '@/types/lead'
-import StatusBadge from './StatusBadge'
-import { MessageSquare, Mail, RefreshCw, Trash2, CheckCircle, ExternalLink, Sparkles, Phone, Globe, MapPin } from 'lucide-react'
+import { 
+  Badge, 
+  Table, 
+  TableHeader, 
+  TableBody, 
+  TableHead, 
+  TableRow, 
+  TableCell 
+} from '@/components'
+import { MessageSquare, RefreshCw, Trash2, CheckCircle, ExternalLink, Sparkles } from 'lucide-react'
 
 interface LeadsTableProps {
   leads: Lead[]
@@ -41,219 +48,201 @@ export default function LeadsTable({
   onDeleteRow
 }: LeadsTableProps) {
   return (
-    <div className="rounded-2xl glass glow-border overflow-hidden shadow-2xl">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-blue-500/10 text-xs">
-          <thead className="bg-blue-950/40">
-            <tr className="text-left text-zinc-400 uppercase tracking-wider font-mono text-[10px]">
-              <th className="px-5 py-4 text-left w-12">
-                <input
-                  type="checkbox"
-                  checked={leads.length > 0 && selectedIds.length === leads.length}
-                  onChange={onSelectAll}
-                  className="rounded border-blue-500/30 bg-black/40 text-blue-500 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                  aria-label="Select all leads"
-                />
-              </th>
-              <th className="px-5 py-4 font-semibold">Name</th>
-              <th className="px-5 py-4 font-semibold">Phone</th>
-              <th className="px-5 py-4 font-semibold">Email</th>
-              <th className="px-5 py-4 font-semibold">Website</th>
-              <th className="px-5 py-4 font-semibold">City</th>
-              <th className="px-5 py-4 font-semibold">Category</th>
-              <th className="px-5 py-4 font-semibold">Status</th>
-              <th className="px-5 py-4 font-semibold text-center">AI Message</th>
-              <th className="px-5 py-4 font-semibold">Created</th>
-              <th className="px-5 py-4 font-semibold text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-blue-500/10 text-zinc-300">
-            {loading ? (
-              <tr>
-                <td colSpan={11} className="px-5 py-16 text-center text-zinc-500 font-mono">
-                  <div className="flex flex-col items-center justify-center gap-3">
-                    <span className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    Loading pipeline leads...
-                  </div>
-                </td>
-              </tr>
-            ) : leads.length === 0 ? (
-              <tr>
-                <td colSpan={11} className="px-5 py-12 text-center text-zinc-500 font-medium">
-                  No leads match the filter criteria.
-                </td>
-              </tr>
-            ) : (
-              leads.map((lead) => {
-                const isChecked = selectedIds.includes(lead.id)
-                const isAiReady = !!lead.ai_message_whatsapp
-                const isRowActionLoading = actionLoadingId === lead.id
-                const isDropdownActive = activeMenuId === lead.id
+    <Table className="bg-page-alt">
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-12 text-center">
+            <input
+              type="checkbox"
+              checked={leads.length > 0 && selectedIds.length === leads.length}
+              onChange={onSelectAll}
+              className="rounded border-border-subtle bg-page text-ink focus:ring-lime w-4 h-4 cursor-pointer"
+              aria-label="Select all leads"
+            />
+          </TableHead>
+          <TableHead>Lead Name</TableHead>
+          <TableHead>Phone</TableHead>
+          <TableHead>Email</TableHead>
+          <TableHead>Website</TableHead>
+          <TableHead>City</TableHead>
+          <TableHead>Category</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead className="text-center">AI Message</TableHead>
+          <TableHead>Created</TableHead>
+          <TableHead className="text-right">Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {loading ? (
+          <TableRow>
+            <TableCell colSpan={11} className="py-12 text-center text-text-muted font-medium">
+              Loading pipeline leads...
+            </TableCell>
+          </TableRow>
+        ) : leads.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={11} className="py-12 text-center text-text-muted font-medium">
+              No leads match the filter criteria.
+            </TableCell>
+          </TableRow>
+        ) : (
+          leads.map((lead) => {
+            const isChecked = selectedIds.includes(lead.id)
+            const isAiReady = !!lead.ai_message_whatsapp
+            const isRowActionLoading = actionLoadingId === lead.id
+            const isDropdownActive = activeMenuId === lead.id
 
-                return (
-                  <tr key={lead.id} className={`hover:bg-blue-500/10 transition-colors duration-150 ${isChecked ? 'bg-blue-600/20' : ''}`}>
-                    <td className="px-5 py-3.5">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => onSelectRow(lead.id, e.target.checked)}
-                        className="rounded border-blue-500/30 bg-black/40 text-blue-500 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                        aria-label={`Select ${lead.name}`}
-                      />
-                    </td>
-                    <td className="px-5 py-3.5 font-bold text-white max-w-[150px] truncate" title={lead.name}>
-                      {lead.name}
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-[10px] text-zinc-400">
-                      {lead.phone ? (() => {
-                        const isWhatsApp = lead.notes?.includes('[WhatsApp: Yes]');
-                        const isNotWhatsApp = lead.notes?.includes('[WhatsApp: No]');
-                        const cleanedPhone = lead.phone.replace(/\D/g, '');
+            return (
+              <TableRow key={lead.id} className={isChecked ? 'bg-lime/10' : undefined}>
+                <TableCell className="text-center">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={(e) => onSelectRow(lead.id, e.target.checked)}
+                    className="rounded border-border-subtle bg-page text-ink focus:ring-lime w-4 h-4 cursor-pointer"
+                    aria-label={`Select ${lead.name}`}
+                  />
+                </TableCell>
+                <TableCell className="font-bold text-ink max-w-[160px] truncate" title={lead.name}>
+                  {lead.name}
+                </TableCell>
+                <TableCell className="font-mono text-xs text-text-body">
+                  {lead.phone ? (() => {
+                    const isWhatsApp = lead.notes?.includes('[WhatsApp: Yes]');
+                    const cleanedPhone = lead.phone.replace(/\D/g, '');
 
-                        if (isWhatsApp) {
-                          return (
-                            <a
-                              href={`https://wa.me/${cleanedPhone}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="hover:underline text-emerald-400 font-bold flex items-center gap-1.5"
-                              title="Open in WhatsApp"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              {lead.phone}
-                            </a>
-                          );
-                        } else if (isNotWhatsApp) {
-                          return (
-                            <span className="text-zinc-500 line-through" title="Not registered on WhatsApp">
-                              {lead.phone}
-                            </span>
-                          );
-                        } else {
-                          return <span>{lead.phone}</span>;
-                        }
-                      })() : (
-                        <span className="text-zinc-600">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 text-zinc-400 max-w-[140px] truncate" title={lead.email || undefined}>
-                      {lead.email || <span className="text-zinc-600">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5 text-zinc-400 max-w-[130px] truncate font-mono text-[10px]">
-                      {lead.website ? (
-                        <a href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline flex items-center gap-1">
-                          <ExternalLink className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{lead.website.replace(/^https?:\/\//, '')}</span>
+                    if (isWhatsApp) {
+                      return (
+                        <a
+                          href={`https://wa.me/${cleanedPhone}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:underline text-ink font-bold flex items-center gap-1.5"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-lime" />
+                          {lead.phone}
                         </a>
-                      ) : (
-                        <span className="text-zinc-600">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 text-zinc-300">
-                      {lead.city || <span className="text-zinc-600">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5 text-blue-300 font-mono text-[10px]">
-                      {lead.category || <span className="text-zinc-600">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={lead.status} />
-                    </td>
-                    <td className="px-5 py-3.5 text-center">
-                      {isAiReady ? (
-                        <button
-                          onClick={() => onOpenOutreachModal(lead, 'whatsapp')}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-mono hover:bg-emerald-500/25 transition-all shadow-sm"
-                        >
-                          <Sparkles className="w-3 h-3 text-emerald-400" /> Ready
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => onTriggerMessage(lead)}
-                          disabled={isRowActionLoading}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-mono hover:bg-blue-500/20 transition-all disabled:opacity-50"
-                        >
-                          + Generate
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 text-zinc-400 font-mono text-[10px]">
-                      {lead.created_at ? (() => {
-                        try {
-                          const d = new Date(lead.created_at);
-                          return isNaN(d.getTime()) ? '—' : formatDistanceToNow(d, { addSuffix: true });
-                        } catch {
-                          return '—';
-                        }
-                      })() : '—'}
-                    </td>
-                    <td className="px-5 py-3.5 text-right relative">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => onOpenOutreachModal(lead, 'whatsapp')}
-                          className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-all"
-                          title="Open Outreach Modal"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5" />
-                        </button>
+                      );
+                    }
+                    return <span>{lead.phone}</span>;
+                  })() : <span className="text-text-muted">—</span>}
+                </TableCell>
+                <TableCell className="text-text-body max-w-[140px] truncate" title={lead.email || undefined}>
+                  {lead.email || <span className="text-text-muted">—</span>}
+                </TableCell>
+                <TableCell className="text-text-body max-w-[130px] truncate font-mono text-[11px]">
+                  {lead.website ? (
+                    <a
+                      href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-ink font-semibold hover:underline flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{lead.website.replace(/^https?:\/\//, '')}</span>
+                    </a>
+                  ) : <span className="text-text-muted">—</span>}
+                </TableCell>
+                <TableCell className="text-text-body">
+                  {lead.city || <span className="text-text-muted">—</span>}
+                </TableCell>
+                <TableCell className="text-ink font-semibold">
+                  {lead.category || <span className="text-text-muted">—</span>}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={
+                      lead.status === 'converted' ? 'lime' :
+                      lead.status === 'replied' ? 'sage' :
+                      lead.status === 'email_sent' || lead.status === 'whatsapp_sent' ? 'lavender' : 'muted'
+                    }
+                  >
+                    {lead.status.replace(/_/g, ' ')}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  {isAiReady ? (
+                    <button
+                      onClick={() => onOpenOutreachModal(lead, 'whatsapp')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill bg-lime text-ink text-[11px] font-bold uppercase tracking-button"
+                    >
+                      <Sparkles className="w-3 h-3" /> Ready
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => onTriggerMessage(lead)}
+                      disabled={isRowActionLoading}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill bg-page border border-border-subtle text-ink text-[11px] font-semibold hover:bg-lime transition-colors disabled:opacity-50"
+                    >
+                      + Generate
+                    </button>
+                  )}
+                </TableCell>
+                <TableCell className="text-text-muted font-mono text-[11px]">
+                  {lead.created_at ? formatDistanceToNow(new Date(lead.created_at), { addSuffix: true }) : '—'}
+                </TableCell>
+                <TableCell className="text-right relative">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => onOpenOutreachModal(lead, 'whatsapp')}
+                      className="p-2 rounded-full bg-page hover:bg-lime text-ink transition-colors"
+                      title="Open Outreach Modal"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </button>
 
-                        <div className="relative inline-block text-left">
+                    <div className="relative inline-block text-left">
+                      <button
+                        onClick={() => onToggleMenu(lead.id)}
+                        className="p-2 rounded-full bg-page hover:bg-page-alt text-ink transition-colors font-bold"
+                        title="More options"
+                      >
+                        •••
+                      </button>
+
+                      {isDropdownActive && (
+                        <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-lg bg-page-alt border border-border-subtle shadow-hover py-2 z-50 text-xs text-ink font-semibold">
                           <button
-                            onClick={() => onToggleMenu(lead.id)}
-                            className="p-1.5 rounded-lg bg-zinc-800/80 border border-zinc-700/60 text-zinc-300 hover:bg-zinc-700/80 transition-all"
-                            title="More options"
+                            onClick={() => onTriggerResearch(lead)}
+                            disabled={isRowActionLoading}
+                            className="w-full text-left px-4 py-2 hover:bg-lime hover:text-ink flex items-center gap-2"
                           >
-                            •••
+                            <RefreshCw className={`w-3.5 h-3.5 ${isRowActionLoading ? 'animate-spin' : ''}`} />
+                            Re-run AI Research
                           </button>
-
-                          {isDropdownActive && (
-                            <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-xl glass glow-border shadow-2xl bg-[#0b1324] border border-blue-500/30 py-1.5 z-50 text-xs">
-                              <button
-                                onClick={() => onTriggerResearch(lead)}
-                                disabled={isRowActionLoading}
-                                className="w-full text-left px-3.5 py-2 text-zinc-300 hover:bg-blue-500/15 hover:text-white flex items-center gap-2"
-                              >
-                                <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isRowActionLoading ? 'animate-spin' : ''}`} />
-                                Re-run AI Research
-                              </button>
-
-                              <button
-                                onClick={() => onTriggerMessage(lead)}
-                                disabled={isRowActionLoading}
-                                className="w-full text-left px-3.5 py-2 text-zinc-300 hover:bg-blue-500/15 hover:text-white flex items-center gap-2"
-                              >
-                                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                                Re-generate AI Copy
-                              </button>
-
-                              <button
-                                onClick={() => onMarkReplied(lead)}
-                                className="w-full text-left px-3.5 py-2 text-zinc-300 hover:bg-emerald-500/15 hover:text-emerald-300 flex items-center gap-2"
-                              >
-                                <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                                Mark as Replied
-                              </button>
-
-                              <div className="border-t border-blue-500/10 my-1" />
-
-                              <button
-                                onClick={() => onDeleteRow(lead)}
-                                className="w-full text-left px-3.5 py-2 text-rose-400 hover:bg-rose-500/15 flex items-center gap-2"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                Delete Lead
-                              </button>
-                            </div>
-                          )}
+                          <button
+                            onClick={() => onTriggerMessage(lead)}
+                            disabled={isRowActionLoading}
+                            className="w-full text-left px-4 py-2 hover:bg-lime hover:text-ink flex items-center gap-2"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Re-generate AI Copy
+                          </button>
+                          <button
+                            onClick={() => onMarkReplied(lead)}
+                            className="w-full text-left px-4 py-2 hover:bg-lime hover:text-ink flex items-center gap-2"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            Mark as Replied
+                          </button>
+                          <div className="border-t border-border-subtle my-1" />
+                          <button
+                            onClick={() => onDeleteRow(lead)}
+                            className="w-full text-left px-4 py-2 text-[#B5583F] hover:bg-[#B5583F]/10 flex items-center gap-2"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete Lead
+                          </button>
                         </div>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+                      )}
+                    </div>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )
+          })
+        )}
+      </TableBody>
+    </Table>
   )
 }
