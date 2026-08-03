@@ -1,4 +1,3 @@
-// dashboard/src/app/layout-client.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
@@ -8,7 +7,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { 
   LayoutDashboard, 
   Users, 
-  MessageSquare, 
+  Smartphone, 
   RefreshCw, 
   Brain, 
   Zap, 
@@ -22,10 +21,9 @@ import {
   LogOut, 
   ChevronRight, 
   Menu, 
-  X,
-  Smartphone,
-  Sparkles
+  X
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface LayoutClientProps {
   children: React.ReactNode
@@ -36,11 +34,11 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   const router = useRouter()
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
 
   useEffect(() => {
     const savedCollapse = localStorage.getItem('stratnent_main_sidebar_collapsed')
-    if (savedCollapse) {
+    if (savedCollapse !== null) {
       setSidebarCollapsed(savedCollapse === 'true')
     }
   }, [])
@@ -87,72 +85,69 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   }, [])
 
   const navLinks = [
-    { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { name: 'Leads List', href: '/leads', icon: <Users className="w-4 h-4" /> },
-    { name: 'WhatsApp Bot', href: '/whatsapp', icon: <Smartphone className="w-4 h-4" /> },
-    { name: 'Workflows', href: '/workflows', icon: <RefreshCw className="w-4 h-4" /> },
-    { name: 'Agentic Brain', href: '/automation/agent-brain', icon: <Brain className="w-4 h-4" /> },
-    { name: 'Social Automation', href: '/automation', icon: <Zap className="w-4 h-4" /> },
-    { name: 'Google Scraper', href: '/scraper', icon: <Search className="w-4 h-4" /> },
-    { name: 'Email Outreach', href: '/automation/email-outreach', icon: <Mail className="w-4 h-4" /> },
-    { name: 'Web Audit', href: '/website-analyzer', icon: <Globe className="w-4 h-4" /> },
-    { name: 'Instagram Audit', href: '/instagram-analyzer', icon: <Camera className="w-4 h-4" /> },
-    { name: 'System Metrics', href: '/metrics', icon: <BarChart3 className="w-4 h-4" /> },
-    { name: 'TinyFish Search', href: '/tinyfish', icon: <Fish className="w-4 h-4" /> },
-    { name: 'Settings', href: '/settings', icon: <Settings className="w-4 h-4" /> },
+    { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+    { name: 'Leads List', href: '/leads', icon: <Users className="w-5 h-5" /> },
+    { name: 'WhatsApp Engine', href: '/whatsapp', icon: <Smartphone className="w-5 h-5" /> },
+    { name: 'Workflows', href: '/workflows', icon: <RefreshCw className="w-5 h-5" /> },
+    { name: 'Agentic Brain', href: '/automation/agent-brain', icon: <Brain className="w-5 h-5" /> },
+    { name: 'Social Automation', href: '/automation', icon: <Zap className="w-5 h-5" /> },
+    { name: 'Google Scraper', href: '/scraper', icon: <Search className="w-5 h-5" /> },
+    { name: 'Email Outreach', href: '/automation/email-outreach', icon: <Mail className="w-5 h-5" /> },
+    { name: 'Web Audit', href: '/website-analyzer', icon: <Globe className="w-5 h-5" /> },
+    { name: 'Instagram Audit', href: '/instagram-analyzer', icon: <Camera className="w-5 h-5" /> },
+    { name: 'System Metrics', href: '/metrics', icon: <BarChart3 className="w-5 h-5" /> },
+    { name: 'TinyFish Search', href: '/tinyfish', icon: <Fish className="w-5 h-5" /> },
+    { name: 'Settings', href: '/settings', icon: <Settings className="w-5 h-5" /> },
   ]
 
   if (pathname === '/login') {
     return (
-      <>
+      <div className="min-h-screen bg-page text-ink font-body">
         <Toaster position="top-right" />
         {children}
-      </>
+      </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex bg-[#080c14] text-foreground antialiased font-sans selection:bg-blue-500/30 selection:text-blue-200">
+    <div className="min-h-screen flex bg-page text-ink font-body select-none">
       <Toaster position="top-right" />
 
-      {/* Main Left Sidebar */}
+      {/* Main Left Icon Rail Sidebar */}
       <aside 
-        className="hidden md:flex border-r border-blue-500/15 glass flex-col justify-between flex-shrink-0 relative transition-all duration-300 z-30 shadow-2xl"
-        style={{ width: sidebarCollapsed ? '76px' : '250px' }}
+        className={cn(
+          "hidden md:flex bg-ink text-page flex-col justify-between flex-shrink-0 relative transition-all duration-300 z-30",
+          sidebarCollapsed ? "w-[80px]" : "w-[240px]"
+        )}
       >
         <button
           onClick={toggleSidebar}
-          className="absolute -right-3.5 top-6 z-40 w-7 h-7 rounded-full border border-blue-500/30 flex items-center justify-center text-blue-300 hover:text-white bg-[#0b1324] shadow-md shadow-blue-500/20 transition-all hover:scale-105"
+          className="absolute -right-3.5 top-6 z-40 w-7 h-7 rounded-full bg-ink border border-border-subtle/30 flex items-center justify-center text-text-onDarkMuted hover:text-page transition-all"
           title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${sidebarCollapsed ? 'rotate-0' : 'rotate-180'}`} />
+          <ChevronRight className={cn("w-4 h-4 transition-transform duration-200", sidebarCollapsed ? "rotate-0" : "rotate-180")} />
         </button>
 
-        <div className="overflow-hidden flex flex-col h-full">
-          {/* Logo Brand Header */}
-          <div className="h-16 border-b border-blue-500/15 px-4 flex items-center justify-between flex-shrink-0 bg-blue-950/20">
-            {!sidebarCollapsed ? (
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-extrabold text-sm text-white shadow-md shadow-blue-500/25 border border-blue-400/30">
-                  S
-                </div>
+        <div className="flex flex-col h-full items-center py-6 px-3">
+          {/* Logo Header */}
+          <div className="mb-6 flex flex-col items-center gap-2 shrink-0 w-full">
+            <Link href="/dashboard" className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-sm bg-lime text-ink flex items-center justify-center font-extrabold text-base tracking-tight shrink-0">
+                L
+              </div>
+              {!sidebarCollapsed && (
                 <div className="flex flex-col">
-                  <span className="text-sm font-bold text-foreground tracking-tight flex items-center gap-1.5">
-                    Stratnent Portal
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
-                  </span>
-                  <span className="text-[10px] text-blue-300/80 font-mono">Lead Gen & Social AI</span>
+                  <span className="text-sm font-bold text-page tracking-tight">Stratnent</span>
+                  <span className="text-[10px] text-lime uppercase font-mono font-semibold">LeadGen AI</span>
                 </div>
-              </div>
-            ) : (
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-extrabold text-sm text-white mx-auto shadow-md shadow-blue-500/25 border border-blue-400/30">
-                S
-              </div>
-            )}
+              )}
+            </Link>
           </div>
 
-          {/* Navigation Links */}
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-none">
+          <div className="w-full h-[1px] bg-border-subtle/10 mb-6" />
+
+          {/* Nav Icons */}
+          <nav className="flex-1 w-full flex flex-col items-center space-y-4 overflow-y-auto scrollbar-none">
             {navLinks.map((link) => {
               const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname.startsWith(link.href))
               return (
@@ -160,65 +155,76 @@ export default function LayoutClient({ children }: LayoutClientProps) {
                   key={link.name}
                   href={link.href}
                   title={sidebarCollapsed ? link.name : undefined}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${
-                    isActive
-                      ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40 shadow-sm shadow-blue-500/15 font-semibold'
-                      : 'text-zinc-400 hover:bg-blue-500/10 hover:text-zinc-100 hover:border hover:border-blue-500/20 border border-transparent'
-                  } ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+                  className={cn(
+                    "flex items-center gap-3 transition-all duration-200 group relative",
+                    sidebarCollapsed ? "justify-center w-full" : "w-full px-3 py-2 rounded-pill"
+                  )}
                 >
-                  <span className={isActive ? 'text-blue-400' : 'text-zinc-400'}>{link.icon}</span>
-                  {!sidebarCollapsed && <span>{link.name}</span>}
+                  <div
+                    className={cn(
+                      "w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shrink-0",
+                      isActive
+                        ? "bg-page text-ink shadow-sm"
+                        : "text-text-onDarkMuted hover:text-page hover:bg-ink-soft"
+                    )}
+                  >
+                    {link.icon}
+                  </div>
+                  {!sidebarCollapsed && (
+                    <span className={cn("text-xs font-semibold tracking-button uppercase truncate", isActive ? "text-page" : "text-text-onDarkMuted")}>
+                      {link.name}
+                    </span>
+                  )}
                 </Link>
               )
             })}
           </nav>
 
-          {/* WhatsApp Connection Status Badge & Logout */}
-          <div className="p-3 border-t border-blue-500/15 space-y-2 bg-blue-950/20">
-            {!sidebarCollapsed && (
-              <div className="p-2.5 rounded-xl border border-blue-500/20 bg-blue-900/10 flex items-center justify-between">
-                <span className="text-xs font-medium text-zinc-300">WhatsApp Engine</span>
-                <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold font-mono ${whatsappConnected ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  <span className={`w-2 h-2 rounded-full ${whatsappConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-                  {whatsappConnected ? 'READY' : 'OFFLINE'}
-                </span>
-              </div>
-            )}
+          <div className="w-full h-[1px] bg-border-subtle/10 my-4" />
+
+          {/* Bottom Avatar & Logout */}
+          <div className="flex flex-col items-center gap-4 w-full shrink-0">
+            {/* User Avatar Circle */}
+            <div
+              className="w-10 h-10 rounded-full bg-lime text-ink flex items-center justify-center font-bold text-xs shadow-sm cursor-pointer"
+              title="Hassan Mansuri (HM)"
+            >
+              HM
+            </div>
+
             <button
               onClick={handleLogout}
-              className={`w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:bg-rose-500/10 hover:text-rose-400 hover:border hover:border-rose-500/20 border border-transparent transition-all ${
-                sidebarCollapsed ? 'justify-center px-0' : ''
-              }`}
+              className="w-10 h-10 rounded-full text-text-onDarkMuted hover:text-rose-400 hover:bg-ink-soft flex items-center justify-center transition-colors"
+              title="Sign Out"
             >
-              <LogOut className="w-4 h-4 shrink-0" />
-              {!sidebarCollapsed && <span>Sign Out</span>}
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </aside>
 
-      {/* Main Workspace Frame */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* Main Workspace Canvas */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-page">
         {/* Mobile Header Bar */}
-        <header className="md:hidden h-14 border-b border-blue-500/15 px-4 flex items-center justify-between glass z-40">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-xs text-white shadow-sm shadow-blue-500/30">
-              S
+        <header className="md:hidden h-16 bg-ink text-page px-4 flex items-center justify-between z-40 border-b border-border-subtle/10">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-sm bg-lime text-ink flex items-center justify-center font-extrabold text-xs">
+              L
             </div>
-            <span className="text-xs font-bold text-foreground">Stratnent Portal</span>
+            <span className="text-xs font-bold uppercase tracking-button">Stratnent AI</span>
           </div>
 
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-lg border border-blue-500/20 text-blue-300 hover:bg-blue-500/10"
+            className="p-2 text-page hover:text-lime"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </header>
 
-        {/* Mobile Slideout Navigation Menu */}
+        {/* Mobile Slideout Nav */}
         {mobileMenuOpen && (
-          <div className="md:hidden fixed inset-0 top-14 z-50 glass bg-black/80 backdrop-blur-xl p-4 overflow-y-auto space-y-2 border-t border-blue-500/20">
+          <div className="md:hidden fixed inset-0 top-16 z-50 bg-ink text-page p-6 overflow-y-auto space-y-3">
             {navLinks.map((link) => {
               const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname.startsWith(link.href))
               return (
@@ -226,9 +232,10 @@ export default function LayoutClient({ children }: LayoutClientProps) {
                   key={link.name}
                   href={link.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold ${
-                    isActive ? 'bg-blue-600/30 border border-blue-500/40 text-blue-200' : 'text-zinc-300 hover:bg-blue-500/10'
-                  }`}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-pill text-xs font-bold uppercase tracking-button",
+                    isActive ? "bg-lime text-ink" : "text-text-onDarkMuted hover:bg-ink-soft hover:text-page"
+                  )}
                 >
                   {link.icon}
                   <span>{link.name}</span>
@@ -238,7 +245,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto bg-transparent">
+        <main className="flex-1 overflow-y-auto p-6 md:p-10 lg:p-12">
           {children}
         </main>
       </div>
