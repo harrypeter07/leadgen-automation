@@ -1,93 +1,95 @@
+@import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700,800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
+:root {
+  /* Loops House Design System Color Tokens */
+  --color-bg-page:        #F6F9DE;
+  --color-bg-page-alt:    #EFF4D6;
+  --color-bg-card-cream:  #F1F4D9;
 
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 98%;
+  --color-ink:            #0D2018;
+  --color-ink-soft:       #14281F;
+  --color-ink-muted:      #3A4A41;
 
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 98%;
+  --color-lime:           #D6EC6F;
+  --color-lime-dark-text: #17331F;
 
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+  --color-sage:           #A4BC93;
+  --color-sage-dark:      #2E3B2C;
+  --color-lavender:       #DEDBF3;
+  --color-lavender-dark:  #2A2740;
+  --color-cream-panel:    #F0F3D6;
 
-    --secondary: 217.2 32.6% 15%;
-    --secondary-foreground: 210 40% 98%;
+  --color-text-heading:   #0D2018;
+  --color-text-body:      #3D4A40;
+  --color-text-muted:     #7C8A7E;
+  --color-text-on-dark:   #F6F9DE;
+  --color-text-on-dark-muted: #A9B8A6;
 
-    --muted: 217.2 32.6% 14%;
-    --muted-foreground: 215 20.2% 65.1%;
+  --color-border-subtle:  #DCE3C4;
+  --color-border-ink:     #0D2018;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+  --color-success:        #6FA968;
+  --color-warning:        #D6B25E;
+  --color-error:          #B5583F;
+  --color-info:           #7C8FD6;
 
-    --destructive: 0 62.8% 40%;
-    --destructive-foreground: 210 40% 98%;
+  /* HSL Variable Fallbacks for Tailwind compatibility */
+  --background: 70 62% 92%; /* #F6F9DE */
+  --foreground: 154 42% 9%; /* #0D2018 */
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+  --card: 71 52% 90%; /* #EFF4D6 */
+  --card-foreground: 154 42% 9%;
 
-    --radius: 0.75rem;
-  }
+  --popover: 71 52% 90%;
+  --popover-foreground: 154 42% 9%;
+
+  --primary: 154 42% 9%;
+  --primary-foreground: 70 62% 92%;
+
+  --secondary: 71 52% 90%;
+  --secondary-foreground: 154 42% 9%;
+
+  --muted: 71 35% 85%;
+  --muted-foreground: 135 7% 51%;
+
+  --accent: 71 76% 68%; /* #D6EC6F */
+  --accent-foreground: 137 38% 15%;
+
+  --destructive: 13 49% 48%;
+  --destructive-foreground: 70 62% 92%;
+
+  --border: 71 34% 83%;
+  --input: 71 34% 83%;
+  --ring: 71 76% 68%;
+
+  --radius: 16px;
 }
 
 @layer base {
+  html, body {
+    background-color: #F6F9DE;
+    color: #0D2018;
+    font-family: 'General Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground antialiased selection:bg-blue-500/30 selection:text-blue-200;
-    font-feature-settings: "rlig" 1, "calt" 1;
-    background-color: #080c14;
-    background-image: 
-      radial-gradient(at 0% 0%, rgba(29, 78, 216, 0.12) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.08) 0px, transparent 50%);
-    background-attachment: fixed;
+    box-shadow: none;
+    border-color: #DCE3C4;
   }
 }
 
-/* Glassmorphism & Subtle Blue Glow Styling */
-.glass {
-  background: rgba(13, 20, 36, 0.65);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(59, 130, 246, 0.15);
+::selection {
+  background-color: #D6EC6F;
+  color: #17331F;
 }
 
-.glass-card {
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-
-.glow-border {
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  box-shadow: 0 0 15px -3px rgba(59, 130, 246, 0.12);
-}
-
-.glow-border:hover {
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: 0 0 20px -2px rgba(59, 130, 246, 0.22);
-}
-
-.blue-gradient-text {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.blue-gradient-bg {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-}
-
-/* Custom scrollbars */
+/* Custom scrollbars matching ink/lime theme */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -98,10 +100,10 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(59, 130, 246, 0.25);
+  background: rgba(13, 32, 24, 0.2);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(59, 130, 246, 0.5);
+  background: rgba(13, 32, 24, 0.4);
 }

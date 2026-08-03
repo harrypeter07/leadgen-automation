@@ -3,22 +3,28 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-lg border px-2.5 py-0.5 text-[10px] font-semibold tracking-wide transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
+  "inline-flex items-center rounded-pill px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] transition-colors select-none",
   {
     variants: {
       variant: {
-        default: "border-blue-500/30 bg-blue-500/15 text-blue-300 font-mono",
-        glow: "border-blue-400/40 bg-blue-600/20 text-blue-200 shadow-sm shadow-blue-500/20 font-mono",
-        secondary: "border-slate-700/60 bg-slate-800/60 text-slate-300",
-        destructive: "border-red-500/30 bg-red-500/15 text-red-300",
-        critical: "border-red-500/40 bg-red-500/20 text-red-300 font-semibold animate-pulse",
-        outline: "border-white/10 text-muted-foreground bg-white/5",
-        success: "border-emerald-500/30 bg-emerald-500/15 text-emerald-300 font-mono",
-        warning: "border-amber-500/30 bg-amber-500/15 text-amber-300 font-mono",
+        dark: "bg-ink text-lime border-none",
+        lime: "bg-lime text-ink border-none",
+        neutral: "bg-transparent text-text-muted border border-border-subtle",
+        muted: "bg-page-alt text-ink-muted border-none",
+        sage: "bg-sage text-sage-text border-none",
+        lavender: "bg-lavender text-lavender-text border-none",
+        success: "bg-[#6FA968]/20 text-[#2E4E29] border border-[#6FA968]/30",
+        warning: "bg-[#D6B25E]/20 text-[#5C481A] border border-[#D6B25E]/30",
+        error: "bg-[#B5583F]/20 text-[#592316] border border-[#B5583F]/30",
+        info: "bg-[#7C8FD6]/20 text-[#293563] border border-[#7C8FD6]/30",
+        // Legacy variant aliases
+        default: "bg-ink text-lime border-none",
+        secondary: "bg-page-alt text-ink-muted border-none",
+        outline: "bg-transparent text-text-muted border border-border-subtle",
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: "dark",
     },
   }
 )

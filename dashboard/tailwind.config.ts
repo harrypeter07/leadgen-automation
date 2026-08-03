@@ -6,76 +6,102 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/modules/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/providers/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     container: {
       center: true,
       padding: "2rem",
       screens: {
-        "2xl": "1400px",
+        "2xl": "1440px",
       },
     },
     extend: {
       colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
+        page: "#F6F9DE",
+        "page-alt": "#EFF4D6",
+        "card-cream": "#F1F4D9",
+        ink: {
+          DEFAULT: "#0D2018",
+          soft: "#14281F",
+          muted: "#3A4A41",
+        },
+        lime: {
+          DEFAULT: "#D6EC6F",
+          text: "#17331F",
+        },
+        sage: {
+          DEFAULT: "#A4BC93",
+          text: "#2E3B2C",
+        },
+        lavender: {
+          DEFAULT: "#DEDBF3",
+          text: "#2A2740",
+        },
+        cream: {
+          panel: "#F0F3D6",
+        },
+        text: {
+          heading: "#0D2018",
+          body: "#3D4A40",
+          muted: "#7C8A7E",
+          onDark: "#F6F9DE",
+          onDarkMuted: "#A9B8A6",
+        },
+        border: {
+          subtle: "#DCE3C4",
+          ink: "#0D2018",
+        },
+        // Legacy HSL color fallbacks
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "#0D2018",
+          foreground: "#F6F9DE",
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          DEFAULT: "#EFF4D6",
+          foreground: "#0D2018",
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
-        },
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          DEFAULT: "#D6EC6F",
+          foreground: "#17331F",
         },
       },
-      boxShadow: {
-        glow: "0 0 20px -3px rgba(59, 130, 246, 0.3)",
-        "glow-lg": "0 0 30px -5px rgba(59, 130, 246, 0.45)",
+      fontFamily: {
+        display: ["General Sans", "Inter", "sans-serif"],
+        body: ["General Sans", "Inter", "sans-serif"],
+        sans: ["General Sans", "Inter", "sans-serif"],
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        sm: "10px",
+        md: "16px",
+        lg: "24px",
+        xl: "32px",
+        pill: "9999px",
       },
-      keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
+      letterSpacing: {
+        eyebrow: "0.08em",
+        button: "0.04em",
+        tight: "-0.02em",
       },
-      animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
+      boxShadow: {
+        none: "none",
+        hover: "0 2px 8px rgba(13, 32, 24, 0.06)",
+        "hover-subtle": "0 2px 8px rgba(13, 32, 24, 0.06)",
+      },
+      transitionTimingFunction: {
+        standard: "cubic-bezier(0.4, 0, 0.2, 1)",
+      },
+      transitionDuration: {
+        fast: "120ms",
+        base: "200ms",
+        slow: "320ms",
       },
     },
   },
   plugins: [],
 };
+
 export default config;

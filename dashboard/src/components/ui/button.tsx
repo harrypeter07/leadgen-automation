@@ -1,29 +1,37 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
+import { ArrowRight, ArrowUpRight, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-xl text-xs font-semibold ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] select-none",
+  "inline-flex items-center justify-center font-bold uppercase tracking-[0.04em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime disabled:pointer-events-none disabled:opacity-40 select-none",
   {
     variants: {
       variant: {
-        default: "bg-blue-600 text-white hover:bg-blue-500 shadow-md shadow-blue-500/20 border border-blue-400/30",
-        glow: "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/25 border border-blue-400/40",
-        destructive: "bg-red-600/90 text-white hover:bg-red-600 shadow-sm border border-red-500/30",
-        outline: "border border-blue-500/20 bg-blue-950/20 text-foreground hover:bg-blue-900/30 hover:border-blue-500/40",
-        secondary: "bg-slate-800/80 text-slate-200 hover:bg-slate-700/80 border border-slate-700/50",
-        ghost: "hover:bg-blue-500/10 hover:text-blue-400 text-muted-foreground",
-        link: "text-blue-400 underline-offset-4 hover:underline",
+        primary:
+          "bg-ink text-page hover:bg-ink-soft rounded-pill h-12 pl-5 pr-1.5 shadow-none",
+        default:
+          "bg-ink text-page hover:bg-ink-soft rounded-pill h-12 pl-5 pr-1.5 shadow-none",
+        secondary:
+          "bg-page border-[1.5px] border-ink text-ink hover:bg-page-alt rounded-pill h-12 pl-5 pr-1.5 shadow-none",
+        ghost:
+          "bg-transparent text-ink hover:bg-page-alt hover:text-ink rounded-pill h-10 px-4 normal-case tracking-normal font-semibold shadow-none",
+        outline:
+          "bg-transparent border border-border-subtle text-ink hover:bg-page-alt rounded-pill h-10 px-4 normal-case tracking-normal font-semibold shadow-none",
+        icon:
+          "w-10 h-10 rounded-full bg-page text-ink hover:bg-lime hover:text-ink transition-colors p-0 inline-flex items-center justify-center border-none shadow-none",
+        darkIcon:
+          "w-10 h-10 rounded-full bg-ink text-lime hover:bg-ink-soft transition-colors p-0 inline-flex items-center justify-center border-none shadow-none",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-lg px-3 text-xs",
-        lg: "h-10 rounded-xl px-6 text-sm",
-        icon: "h-9 w-9 p-0",
+        default: "text-xs h-12",
+        sm: "text-[11px] h-10 pl-4 pr-1",
+        lg: "text-sm h-14 pl-6 pr-2",
+        icon: "w-10 h-10 p-0",
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: "primary",
       size: "default",
     },
   }
@@ -31,16 +39,63 @@ const buttonVariants = cva(
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean
+  loading?: boolean
+  iconType?: "arrow-right" | "arrow-up-right" | "none"
+  iconCircleClassName?: string
+}
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => {
+  (
+    {
+      className,
+      variant = "primary",
+      size,
+      loading,
+      iconType = "arrow-right",
+      iconCircleClassName,
+      children,
+      disabled,
+      ...props
+    },
+    ref
+  ) => {
+    const isPrimary = variant === "primary" || variant === "default"
+    const isSecondary = variant === "secondary"
+    const hasIconCircle = (isPrimary || isSecondary) && iconType !== "none"
+
     return (
       <button
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        disabled={disabled || loading}
         {...props}
-      />
+      >
+        {loading ? (
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        ) : null}
+
+        <span className="flex-1 text-center">{children}</span>
+
+        {hasIconCircle && !loading && (
+          <span
+            className={cn(
+              "w-9 h-9 rounded-full inline-flex items-center justify-center shrink-0 ml-3 transition-colors",
+              isPrimary
+                ? "bg-page text-ink"
+                : "bg-ink text-page",
+              iconCircleClassName
+            )}
+          >
+            {iconType === "arrow-up-right" ? (
+              <ArrowUpRight className="w-4 h-4" />
+            ) : (
+              <ArrowRight className="w-4 h-4" />
+            )}
+          </span>
+        )}
+      </button>
     )
   }
 )
