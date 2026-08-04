@@ -35,6 +35,9 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+  const [isHovered, setIsHovered] = useState(false)
+
+  const isExpanded = !sidebarCollapsed || isHovered
 
   useEffect(() => {
     const savedCollapse = localStorage.getItem('stratnent_main_sidebar_collapsed')
@@ -113,30 +116,32 @@ export default function LayoutClient({ children }: LayoutClientProps) {
     <div className="min-h-screen flex bg-page text-ink font-body select-none">
       <Toaster position="top-right" />
 
-      {/* Main Left Icon Rail Sidebar */}
+      {/* Main Left Icon Rail Sidebar with Hover-to-Expand */}
       <aside 
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "hidden md:flex bg-ink text-page flex-col justify-between flex-shrink-0 relative transition-all duration-300 z-30",
-          sidebarCollapsed ? "w-[80px]" : "w-[240px]"
+          "hidden md:flex bg-ink text-page flex-col justify-between flex-shrink-0 relative transition-all duration-300 ease-in-out z-30",
+          isExpanded ? "w-[240px]" : "w-[80px]"
         )}
       >
         <button
           onClick={toggleSidebar}
           className="absolute -right-3.5 top-6 z-40 w-7 h-7 rounded-full bg-ink border border-border-subtle/30 flex items-center justify-center text-text-onDarkMuted hover:text-page transition-all"
-          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
         >
-          <ChevronRight className={cn("w-4 h-4 transition-transform duration-200", sidebarCollapsed ? "rotate-0" : "rotate-180")} />
+          <ChevronRight className={cn("w-4 h-4 transition-transform duration-200", isExpanded ? "rotate-180" : "rotate-0")} />
         </button>
 
-        <div className="flex flex-col h-full items-center py-6 px-3">
+        <div className="flex flex-col h-full items-center py-6 px-3 overflow-hidden">
           {/* Logo Header */}
-          <div className="mb-6 flex flex-col items-center gap-2 shrink-0 w-full">
-            <Link href="/dashboard" className="flex items-center gap-3">
+          <div className="mb-6 flex items-center shrink-0 w-full px-1">
+            <Link href="/dashboard" className="flex items-center gap-3 w-full">
               <div className="w-10 h-10 rounded-sm bg-lime text-ink flex items-center justify-center font-extrabold text-base tracking-tight shrink-0">
                 L
               </div>
-              {!sidebarCollapsed && (
-                <div className="flex flex-col">
+              {isExpanded && (
+                <div className="flex flex-col whitespace-nowrap overflow-hidden transition-opacity duration-200">
                   <span className="text-sm font-bold text-page tracking-tight">Stratnent</span>
                   <span className="text-[10px] text-lime uppercase font-mono font-semibold">LeadGen AI</span>
                 </div>
@@ -147,17 +152,17 @@ export default function LayoutClient({ children }: LayoutClientProps) {
           <div className="w-full h-[1px] bg-border-subtle/10 mb-6" />
 
           {/* Nav Icons */}
-          <nav className="flex-1 w-full flex flex-col items-center space-y-4 overflow-y-auto scrollbar-none">
+          <nav className="flex-1 w-full flex flex-col items-center space-y-2 overflow-y-auto scrollbar-none">
             {navLinks.map((link) => {
               const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname.startsWith(link.href))
               return (
                 <Link
                   key={link.name}
                   href={link.href}
-                  title={sidebarCollapsed ? link.name : undefined}
+                  title={!isExpanded ? link.name : undefined}
                   className={cn(
-                    "flex items-center gap-3 transition-all duration-200 group relative",
-                    sidebarCollapsed ? "justify-center w-full" : "w-full px-3 py-2 rounded-pill"
+                    "flex items-center gap-3 transition-all duration-200 group relative w-full px-1.5 py-1 rounded-pill",
+                    !isExpanded && "justify-center"
                   )}
                 >
                   <div
@@ -170,8 +175,8 @@ export default function LayoutClient({ children }: LayoutClientProps) {
                   >
                     {link.icon}
                   </div>
-                  {!sidebarCollapsed && (
-                    <span className={cn("text-xs font-semibold tracking-button uppercase truncate", isActive ? "text-page" : "text-text-onDarkMuted")}>
+                  {isExpanded && (
+                    <span className={cn("text-xs font-semibold tracking-button uppercase truncate whitespace-nowrap transition-opacity duration-200", isActive ? "text-page" : "text-text-onDarkMuted")}>
                       {link.name}
                     </span>
                   )}
@@ -183,18 +188,25 @@ export default function LayoutClient({ children }: LayoutClientProps) {
           <div className="w-full h-[1px] bg-border-subtle/10 my-4" />
 
           {/* Bottom Avatar & Logout */}
-          <div className="flex flex-col items-center gap-4 w-full shrink-0">
-            {/* User Avatar Circle */}
-            <div
-              className="w-10 h-10 rounded-full bg-lime text-ink flex items-center justify-center font-bold text-xs shadow-sm cursor-pointer"
-              title="Hassan Mansuri (HM)"
-            >
-              HM
+          <div className="flex items-center justify-between gap-2 w-full px-1 shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className="w-10 h-10 rounded-full bg-lime text-ink flex items-center justify-center font-bold text-xs shadow-sm cursor-pointer shrink-0"
+                title="Hassan Mansuri (HM)"
+              >
+                HM
+              </div>
+              {isExpanded && (
+                <div className="flex flex-col whitespace-nowrap overflow-hidden">
+                  <span className="text-xs font-bold text-page truncate">Hassan M.</span>
+                  <span className="text-[10px] text-text-onDarkMuted truncate">Admin</span>
+                </div>
+              )}
             </div>
 
             <button
               onClick={handleLogout}
-              className="w-10 h-10 rounded-full text-text-onDarkMuted hover:text-rose-400 hover:bg-ink-soft flex items-center justify-center transition-colors"
+              className="w-10 h-10 rounded-full text-text-onDarkMuted hover:text-rose-400 hover:bg-ink-soft flex items-center justify-center transition-colors shrink-0"
               title="Sign Out"
             >
               <LogOut className="w-4 h-4" />
