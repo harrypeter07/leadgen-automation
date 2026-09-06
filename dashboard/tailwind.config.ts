@@ -19,68 +19,89 @@ const config: Config = {
     },
     extend: {
       colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
+        page: "#F6F9DE",
+        "page-alt": "#EFF4D6",
+        "card-cream": "#F1F4D9",
+        ink: {
+          DEFAULT: "#0D2018",
+          soft: "#14281F",
+          muted: "#3A4A41",
+        },
+        lime: {
+          DEFAULT: "#D6EC6F",
+          text: "#17331F",
+        },
+        sage: {
+          DEFAULT: "#A4BC93",
+          text: "#2E3B2C",
+        },
+        lavender: {
+          DEFAULT: "#DEDBF3",
+          text: "#2A2740",
+        },
+        cream: {
+          panel: "#F0F3D6",
+        },
+        text: {
+          heading: "#0D2018",
+          body: "#3D4A40",
+          muted: "#7C8A7E",
+          onDark: "#F6F9DE",
+          onDarkMuted: "#A9B8A6",
+        },
+        border: {
+          subtle: "#DCE3C4",
+          ink: "#0D2018",
+        },
+        // Legacy HSL color fallbacks
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "#0D2018",
+          foreground: "#F6F9DE",
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          DEFAULT: "#EFF4D6",
+          foreground: "#0D2018",
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+          DEFAULT: "#D6EC6F",
+          foreground: "#17331F",
         },
-        popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
-        },
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
-        },
-        // Editorial Token Extensions
-        editorial: {
-          bgPrimary: "var(--bg-primary)",
-          bgSecondary: "var(--bg-secondary)",
-          bgSidebar: "var(--bg-sidebar)",
-          surfacePrimary: "var(--surface-primary)",
-          surfaceElevated: "var(--surface-elevated)",
-          textPrimary: "var(--text-primary)",
-          textSecondary: "var(--text-secondary)",
-          borderSubtle: "var(--border-subtle)",
-          borderStrong: "var(--border-strong)",
-          accentPrimary: "var(--accent-primary)",
-          accentHover: "var(--accent-hover)",
-        },
+      },
+      fontFamily: {
+        display: ["General Sans", "Inter", "sans-serif"],
+        body: ["General Sans", "Inter", "sans-serif"],
+        sans: ["General Sans", "Inter", "sans-serif"],
       },
       borderRadius: {
-        sm: "var(--radius-sm)",
-        md: "var(--radius-md)",
-        lg: "var(--radius-lg)",
-        hero: "var(--radius-hero)",
-        dialog: "var(--radius-dialog)",
-        pill: "var(--radius-pill)",
+        sm: "10px",
+        md: "16px",
+        lg: "24px",
+        xl: "32px",
+        pill: "9999px",
+      },
+      letterSpacing: {
+        eyebrow: "0.08em",
+        button: "0.04em",
+        tight: "-0.02em",
       },
       boxShadow: {
-        glow: "0 0 20px -3px rgba(59, 130, 246, 0.3)",
-        "glow-lg": "0 0 30px -5px rgba(59, 130, 246, 0.45)",
+        none: "none",
+        hover: "0 2px 8px rgba(13, 32, 24, 0.06)",
+        "hover-subtle": "0 2px 8px rgba(13, 32, 24, 0.06)",
+      },
+      transitionTimingFunction: {
+        standard: "cubic-bezier(0.4, 0, 0.2, 1)",
+      },
+      transitionDuration: {
+        fast: "120ms",
+        base: "200ms",
+        slow: "320ms",
       },
     },
   },
   plugins: [],
 };
+
 export default config;

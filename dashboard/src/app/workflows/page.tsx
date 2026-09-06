@@ -1,10 +1,16 @@
-// dashboard/src/app/workflows/page.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { supabaseBrowser } from '@/lib/supabase'
-import { RefreshCw, Brain, Send, Copy, Database, Sparkles, Zap, Link as LinkIcon } from 'lucide-react'
+import { 
+  Button, 
+  Badge, 
+  Card, 
+  StatCard, 
+  HeroCard 
+} from '@/components'
+import { Brain, Send, Link as LinkIcon } from 'lucide-react'
 
 export default function WorkflowsPage() {
   const [totalLeads, setTotalLeads] = useState<number | null>(null)
@@ -19,16 +25,13 @@ export default function WorkflowsPage() {
 
   const webhookUrl = `${process.env.NEXT_PUBLIC_N8N_WEBHOOK_BASE_URL || 'https://n8n-production-b85da.up.railway.app'}/webhook/leads`
 
-  // Fetch counts from Supabase
   async function fetchCounts() {
     try {
-      // 1. Total leads
       const totalRes = await supabaseBrowser
         .from('leads')
         .select('*', { count: 'exact', head: true })
       setTotalLeads(totalRes.count ?? 0)
 
-      // 2. Pending AI (where ai_message_whatsapp is null and status is new)
       const pendingRes = await supabaseBrowser
         .from('leads')
         .select('*', { count: 'exact', head: true })
@@ -36,7 +39,6 @@ export default function WorkflowsPage() {
         .is('ai_message_whatsapp', null)
       setPendingAi(pendingRes.count ?? 0)
 
-      // 3. Ready outreach (where status is new and ai_message_whatsapp is not null)
       const readyRes = await supabaseBrowser
         .from('leads')
         .select('*', { count: 'exact', head: true })
@@ -57,7 +59,6 @@ export default function WorkflowsPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // Trigger AI Personalise
   async function handleTriggerAi() {
     setTriggeringAi(true)
     const toastId = toast.loading('Triggering Gemini AI Personalisation...')
@@ -80,7 +81,6 @@ export default function WorkflowsPage() {
     }
   }
 
-  // Trigger Outreach
   async function handleTriggerOutreach() {
     setTriggeringOutreach(true)
     const toastId = toast.loading('Triggering outreach workflow...')
@@ -109,139 +109,127 @@ export default function WorkflowsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-8 space-y-8 select-none text-foreground max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="border-b border-blue-500/15 pb-6">
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
-          <RefreshCw className="w-7 h-7 text-blue-400" /> Automated Workflows
-        </h1>
-        <p className="mt-1 text-xs sm:text-sm text-zinc-400 font-medium">Orchestrate automated campaign pipelines, trigger AI copywriting, and verify n8n webhook nodes.</p>
+    <div className="space-y-10 max-w-7xl mx-auto">
+      {/* Hero Header */}
+      <HeroCard
+        eyebrow="AUTOMATION WORKFLOWS"
+        title="Orchestrate Campaign Pipelines"
+        description="Trigger AI personalization, execute multi-channel outreach, and verify n8n webhook nodes."
+        variant="sage"
+      />
+
+      {/* Metric Cards Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <StatCard
+          label="Total Database Leads"
+          value={totalLeads === null ? '...' : totalLeads.toLocaleString()}
+          variant="lavender"
+        />
+        <StatCard
+          label="Pending AI Copy Generation"
+          value={pendingAi === null ? '...' : pendingAi.toLocaleString()}
+          variant="cream"
+        />
+        <StatCard
+          label="Ready for Outreach"
+          value={readyOutreach === null ? '...' : readyOutreach.toLocaleString()}
+          variant="sage"
+        />
       </div>
 
-      {/* Grid count cards */}
-      <div className="grid gap-6 sm:grid-cols-3">
-        <div className="rounded-2xl glass glow-border p-6 shadow-xl flex flex-col justify-between min-h-[130px]">
-          <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Database className="w-3.5 h-3.5 text-blue-400" /> Total Leads in DB
-          </span>
-          <h3 className="text-3xl font-black text-white mt-3 font-mono">
-            {totalLeads === null ? '...' : totalLeads.toLocaleString()}
-          </h3>
-        </div>
-
-        <div className="rounded-2xl glass glow-border p-6 shadow-xl flex flex-col justify-between min-h-[130px]">
-          <span className="text-[10px] font-mono font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Pending AI Copy Generation
-          </span>
-          <h3 className="text-3xl font-black text-amber-300 mt-3 font-mono">
-            {pendingAi === null ? '...' : pendingAi.toLocaleString()}
-          </h3>
-        </div>
-
-        <div className="rounded-2xl glass glow-border p-6 shadow-xl flex flex-col justify-between min-h-[130px]">
-          <span className="text-[10px] font-mono font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-emerald-400" /> Ready for Outreach
-          </span>
-          <h3 className="text-3xl font-black text-emerald-400 mt-3 font-mono">
-            {readyOutreach === null ? '...' : readyOutreach.toLocaleString()}
-          </h3>
-        </div>
-      </div>
-
-      {/* Workflow trigger cards */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Gemini AI Trigger Card */}
-        <div className="rounded-2xl glass glow-border p-6 shadow-xl space-y-4 flex flex-col justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300">
-                <Brain className="w-5 h-5" />
+      {/* Workflow Trigger Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card variant="page-alt" className="p-8 space-y-6 flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+              <div className="flex items-center gap-2">
+                <Brain className="w-5 h-5 text-ink" />
+                <h3 className="font-bold text-xl text-ink font-display">Gemini AI Personalisation</h3>
               </div>
-              <h3 className="text-lg font-bold text-white tracking-tight">Gemini AI Copywriting</h3>
+              <Badge variant="lime" className="font-mono">READY</Badge>
             </div>
-            <p className="text-xs text-zinc-400 leading-relaxed font-medium">
-              Scrapes detailed profile metadata for new leads, runs personalization templates, and generates highly targeted WhatsApp messages and email copies.
+            <p className="text-xs text-text-body leading-relaxed font-medium">
+              Analyzes scraped profile metadata, runs persona templates, and generates highly targeted WhatsApp messages and email copies.
             </p>
           </div>
 
-          <div className="space-y-4 pt-4 border-t border-blue-500/15">
+          <div className="space-y-4 pt-4 border-t border-border-subtle">
             {lastAiTrigger && (
-              <div className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-wider">
-                Last Triggered: <span className="text-blue-300">{lastAiTrigger}</span>
-              </div>
+              <span className="text-[11px] font-semibold text-text-muted block">
+                Last Triggered: {lastAiTrigger}
+              </span>
             )}
-
-            <button
+            <Button
               onClick={handleTriggerAi}
-              disabled={triggeringAi || pendingAi === 0}
-              className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase font-mono tracking-wider text-white py-3.5 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
+              loading={triggeringAi}
+              disabled={pendingAi === 0}
+              variant="primary"
+              className="w-full"
+              iconType="arrow-right"
             >
-              {triggeringAi ? (
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Brain className="w-4 h-4" />
-              )}
               Trigger AI Copywriting
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
 
-        {/* Automated outreach campaign card */}
-        <div className="rounded-2xl glass glow-border p-6 shadow-xl space-y-4 flex flex-col justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300">
-                <Send className="w-5 h-5" />
+        <Card variant="page-alt" className="p-8 space-y-6 flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+              <div className="flex items-center gap-2">
+                <Send className="w-5 h-5 text-ink" />
+                <h3 className="font-bold text-xl text-ink font-display">Outreach Campaign Dispatch</h3>
               </div>
-              <h3 className="text-lg font-bold text-white tracking-tight">Automated Outreach Campaign</h3>
+              <Badge variant="dark">PIPELINE</Badge>
             </div>
-            <p className="text-xs text-zinc-400 leading-relaxed font-medium">
-              Triggers the outreach pipeline for ready leads. Automatically schedules messages, launches WhatsApp client sockets, and dispatches email copy structures.
+            <p className="text-xs text-text-body leading-relaxed font-medium">
+              Triggers outreach for ready leads. Automatically schedules messages, launches WhatsApp client sockets, and dispatches email copy structures.
             </p>
           </div>
 
-          <div className="space-y-4 pt-4 border-t border-blue-500/15">
+          <div className="space-y-4 pt-4 border-t border-border-subtle">
             {lastOutreachTrigger && (
-              <div className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-wider">
-                Last Triggered: <span className="text-blue-300">{lastOutreachTrigger}</span>
-              </div>
+              <span className="text-[11px] font-semibold text-text-muted block">
+                Last Triggered: {lastOutreachTrigger}
+              </span>
             )}
-
-            <button
+            <Button
               onClick={handleTriggerOutreach}
-              disabled={triggeringOutreach || readyOutreach === 0}
-              className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase font-mono tracking-wider text-white py-3.5 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
+              loading={triggeringOutreach}
+              disabled={readyOutreach === 0}
+              variant="secondary"
+              className="w-full"
+              iconType="arrow-right"
             >
-              {triggeringOutreach ? (
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
               Trigger Outreach Campaign
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Webhook Integrations info card */}
-      <div className="rounded-2xl glass glow-border p-6 shadow-xl space-y-4">
-        <h3 className="font-bold text-white text-md uppercase tracking-wider text-[11px] text-zinc-400 font-mono flex items-center gap-1.5">
-          <LinkIcon className="w-3.5 h-3.5 text-blue-400" /> Webhook Integrations (n8n Node Link)
-        </h3>
-        <p className="text-xs text-zinc-400 leading-relaxed font-medium">
-          Configure external ingestion nodes to send leads directly to n8n pipelines in real-time. Use the following webhook link inside your scrape workflows.
+      {/* Webhook Integrations Card */}
+      <Card variant="ink" className="p-8 space-y-4">
+        <div className="flex items-center justify-between border-b border-border-subtle/20 pb-3">
+          <div className="flex items-center gap-2">
+            <LinkIcon className="w-5 h-5 text-lime" />
+            <h3 className="font-bold text-lg text-page font-display">n8n Webhook Node Endpoint</h3>
+          </div>
+          <Badge variant="lime">ACTIVE</Badge>
+        </div>
+        <p className="text-xs text-text-onDarkMuted leading-relaxed font-medium">
+          Use the endpoint URL below to configure external ingestion nodes and send leads to n8n pipelines in real-time.
         </p>
-
-        <div className="flex gap-3 bg-black/50 border border-white/10 p-3 rounded-xl items-center text-xs">
-          <span className="font-mono text-zinc-300 flex-1 truncate select-all">{webhookUrl}</span>
-          <button
+        <div className="flex items-center justify-between gap-4 bg-ink-soft p-4 rounded-lg font-mono text-xs text-text-onDark border border-border-subtle/20">
+          <span className="truncate">{webhookUrl}</span>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleCopyWebhook}
-            className="px-3.5 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-300 text-[10px] font-mono font-bold uppercase tracking-wider hover:bg-blue-600/30 transition-all shadow-sm flex items-center gap-1"
+            className="text-lime hover:text-lime"
           >
-            <Copy className="w-3 h-3" /> Copy
-          </button>
+            Copy Endpoint
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

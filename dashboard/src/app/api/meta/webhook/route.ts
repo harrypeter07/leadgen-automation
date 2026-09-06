@@ -189,13 +189,13 @@ async function handleAutoReply(
       rules = settings.AUTO_REPLY_RULES ? JSON.parse(settings.AUTO_REPLY_RULES) : []
     }
 
-    // Resolve chatbot enabled status
-    let globalChatbotEnabled = false
+    // Resolve chatbot enabled status: Master AI_CHATBOT_ENABLED must be 'true' AND account-level enabled
+    const masterEnabled = settings.AI_CHATBOT_ENABLED === 'true'
+    let accountEnabled = true
     if (matchedAccount && matchedAccount.chatbot_enabled !== undefined && matchedAccount.chatbot_enabled !== null) {
-      globalChatbotEnabled = !!matchedAccount.chatbot_enabled
-    } else {
-      globalChatbotEnabled = settings.AI_CHATBOT_ENABLED === 'true'
+      accountEnabled = !!matchedAccount.chatbot_enabled
     }
+    const globalChatbotEnabled = masterEnabled && accountEnabled
 
     // Thread-level configurations override
     let threadConfigs: Record<string, any> = {}

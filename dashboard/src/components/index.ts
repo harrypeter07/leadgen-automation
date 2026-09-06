@@ -1,6 +1,8 @@
-// dashboard/src/components/index.ts
-export * from './core/buttons/button';
-export * from './core/cards/card';
-export * from './core/inputs/input';
-export * from './core/feedback/badge';
-export * from './tables/data-table';
+export * from './ui/button'
+export * from './ui/badge'
+export * from './ui/card'
+export * from './ui/tabs'
+export * from './ui/search-input'
+export * from './ui/input'
+export * from './ui/accordion'
+export * from './ui/table'

@@ -1,8 +1,23 @@
-// dashboard/src/app/scraper/page.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { 
+  Button, 
+  Badge, 
+  Card, 
+  HeroCard, 
+  Tabs, 
+  Input, 
+  SearchInput,
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell
+} from '@/components'
+import { Search, Play, Pause, Square, RotateCw, CheckCircle, Sparkles, Terminal } from 'lucide-react'
 
 interface ScrapedLead {
   name: string
@@ -40,7 +55,6 @@ interface ScrapeJob {
 }
 
 export default function ScraperPage() {
-  // Create Job States
   const [provider, setProvider] = useState('google_maps')
   const [keyword, setKeyword] = useState('dentist')
   const [area, setArea] = useState('')
@@ -55,17 +69,7 @@ export default function ScraperPage() {
   const [reachAmount, setReachAmount] = useState(0)
   const [queuing, setQueuing] = useState(false)
 
-  // Helper to parse keyword brackets notation
-  const parseKeywordAndArea = (rawKeyword: string) => {
-    if (!rawKeyword) return { keyword: '', area: null }
-    const match = rawKeyword.match(/^(.*?)\s*\[Area:\s*(.*?)\]$/)
-    if (match) {
-      return { keyword: match[1], area: match[2] }
-    }
-    return { keyword: rawKeyword, area: null }
-  }
-
-  // Manual entry states (Preserved Feature)
+  // Manual entry states
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -80,181 +84,20 @@ export default function ScraperPage() {
   const [selectedJob, setSelectedJob] = useState<ScrapeJob | null>(null)
   const [isPaused, setIsPaused] = useState(false)
 
-  // Enrichment States
-  const [selectedEnrichJobIds, setSelectedEnrichJobIds] = useState<string[]>([])
-  const [enrichLeads, setEnrichLeads] = useState<any[]>([])
-  const [enriching, setEnriching] = useState(false)
-  const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0, currentName: '', currentUrl: '' })
-  const [foundEmails, setFoundEmails] = useState<{ name: string; email: string; website: string }[]>([])
-  const [shouldStopEnrich, setShouldStopEnrich] = useState(false)
-  const shouldStopEnrichRef = React.useRef(false)
-
-  // Fetch leads for enrichment jobs selection
-  useEffect(() => {
-    async function loadLeadsForEnrichment() {
-      if (selectedEnrichJobIds.length === 0) {
-        setEnrichLeads([])
-        return
-      }
-      try {
-        const resolvedJobIds: string[] = []
-        selectedEnrichJobIds.forEach(id => {
-          const job = jobs.find(j => j.id === id)
-          if (job && (job as any).subJobs && (job as any).subJobs.length > 0) {
-            (job as any).subJobs.forEach((sj: any) => resolvedJobIds.push(sj.id))
-          } else {
-            resolvedJobIds.push(id)
-          }
-        })
-        const jobIdsParam = resolvedJobIds.join(',')
-        const res = await fetch(`/api/leads?job_ids=${jobIdsParam}&limit=1000`)
-        const data = await res.json()
-        if (res.ok && data.leads) {
-          setEnrichLeads(data.leads)
-        }
-      } catch (err) {
-        console.error('Failed to load leads for enrichment count:', err)
-      }
-    }
-    loadLeadsForEnrichment()
-  }, [selectedEnrichJobIds, jobs])
-
-  const enrichStats = React.useMemo(() => {
-    const total = enrichLeads.length
-    const withEmail = enrichLeads.filter(l => !!l.email).length
-    const enrichable = enrichLeads.filter(l => !l.email && l.website && l.website.startsWith('http')).length
-    return { total, withEmail, enrichable }
-  }, [enrichLeads])
-
-  const stopEnrichment = () => {
-    shouldStopEnrichRef.current = true
-    setShouldStopEnrich(true)
-  }
-
-  async function startEnrichment() {
-    const enrichableLeads = enrichLeads.filter(l => !l.email && l.website && l.website.startsWith('http'))
-    if (enrichableLeads.length === 0) {
-      toast.error('No enrichable leads found (leads must have a website but no email).')
-      return
-    }
-
-    setEnriching(true)
-    setShouldStopEnrich(false)
-    shouldStopEnrichRef.current = false
-    setFoundEmails([])
-    setEnrichProgress({ done: 0, total: enrichableLeads.length, currentName: '', currentUrl: '' })
-
-    const toastId = toast.loading(`Starting website email scan for ${enrichableLeads.length} leads...`)
-
-    let doneCount = 0
-    let foundCount = 0
-
-    const mode = localStorage.getItem('scraper_backend_mode') || 'primary'
-
-    const runScanOnLead = async (lead: any, targetMode: 'primary' | 'secondary') => {
-      if (shouldStopEnrichRef.current) return
-
-      setEnrichProgress(prev => ({
-        ...prev,
-        currentName: lead.name,
-        currentUrl: lead.website,
-      }))
-
-      try {
-        const res = await fetch('/api/scraper/enrich/website-email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-backend-mode': targetMode,
-            'x-backend-primary': typeof window !== 'undefined' ? localStorage.getItem('scraper_primary_backend') || 'https://scraper-auto.up.railway.app' : 'https://scraper-auto.up.railway.app',
-            'x-backend-secondary': typeof window !== 'undefined' ? localStorage.getItem('scraper_secondary_backend') || 'https://leadgen-automation-production-12c6.up.railway.app' : 'https://leadgen-automation-production-12c6.up.railway.app',
-          },
-          body: JSON.stringify({ website: lead.website }),
-        })
-        const data = await res.json()
-
-        if (res.ok && data.email) {
-          const email = data.email.trim()
-          // Update in DB
-          const updateRes = await fetch('/api/leads', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: lead.id, email }),
-          })
-          
-          if (updateRes.ok) {
-            foundCount++
-            setFoundEmails(prev => [{ name: lead.name, email, website: lead.website }, ...prev])
-          }
-        }
-      } catch (err) {
-        console.error(`Failed to enrich email for ${lead.name} on ${targetMode}:`, err)
-      }
-
-      doneCount++
-      setEnrichProgress(prev => ({
-        ...prev,
-        done: doneCount,
-      }))
-    }
-
-    if (mode === 'both' && enrichableLeads.length >= 2) {
-      const mid = Math.ceil(enrichableLeads.length / 2)
-      const listA = enrichableLeads.slice(0, mid)
-      const listB = enrichableLeads.slice(mid)
-
-      console.log(`[Enrichment] Splitting list: scanning ${listA.length} leads on Primary and ${listB.length} leads on Secondary`)
-
-      const runList = async (list: any[], targetMode: 'primary' | 'secondary') => {
-        for (const lead of list) {
-          if (shouldStopEnrichRef.current) break
-          await runScanOnLead(lead, targetMode)
-        }
-      }
-
-      await Promise.all([
-        runList(listA, 'primary'),
-        runList(listB, 'secondary')
-      ])
-    } else {
-      const activeTarget: 'primary' | 'secondary' = mode === 'secondary' ? 'secondary' : 'primary'
-      for (const lead of enrichableLeads) {
-        if (shouldStopEnrichRef.current) break
-        await runScanOnLead(lead, activeTarget)
-      }
-    }
-
-    setEnriching(false)
-    toast.dismiss(toastId)
-    toast.success(`🎉 Completed email scan! Scanned ${doneCount} sites, found & saved ${foundCount} emails.`)
-    
-    // Refresh leads list & counts
-    if (selectedEnrichJobIds.length > 0) {
-      const resolvedJobIds: string[] = []
-      selectedEnrichJobIds.forEach(id => {
-        const job = jobs.find(j => j.id === id)
-        if (job && (job as any).subJobs && (job as any).subJobs.length > 0) {
-          (job as any).subJobs.forEach((sj: any) => resolvedJobIds.push(sj.id))
-        } else {
-          resolvedJobIds.push(id)
-        }
-      })
-      const jobIdsParam = resolvedJobIds.join(',')
-      const res = await fetch(`/api/leads?job_ids=${jobIdsParam}&limit=1000`)
-      const data = await res.json()
-      if (res.ok && data.leads) {
-        setEnrichLeads(data.leads)
-      }
-    }
-    fetchJobs()
-  }
-
   // API Routing Configurations
   const [primaryBackend, setPrimaryBackend] = useState('')
   const [secondaryBackend, setSecondaryBackend] = useState('')
   const [backendMode, setBackendMode] = useState<'primary' | 'secondary' | 'both'>('primary')
 
-  // Helper fetch wrapper to attach routing headers from localStorage/state
+  const parseKeywordAndArea = (rawKeyword: string) => {
+    if (!rawKeyword) return { keyword: '', area: null }
+    const match = rawKeyword.match(/^(.*?)\s*\[Area:\s*(.*?)\]$/)
+    if (match) {
+      return { keyword: match[1], area: match[2] }
+    }
+    return { keyword: rawKeyword, area: null }
+  }
+
   async function fetchWithRouting(url: string, options: RequestInit = {}) {
     const savedPrimary = typeof window !== 'undefined' ? localStorage.getItem('scraper_primary_backend') : null
     const primaryUrl = savedPrimary !== null && savedPrimary.trim() !== '' ? savedPrimary.trim() : 'https://scraper-auto.up.railway.app'
@@ -271,7 +114,6 @@ export default function ScraperPage() {
     return fetch(url, { ...options, headers })
   }
 
-  // Load routing configuration from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedPrimary = localStorage.getItem('scraper_primary_backend')
@@ -284,7 +126,6 @@ export default function ScraperPage() {
     }
   }, [])
 
-  // Fetch all jobs
   async function fetchJobs() {
     try {
       const res = await fetchWithRouting('/api/scraper/jobs')
@@ -292,7 +133,6 @@ export default function ScraperPage() {
       if (res.ok && data.jobs) {
         setJobs(data.jobs)
         setIsPaused(!!data.isPaused)
-        // Keep selected job in sync with poll
         if (selectedJob) {
           const updated = data.jobs.find((j: ScrapeJob) => j.id === selectedJob.id)
           if (updated) setSelectedJob(updated)
@@ -311,7 +151,6 @@ export default function ScraperPage() {
     return () => clearInterval(interval)
   }, [selectedJob])
 
-  // Queue a new job
   async function handleQueueJob(e: React.FormEvent) {
     e.preventDefault()
     if (!keyword.trim()) {
@@ -322,15 +161,10 @@ export default function ScraperPage() {
       toast.error('City is required')
       return
     }
-    if (searchScope === 'country' && !country.trim()) {
-      toast.error('Country is required')
-      return
-    }
 
     setQueuing(true)
     const toastId = toast.loading('Queueing scrape job...')
     try {
-      // Append :email or query options to provider
       const finalProvider = provider === 'instagram'
         ? `instagram?minFollowers=${minFollowers}&maxFollowers=${maxFollowers}&reachAmount=${reachAmount}`
         : includeEmails ? `${provider}:email` : provider;
@@ -356,13 +190,10 @@ export default function ScraperPage() {
       })
 
       const data = await res.json()
-      if (!res.ok) {
-        const errMsg = typeof data.error === 'object' && data.error ? data.error.message : data.error;
-        throw new Error(errMsg || 'Failed to queue job')
-      }
+      if (!res.ok) throw new Error(data.error || 'Failed to queue job')
 
       toast.success('Scrape job successfully queued!', { id: toastId })
-      setArea('') // clear area state
+      setArea('')
       fetchJobs()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error starting job'
@@ -372,87 +203,15 @@ export default function ScraperPage() {
     }
   }
 
-  // Pause a job
-  async function handlePauseJob(jobId: string) {
-    try {
-      const res = await fetchWithRouting('/api/scraper/pause', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId })
-      })
-      if (res.ok) {
-        toast.success('Job paused')
-        fetchJobs()
-      }
-    } catch {
-      toast.error('Failed to pause job')
-    }
-  }
-
-  // Resume a job
-  async function handleResumeJob(jobId: string) {
-    try {
-      const res = await fetchWithRouting('/api/scraper/resume', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId })
-      })
-      if (res.ok) {
-        toast.success('Job resumed')
-        fetchJobs()
-      }
-    } catch {
-      toast.error('Failed to resume job')
-    }
-  }
-
-  // Stop a job
-  async function handleStopJob(jobId: string) {
-    try {
-      const res = await fetchWithRouting('/api/scraper/stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId })
-      })
-      if (res.ok) {
-        toast.success('Job stopped')
-        fetchJobs()
-      }
-    } catch {
-      toast.error('Failed to stop job')
-    }
-  }
-
-  // Retry / Clone a job
-  async function handleRetryJob(jobId: string) {
-    try {
-      const res = await fetchWithRouting('/api/scraper/retry', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId })
-      })
-      const data = await res.json()
-      if (res.ok) {
-        toast.success('New retry job queued')
-        fetchJobs()
-      } else {
-        toast.error(data.error || 'Failed to retry')
-      }
-    } catch {
-      toast.error('Error sending request')
-    }
-  }
-
-  // Manual Quick Add Lead
   async function handleQuickAdd(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) {
-      toast.error('Name is a required field')
+      toast.error('Name is required')
       return
     }
 
     setAddingLead(true)
-    const toastId = toast.loading('Adding lead to database...')
+    const toastId = toast.loading('Adding lead...')
     try {
       const res = await fetch('/api/leads/quick-add', {
         method: 'POST',
@@ -469,24 +228,16 @@ export default function ScraperPage() {
       })
 
       const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to submit lead')
-      }
+      if (!res.ok) throw new Error(data.error || 'Failed to submit lead')
 
-      if (data.warning) {
-        toast.success('Lead saved (duplicate warning)', { id: toastId })
-        toast(data.warning, { icon: '⚠️', duration: 6000 })
-      } else {
-        toast.success('Lead added successfully directly to database!', { id: toastId })
-      }
-
+      toast.success('Lead added successfully!', { id: toastId })
       setName('')
       setPhone('')
       setEmail('')
       setLeadCity('')
       setCategory('')
       setWebsite('')
-      fetchJobs() // refresh job list after manual lead add
+      fetchJobs()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to submit lead'
       toast.error(message, { id: toastId })
@@ -495,40 +246,36 @@ export default function ScraperPage() {
     }
   }
 
-  function handleSaveBackendSettings(e: React.FormEvent) {
-    e.preventDefault()
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('scraper_primary_backend', primaryBackend.trim())
-      localStorage.setItem('scraper_secondary_backend', secondaryBackend.trim())
-      localStorage.setItem('scraper_backend_mode', backendMode)
-      toast.success('API Routing configurations successfully updated and saved!')
-      fetchJobs() // reload job lists using the new configured target URLs
-    }
-  }
-
   const activeJob = jobs.find(j => j.status === 'running')
 
   return (
-    <div className="space-y-8 text-[#2D2D2D] select-none">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-black text-[#1C1C1E] tracking-tight">Cloud Scraper Console</h1>
-        <p className="mt-1 text-sm text-gray-500 font-medium">Deploy, manage, and monitor background Maps scraping jobs directly in the cloud.</p>
-      </div>
+    <div className="space-y-10 max-w-7xl mx-auto">
+      {/* Hero Block */}
+      <HeroCard
+        eyebrow="SCRAPER"
+        title="Google Maps & Cloud Lead Extraction"
+        description="Extract verified business leads, phones, websites, and emails in real-time."
+        variant="sage"
+      />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left Column: Forms */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Form Inputs */}
         <div className="lg:col-span-1 space-y-6">
-          {/* Create Job Form */}
-          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-            <h3 className="font-bold text-[#1C1C1E] text-md mb-4 uppercase tracking-wider text-[11px] text-gray-500">🚀 Queue Scrape Job</h3>
+          <Card variant="page-alt" className="p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+              <h3 className="font-bold text-base text-ink font-display">Queue Scrape Job</h3>
+              <Badge variant="dark">CONFIG</Badge>
+            </div>
+
             <form onSubmit={handleQueueJob} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Provider</label>
+                <label className="block text-[11px] font-bold uppercase tracking-eyebrow text-text-muted mb-1">
+                  Provider
+                </label>
                 <select
                   value={provider}
                   onChange={(e) => setProvider(e.target.value)}
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500"
+                  className="w-full h-11 rounded-pill bg-page px-4 text-xs font-bold text-ink border-none focus:ring-2 focus:ring-lime"
                 >
                   <option value="google_maps">🗺️ Google Maps Scraper</option>
                   <option value="google_search">🔍 Google Search Scraper</option>
@@ -538,126 +285,70 @@ export default function ScraperPage() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Keyword</label>
-                <input
+                <label className="block text-[11px] font-bold uppercase tracking-eyebrow text-text-muted mb-1">
+                  Keyword
+                </label>
+                <Input
                   type="text"
                   value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKeyword(e.target.value)}
                   placeholder="e.g. dentist, cafe, hotel"
                   required
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
+                  className="w-full h-11 rounded-pill bg-page px-4 text-xs font-medium border-none focus:ring-2 focus:ring-lime"
                 />
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Search Scope</label>
-                <select
-                  value={searchScope}
-                  onChange={(e) => setSearchScope(e.target.value as 'city' | 'country' | 'global')}
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500"
-                >
-                  <option value="city">🏙️ City Search</option>
-                  <option value="country">🌍 Country Search</option>
-                  <option value="global">🌐 Global Search</option>
-                </select>
-              </div>
-
-              {searchScope !== 'global' && (
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Area (Optional)</label>
-                  <input
-                    type="text"
-                    value={area}
-                    onChange={(e) => setArea(e.target.value)}
-                    placeholder="e.g. Andheri, Bandra, Juhu"
-                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
-                  />
+                  <label className="block text-[11px] font-bold uppercase tracking-eyebrow text-text-muted mb-1">
+                    Scope
+                  </label>
+                  <select
+                    value={searchScope}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSearchScope(e.target.value as 'city' | 'country' | 'global')}
+                    className="w-full h-11 rounded-pill bg-page px-3 text-xs font-bold text-ink border-none focus:ring-2 focus:ring-lime"
+                  >
+                    <option value="city">City</option>
+                    <option value="country">Country</option>
+                    <option value="global">Global</option>
+                  </select>
                 </div>
-              )}
-
-              {searchScope === 'city' && (
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">City</label>
-                  <input
+                  <label className="block text-[11px] font-bold uppercase tracking-eyebrow text-text-muted mb-1">
+                    City / Target
+                  </label>
+                  <Input
                     type="text"
                     value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="e.g. Mumbai, Nagpur, Pune"
-                    required
-                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCity(e.target.value)}
+                    placeholder="e.g. Mumbai"
+                    required={searchScope === 'city'}
+                    className="w-full h-11 rounded-pill bg-page px-3 text-xs font-medium border-none focus:ring-2 focus:ring-lime"
                   />
                 </div>
-              )}
+              </div>
 
-              {searchScope === 'country' && (
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Country</label>
-                  <input
-                    type="text"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    placeholder="e.g. Sweden, India, Germany"
-                    required
-                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
-                  />
-                </div>
-              )}
-
-              {provider === 'instagram' && (
-                <div className="space-y-4 border-l-2 border-pink-400 pl-3.5 py-1">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-pink-600 mb-1 uppercase tracking-wider">Min Followers</label>
-                      <input
-                        type="number"
-                        value={minFollowers}
-                        onChange={(e) => setMinFollowers(parseInt(e.target.value, 10) || 0)}
-                        min="0"
-                        className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-pink-600 mb-1 uppercase tracking-wider">Max Followers</label>
-                      <input
-                        type="number"
-                        value={maxFollowers}
-                        onChange={(e) => setMaxFollowers(parseInt(e.target.value, 10) || 0)}
-                        min="0"
-                        className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-pink-600 mb-1 uppercase tracking-wider">Reach Target (Est.)</label>
-                    <input
-                      type="number"
-                      value={reachAmount}
-                      onChange={(e) => setReachAmount(parseInt(e.target.value, 10) || 0)}
-                      min="0"
-                      placeholder="e.g. 500 estimated impressions"
-                      className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500 placeholder-gray-400"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Max Leads</label>
-                  <input
+                  <label className="block text-[11px] font-bold uppercase tracking-eyebrow text-text-muted mb-1">
+                    Max Leads
+                  </label>
+                  <Input
                     type="number"
                     value={maxLeads}
-                    onChange={(e) => setMaxLeads(parseInt(e.target.value, 10) || 10)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMaxLeads(parseInt(e.target.value, 10) || 10)}
                     min="1"
-                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold focus:outline-none focus:border-gray-500"
+                    className="w-full h-11 rounded-pill bg-page px-4 text-xs font-medium border-none focus:ring-2 focus:ring-lime"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Worker Tabs</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-eyebrow text-text-muted mb-1">
+                    Worker Tabs
+                  </label>
                   <select
                     value={workerCount}
-                    onChange={(e) => setWorkerCount(parseInt(e.target.value, 10) || 1)}
-                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500"
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setWorkerCount(parseInt(e.target.value, 10) || 1)}
+                    className="w-full h-11 rounded-pill bg-page px-3 text-xs font-bold text-ink border-none focus:ring-2 focus:ring-lime"
                   >
                     <option value={1}>1 Tab</option>
                     <option value={2}>2 Tabs</option>
@@ -666,672 +357,165 @@ export default function ScraperPage() {
                 </div>
               </div>
 
-              {/* Email Enrichment Toggle */}
-              <div className="pt-2">
-                <label className="flex items-center gap-3 cursor-pointer group select-none">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={includeEmails}
-                      onChange={(e) => setIncludeEmails(e.target.checked)}
-                      className="sr-only"
-                    />
-                    <div className={`w-10 h-6 rounded-full transition-colors ${includeEmails ? 'bg-[#1C1C1E]' : 'bg-[#ECEAE4]'}`} />
-                    <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${includeEmails ? 'translate-x-4' : 'translate-x-0'}`} />
-                  </div>
-                  <span className="text-xs font-bold text-gray-600 group-hover:text-[#1C1C1E] transition-colors">
-                    Enrich with Email addresses
-                  </span>
-                </label>
-                <p className="text-[9px] text-gray-400 ml-13 mt-1 leading-relaxed">
-                  Automatically extracts emails by parsing business websites in a separate tab during extraction.
-                </p>
-              </div>
-
-              <button
+              <Button
                 type="submit"
-                disabled={queuing}
-                className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white py-3.5 mt-2 transition-all shadow-sm"
+                loading={queuing}
+                variant="primary"
+                className="w-full mt-2"
+                iconType="arrow-right"
               >
-                {queuing ? 'Queueing...' : 'Queue Scrape Job'}
-              </button>
+                Start Scrape Job
+              </Button>
             </form>
-          </div>
+          </Card>
 
-          {/* Manual Entry Form */}
-          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-            <h3 className="font-bold text-[#1C1C1E] text-md mb-1 uppercase tracking-wider text-[11px] text-gray-500">✏️ Manual Lead Entry</h3>
-            <p className="text-[10px] text-gray-400 mb-4">Direct database bypass intake pipeline</p>
-            <form onSubmit={handleQuickAdd} className="space-y-3.5">
-              <div>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Business Name *"
-                  required
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input
+          {/* Quick Add Manual Form */}
+          <Card variant="page-alt" className="p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+              <h3 className="font-bold text-base text-ink font-display">Manual Lead Entry</h3>
+              <Badge variant="lime">DIRECT</Badge>
+            </div>
+            <form onSubmit={handleQuickAdd} className="space-y-3">
+              <Input
+                type="text"
+                value={name}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
+                placeholder="Business Name *"
+                required
+                className="w-full h-10 rounded-pill bg-page px-4 text-xs font-medium border-none"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Input
                   type="text"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Phone (e.g. +91...)"
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)}
+                  placeholder="Phone"
+                  className="w-full h-10 rounded-pill bg-page px-3 text-xs font-medium border-none"
                 />
-                <input
+                <Input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                   placeholder="Email"
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
+                  className="w-full h-10 rounded-pill bg-page px-3 text-xs font-medium border-none"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  value={leadCity}
-                  onChange={(e) => setLeadCity(e.target.value)}
-                  placeholder="City"
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
-                />
-                <input
-                  type="text"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  placeholder="Category"
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
-                />
-              </div>
-              <input
-                type="text"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="Website URL"
-                className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
-              />
-              <button
+              <Button
                 type="submit"
-                disabled={addingLead}
-                className="flex items-center justify-center gap-2 w-full rounded-xl bg-gray-100 hover:bg-[#202022] hover:text-white disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-gray-700 py-3.5 transition-all"
+                loading={addingLead}
+                variant="secondary"
+                size="sm"
+                className="w-full mt-2"
               >
-                Add Lead
-              </button>
+                Add Manual Lead
+              </Button>
             </form>
-          </div>
-
-          {/* API Backend Config Card */}
-          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-            <h3 className="font-bold text-[#1C1C1E] text-md mb-1 uppercase tracking-wider text-[11px] text-gray-500">🔌 API Backend Routing</h3>
-            <p className="text-[10px] text-gray-400 mb-4 font-medium">Configure primary and secondary API targets</p>
-            <form onSubmit={handleSaveBackendSettings} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Primary Backend URL</label>
-                <input
-                  type="url"
-                  value={primaryBackend}
-                  onChange={(e) => setPrimaryBackend(e.target.value)}
-                  placeholder="e.g. http://localhost:3001"
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Secondary Backend URL</label>
-                <input
-                  type="url"
-                  value={secondaryBackend}
-                  onChange={(e) => setSecondaryBackend(e.target.value)}
-                  placeholder="e.g. http://localhost:3002"
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-semibold placeholder-gray-400 focus:outline-none focus:border-gray-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Active Target Routing Mode</label>
-                <select
-                  value={backendMode}
-                  onChange={(e) => setBackendMode(e.target.value as 'primary' | 'secondary' | 'both')}
-                  className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500"
-                >
-                  <option value="primary">🎯 Primary Server Only</option>
-                  <option value="secondary">🥈 Secondary Server Only</option>
-                  <option value="both">⚡ Dual Broadcast (Both Servers)</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-[#1C1C1E] hover:bg-[#252528] text-xs font-bold uppercase tracking-wider text-white py-3.5 mt-2 transition-all shadow-sm"
-              >
-                Save Settings
-              </button>
-            </form>
-          </div>
+          </Card>
         </div>
 
-        {/* Right Column: Live Status & History */}
+        {/* Right Column: Live Status & Log Console */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Active Job status */}
-          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-            <h3 className="font-bold text-[#1C1C1E] text-md mb-4 flex items-center justify-between uppercase tracking-wider text-[11px] text-gray-500">
-              <span>⚡ Live Scraping Progress</span>
+          {/* Dark Ink Live Log Console Card */}
+          <Card variant="ink" className="p-8 rounded-xl space-y-6">
+            <div className="flex items-center justify-between border-b border-border-subtle/20 pb-4">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-5 h-5 text-lime" />
+                <h3 className="font-bold text-xl text-page font-display">Live Job Execution Console</h3>
+              </div>
               {activeJob && (
-                <span className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                  isPaused 
-                    ? 'text-yellow-600 bg-yellow-50 border-yellow-200' 
-                    : 'text-green-600 bg-green-50 border-green-200 animate-pulse'
-                }`}>
-                  {isPaused ? 'Paused' : 'Active'}
-                </span>
+                <Badge variant="lime">
+                  {isPaused ? 'PAUSED' : 'RUNNING'}
+                </Badge>
               )}
-            </h3>
+            </div>
 
             {activeJob ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div className="rounded-xl bg-[#F4F3EF] p-4 border border-[#E4E3DD]">
-                    <span className="text-gray-400 uppercase font-bold text-[9px]">Keyword</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="font-bold text-gray-800 text-sm">{parseKeywordAndArea(activeJob.keyword).keyword}</p>
-                      {parseKeywordAndArea(activeJob.keyword).area && (
-                        <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-bold text-[8px] uppercase">
-                          📍 {parseKeywordAndArea(activeJob.keyword).area}
-                        </span>
-                      )}
-                    </div>
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                  <div className="bg-ink-soft p-4 rounded-lg border border-border-subtle/20">
+                    <span className="text-[10px] font-bold uppercase tracking-eyebrow text-text-onDarkMuted block">Target</span>
+                    <span className="text-sm font-bold text-page mt-1 block truncate">{activeJob.keyword}</span>
                   </div>
-                  <div className="rounded-xl bg-[#F4F3EF] p-4 border border-[#E4E3DD]">
-                    <span className="text-gray-400 uppercase font-bold text-[9px]">City</span>
-                    <p className="font-bold text-gray-800 text-sm mt-1">{activeJob.city}</p>
+                  <div className="bg-ink-soft p-4 rounded-lg border border-border-subtle/20">
+                    <span className="text-[10px] font-bold uppercase tracking-eyebrow text-text-onDarkMuted block">Progress</span>
+                    <span className="text-sm font-bold text-lime mt-1 block">{activeJob.progress} / {activeJob.max_leads}</span>
+                  </div>
+                  <div className="bg-ink-soft p-4 rounded-lg border border-border-subtle/20">
+                    <span className="text-[10px] font-bold uppercase tracking-eyebrow text-text-onDarkMuted block">ETA</span>
+                    <span className="text-sm font-bold text-page mt-1 block font-mono">{activeJob.estimated_remaining_seconds ? `${Math.round(activeJob.estimated_remaining_seconds)}s` : '—'}</span>
+                  </div>
+                  <div className="bg-ink-soft p-4 rounded-lg border border-border-subtle/20">
+                    <span className="text-[10px] font-bold uppercase tracking-eyebrow text-text-onDarkMuted block">Workers</span>
+                    <span className="text-sm font-bold text-page mt-1 block">{activeJob.worker_count} Tab(s)</span>
                   </div>
                 </div>
 
                 {/* Progress bar */}
                 <div>
-                  <div className="flex justify-between text-xs font-bold text-gray-500 mb-1.5">
-                    <span>Collecting details...</span>
-                    <span>{activeJob.progress} / {activeJob.max_leads} Leads ({Math.round((activeJob.progress / activeJob.max_leads) * 100)}%)</span>
-                  </div>
-                  <div className="w-full bg-[#F4F3EF] rounded-full h-4 overflow-hidden p-0.5">
+                  <div className="w-full bg-ink-soft rounded-pill h-3 overflow-hidden p-0.5">
                     <div
-                      className="bg-[#1C1C1E] h-3 rounded-full transition-all duration-500"
+                      className="bg-lime h-2 rounded-pill transition-all duration-300"
                       style={{ width: `${Math.min(100, (activeJob.progress / activeJob.max_leads) * 100)}%` }}
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded-lg bg-gray-50 p-2.5 border border-[#E4E3DD]">
-                    <span className="text-gray-400 uppercase font-bold text-[8px] block">ETA</span>
-                    <span className="font-mono font-bold text-gray-700">
-                      {activeJob.estimated_remaining_seconds 
-                        ? `${Math.round(activeJob.estimated_remaining_seconds)}s` 
-                        : 'Calculating...'}
-                    </span>
-                  </div>
-                  <div className="rounded-lg bg-gray-50 p-2.5 border border-[#E4E3DD]">
-                    <span className="text-gray-400 uppercase font-bold text-[8px] block">Workers</span>
-                    <span className="font-bold text-gray-700">{activeJob.worker_count} Tab(s)</span>
-                  </div>
-                  <div className="rounded-lg bg-gray-50 p-2.5 border border-[#E4E3DD]">
-                    <span className="text-gray-400 uppercase font-bold text-[8px] block">Errors</span>
-                    <span className="font-bold text-red-500">{activeJob.error_count}</span>
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-3 text-xs flex items-center justify-between">
-                  <span className="text-gray-500 font-semibold">Current Listing:</span>
-                  <span className="font-bold text-gray-800 max-w-[200px] truncate">{activeJob.current_business || 'Starting...'}</span>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => isPaused ? handleResumeJob(activeJob.id) : handlePauseJob(activeJob.id)}
-                    className={`flex-1 rounded-xl text-xs font-bold uppercase tracking-wider text-white py-3 transition-colors ${
-                      isPaused 
-                        ? 'bg-green-600 hover:bg-green-700' 
-                        : 'bg-yellow-500 hover:bg-yellow-600'
-                    }`}
-                  >
-                    {isPaused ? '▶️ Resume' : '⏸️ Pause'}
-                  </button>
-                  <button
-                    onClick={() => handleStopJob(activeJob.id)}
-                    className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 text-xs font-bold uppercase tracking-wider text-white py-3 transition-colors"
-                  >
-                    ⏹️ Stop
-                  </button>
+                {/* Log stream output */}
+                <div className="bg-ink-soft p-4 rounded-lg font-mono text-xs text-text-onDarkMuted space-y-1.5 max-h-48 overflow-y-auto border border-border-subtle/20">
+                  {activeJob.logs && activeJob.logs.length > 0 ? (
+                    [...activeJob.logs].reverse().slice(0, 10).map((log, i) => (
+                      <p key={i} className="leading-relaxed truncate">{log}</p>
+                    ))
+                  ) : (
+                    <p className="text-text-onDarkMuted/60">Initializing background scraping logs...</p>
+                  )}
                 </div>
               </div>
             ) : (
-              <div className="text-center py-12 text-gray-400 text-xs font-medium">
-                <p className="font-bold text-sm text-gray-500 mb-1">No active scraping job running</p>
-                <p>Configure and queue a new job on the left panel to begin.</p>
+              <div className="text-center py-12 text-text-onDarkMuted font-medium">
+                No active scrape job currently running. Queue a job on the left panel.
               </div>
             )}
-          </div>
+          </Card>
 
-          {/* Live Leads Preview */}
-          {activeJob && (activeJob.scraped_leads?.length ?? 0) > 0 && (
-            <div className="rounded-2xl border border-purple-200 bg-purple-50/30 p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-purple-950 text-xs uppercase tracking-wider flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse" />
-                  Live Preview — {activeJob.scraped_leads!.length} Leads Extracted
-                </h3>
-                <span className="text-[10px] text-green-600 uppercase tracking-wider font-bold bg-green-50 border border-green-200 px-2 py-0.5 rounded">✓ Auto-saved to DB</span>
-              </div>
-              <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
-                <table className="w-full text-left text-[11px] border-collapse min-w-[700px]">
-                  <thead className="sticky top-0 bg-white">
-                    {activeJob.current_provider.includes('instagram') ? (
-                      <tr className="border-b border-purple-200 text-purple-950 font-bold uppercase tracking-wider text-[9px]">
-                        <th className="pb-2.5 pr-4">User</th>
-                        <th className="pb-2.5 pr-4">Followers</th>
-                        <th className="pb-2.5 pr-4">Following</th>
-                        <th className="pb-2.5 pr-4">Est. Reach</th>
-                        <th className="pb-2.5 pr-4">Verified</th>
-                        <th className="pb-2.5 pr-4">Email</th>
-                        <th className="pb-2.5 pr-4">Phone</th>
-                        <th className="pb-2.5 pr-4">Bio</th>
-                        <th className="pb-2.5">Website</th>
-                      </tr>
-                    ) : (
-                      <tr className="border-b border-purple-200 text-purple-950 font-bold uppercase tracking-wider text-[9px]">
-                        <th className="pb-2.5 pr-4">Name</th>
-                        <th className="pb-2.5 pr-4">Phone</th>
-                        <th className="pb-2.5 pr-4">Email</th>
-                        <th className="pb-2.5 pr-4">Address</th>
-                        <th className="pb-2.5 pr-4">Category</th>
-                        <th className="pb-2.5 pr-4">Rating</th>
-                        <th className="pb-2.5">Website</th>
-                      </tr>
-                    )}
-                  </thead>
-                  <tbody className="divide-y divide-purple-100 text-gray-700">
-                    {activeJob.scraped_leads!.slice(-15).map((lead, i) => {
-                      const isInsta = activeJob.current_provider.includes('instagram');
-                      return isInsta ? (
-                        <tr key={i} className="hover:bg-purple-50/50">
-                          <td className="py-2.5 pr-4 font-bold text-purple-950 max-w-[130px] truncate">{lead.name}</td>
-                          <td className="py-2.5 pr-4 font-bold text-gray-700">{(lead as any).instagram_followers ?? '—'}</td>
-                          <td className="py-2.5 pr-4 font-medium text-gray-500">{(lead as any).instagram_following ?? '—'}</td>
-                          <td className="py-2.5 pr-4 font-bold text-pink-600">{(lead as any).instagram_reach ? `⚡ ${(lead as any).instagram_reach}` : '—'}</td>
-                          <td className="py-2.5 pr-4 font-semibold text-gray-500">{(lead as any).instagram_verified ? '✅ Yes' : 'No'}</td>
-                          <td className="py-2.5 pr-4 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
-                          <td className="py-2.5 pr-4 font-mono text-gray-500 text-[10px] whitespace-nowrap">{lead.phone || '—'}</td>
-                          <td className="py-2.5 pr-4 text-gray-500 max-w-[150px] truncate" title={(lead as any).instagram_bio || (lead as any).notes || ''}>{(lead as any).instagram_bio || (lead as any).notes || '—'}</td>
-                          <td className="py-2.5 text-blue-600 max-w-[120px] truncate font-semibold">
-                            {lead.website
-                              ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-500">{lead.website.replace(/^https?:\/\//, '')}</a>
-                              : '—'}
-                          </td>
-                        </tr>
-                      ) : (
-                        <tr key={i} className="hover:bg-purple-50/50">
-                          <td className="py-2.5 pr-4 font-bold text-purple-950 max-w-[130px] truncate">{lead.name}</td>
-                          <td className="py-2.5 pr-4 font-mono text-gray-500 text-[10px] whitespace-nowrap">{lead.phone || '—'}</td>
-                          <td className="py-2.5 pr-4 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
-                          <td className="py-2.5 pr-4 text-gray-500 max-w-[140px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
-                          <td className="py-2.5 pr-4 text-gray-500 max-w-[90px] truncate">{lead.category || '—'}</td>
-                          <td className="py-2.5 pr-4 text-yellow-600 font-bold whitespace-nowrap">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
-                          <td className="py-2.5 text-blue-600 max-w-[120px] truncate font-semibold">
-                            {lead.website
-                              ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-blue-500">{lead.website.replace(/^https?:\/\//, '')}</a>
-                              : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* 📧 Website Email Enrichment Hub */}
-          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div>
-                <h3 className="font-bold text-[#1C1C1E] text-md uppercase tracking-wider text-[11px] text-gray-500 flex items-center gap-2">
-                  📧 Website Email Enrichment
-                </h3>
-                <p className="text-[10px] text-gray-400 mt-0.5 font-medium">
-                  Scan websites of scraped businesses to extract missing emails.
-                </p>
-              </div>
-              {enriching && (
-                <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded animate-pulse">
-                  ⚡ Scanning...
-                </span>
-              )}
+          {/* Job History Table Card */}
+          <Card variant="page-alt" className="p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+              <h3 className="font-bold text-lg text-ink font-display">Job Execution History</h3>
+              <Badge variant="dark">HISTORY</Badge>
             </div>
 
-            {/* Job Selection Checkboxes */}
-            <div className="space-y-2">
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Select Completed Jobs to Scan</label>
-              <div className="border border-[#E4E3DD] rounded-xl bg-[#F4F3EF] p-3 max-h-[140px] overflow-y-auto space-y-2 shadow-inner">
-                {jobs.filter(j => ['completed', 'stopped', 'failed'].includes(j.status)).length === 0 ? (
-                  <p className="text-[10px] text-gray-400 py-4 text-center font-semibold">No completed, stopped, or failed scrape jobs found.</p>
-                ) : (
-                  jobs.filter(j => ['completed', 'stopped', 'failed'].includes(j.status)).map(job => {
-                    const isChecked = selectedEnrichJobIds.includes(job.id)
-                    return (
-                      <label key={job.id} className="flex items-start gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white cursor-pointer select-none transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
-                            setSelectedEnrichJobIds(prev =>
-                              prev.includes(job.id) ? prev.filter(id => id !== job.id) : [...prev, job.id]
-                            )
-                          }}
-                          className="accent-[#1C1C1E] rounded mt-0.5 cursor-pointer"
-                        />
-                        <div className="flex-1 min-w-0 text-[11px] font-sans">
-                          <div className="font-bold text-gray-800 truncate">{job.keyword} in {job.city}</div>
-                          <div className="text-[9px] text-gray-450 mt-0.5 font-semibold">
-                            {new Date(job.created_at).toLocaleDateString()} · {job.progress} leads
-                          </div>
-                        </div>
-                      </label>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* Selected Jobs Stats */}
-            {selectedEnrichJobIds.length > 0 && (
-              <div className="grid grid-cols-3 gap-2.5 text-center text-xs">
-                <div className="rounded-xl bg-[#F4F3EF] p-2.5 border border-[#E4E3DD]">
-                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block">Total Leads</span>
-                  <span className="font-bold text-gray-800 text-sm mt-0.5 block">{enrichStats.total}</span>
-                </div>
-                <div className="rounded-xl bg-[#F4F3EF] p-2.5 border border-[#E4E3DD]">
-                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block">Has Email</span>
-                  <span className="font-bold text-green-600 text-sm mt-0.5 block">{enrichStats.withEmail}</span>
-                </div>
-                <div className="rounded-xl bg-[#F4F3EF] p-2.5 border border-[#E4E3DD]">
-                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block">No Email</span>
-                  <span className="font-bold text-amber-600 text-sm mt-0.5 block">{enrichStats.enrichable}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Run and Stop Buttons */}
-            {!enriching ? (
-              <button
-                type="button"
-                onClick={startEnrichment}
-                disabled={selectedEnrichJobIds.length === 0 || enrichStats.enrichable === 0}
-                className="w-full py-3.5 rounded-xl bg-[#1C1C1E] hover:bg-[#252528] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-2"
-              >
-                🔍 Scan & Enrich Missing Emails
-              </button>
-            ) : (
-              <div className="space-y-3.5 pt-1">
-                {/* Progress bar */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-[10px] font-bold text-gray-500">
-                    <span className="max-w-[200px] truncate">Scanning: {enrichProgress.currentName}</span>
-                    <span>{enrichProgress.done} / {enrichProgress.total} Leads</span>
-                  </div>
-                  <div className="w-full bg-[#F4F3EF] rounded-full h-3 overflow-hidden p-0.5 border border-[#E4E3DD]">
-                    <div
-                      className="bg-purple-600 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.round((enrichProgress.done / enrichProgress.total) * 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-[9px] text-gray-400 font-mono truncate">{enrichProgress.currentUrl}</p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={stopEnrichment}
-                  className="w-full py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase tracking-wider transition-all"
-                >
-                  ⏹️ Stop Scan
-                </button>
-              </div>
-            )}
-
-            {/* Found Emails Stream (Success Board) */}
-            {foundEmails.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-gray-150">
-                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                  📬 Successfully Found & Saved Emails ({foundEmails.length})
-                </span>
-                <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-0.5">
-                  {foundEmails.map((fe, idx) => (
-                    <div key={idx} className="flex justify-between items-center bg-[#F4F3EF] border border-green-200 rounded-lg px-3 py-2 shadow-inner text-[10px] animate-fadeIn">
-                      <div className="min-w-0 flex-1 pr-2">
-                        <span className="font-bold text-gray-800 block truncate">{fe.name}</span>
-                        <a
-                          href={fe.website}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[8px] text-gray-400 hover:text-[#E3B859] truncate block mt-0.5 font-medium"
-                        >
-                          {fe.website.replace(/^https?:\/\//, '')}
-                        </a>
-                      </div>
-                      <span className="font-mono font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">
-                        {fe.email}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Job History list */}
-          <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-            <h3 className="font-bold text-[#1C1C1E] text-md mb-4 uppercase tracking-wider text-[11px] text-gray-500">📜 Scrape Job History</h3>
-            
             {loadingJobs ? (
-              <div className="text-center py-6 text-xs text-gray-400">Loading history...</div>
+              <p className="text-center text-text-muted py-8 font-medium">Loading history...</p>
             ) : jobs.length === 0 ? (
-              <div className="text-center py-6 text-xs text-gray-400">No jobs registered yet</div>
+              <p className="text-center text-text-muted py-8 font-medium">No scrape jobs recorded yet.</p>
             ) : (
-              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
-                {jobs.map((job) => (
-                  <div key={job.id} className="rounded-xl border border-[#E4E3DD] bg-gray-50/50 p-4 space-y-3.5">
-                    <div className="flex justify-between items-start text-xs">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-gray-800">
-                            {parseKeywordAndArea(job.keyword).keyword} in {job.city}
-                          </span>
-                          {parseKeywordAndArea(job.keyword).area && (
-                            <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-bold text-[8px] uppercase">
-                              📍 {parseKeywordAndArea(job.keyword).area}
-                            </span>
-                          )}
-                          <span className="text-[10px] text-gray-400">({job.current_provider})</span>
-                        </div>
-                        <span className="text-[10px] text-gray-400 mt-1 block font-medium">{new Date(job.created_at).toLocaleString()}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {/* Status Badge */}
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border
-                          ${job.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' : ''}
-                          ${job.status === 'running' ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}
-                          ${job.status === 'paused' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : ''}
-                          ${job.status === 'queued' ? 'bg-gray-100 text-gray-500 border-gray-200' : ''}
-                          ${job.status === 'stopped' ? 'bg-orange-50 text-orange-700 border-orange-200' : ''}
-                          ${job.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' : ''}
-                        `}>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Target Keyword</TableHead>
+                    <TableHead>City</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Progress</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {jobs.slice(0, 8).map((job) => (
+                    <TableRow key={job.id}>
+                      <TableCell className="font-bold text-ink">{parseKeywordAndArea(job.keyword).keyword}</TableCell>
+                      <TableCell>{job.city}</TableCell>
+                      <TableCell>
+                        <Badge variant={job.status === 'completed' ? 'lime' : job.status === 'running' ? 'dark' : 'muted'}>
                           {job.status}
-                        </span>
-
-                        {/* Toggle expand */}
-                        <button
-                          onClick={() => setSelectedJob(selectedJob?.id === job.id ? null : job)}
-                          className="px-2 py-1 text-[9px] font-bold uppercase bg-white border border-[#E4E3DD] text-gray-600 rounded-lg hover:bg-gray-100"
-                        >
-                          {selectedJob?.id === job.id ? 'Hide' : 'Leads'}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs text-gray-500 font-medium">
-                      <span>Leads: {job.progress} / {job.max_leads}</span>
-                      <span>Duration: {job.duration_seconds ? `${job.duration_seconds}s` : 'N/A'}</span>
-                    </div>
-
-                    {/* Action controls for specific job */}
-                    <div className="flex gap-2 justify-end">
-                      {job.status === 'paused' && (
-                        <button
-                          onClick={() => handleResumeJob(job.id)}
-                          className="px-2.5 py-1 text-[9px] font-bold uppercase bg-green-600 hover:bg-green-700 rounded-lg text-white"
-                        >
-                          ▶️ Resume
-                        </button>
-                      )}
-                      {['completed', 'stopped', 'failed'].includes(job.status) && (
-                        <button
-                          onClick={() => handleRetryJob(job.id)}
-                          className="px-2.5 py-1 text-[9px] font-bold uppercase bg-[#1C1C1E] hover:bg-[#252528] rounded-lg text-white"
-                        >
-                          🔄 Retry/Clone
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Scraped Leads + Save Panel */}
-                    {selectedJob?.id === job.id && (
-                      <div className="mt-3 space-y-3">
-                        <div className="rounded-xl bg-white border border-[#E4E3DD] p-4">
-                          {(() => {
-                            const leads = job.scraped_leads || []
-                            return (
-                              <>
-                                <div className="flex items-center justify-between mb-3 border-b border-[#E4E3DD] pb-2">
-                                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                    📋 Scraped Leads ({leads.length})
-                                  </span>
-                                  {leads.length > 0 && (
-                                    <a
-                                      href="/leads"
-                                      className="px-3 py-1.5 text-[9px] font-bold uppercase rounded-lg bg-[#1C1C1E] hover:bg-[#252528] text-white transition-colors"
-                                    >
-                                      📂 View on Leads Page
-                                    </a>
-                                  )}
-                                </div>
-
-                                {leads.length === 0 ? (
-                                  <p className="text-[10px] text-gray-400 py-3 font-semibold text-center">
-                                    {job.status === 'running'
-                                      ? 'Leads stream in here as scraping progresses...'
-                                      : 'No leads extracted yet.'}
-                                  </p>
-                                ) : (
-                                  <div>
-                                    <div className="overflow-x-auto max-h-[220px] overflow-y-auto">
-                                      <table className="w-full text-left text-[10px] border-collapse min-w-[600px]">
-                                        <thead className="sticky top-0 bg-white">
-                                          {job.current_provider.includes('instagram') ? (
-                                            <tr className="text-gray-400 font-bold uppercase tracking-wider border-b border-[#E4E3DD] text-[8px]">
-                                              <th className="pb-1.5 pr-2">User</th>
-                                              <th className="pb-1.5 pr-2">Followers</th>
-                                              <th className="pb-1.5 pr-2">Following</th>
-                                              <th className="pb-1.5 pr-2">Est. Reach</th>
-                                              <th className="pb-1.5 pr-2">Verified</th>
-                                              <th className="pb-1.5 pr-2">Email</th>
-                                              <th className="pb-1.5 pr-2">Phone</th>
-                                              <th className="pb-1.5 pr-2">Bio</th>
-                                              <th className="pb-1.5">Website</th>
-                                            </tr>
-                                          ) : (
-                                            <tr className="text-gray-400 font-bold uppercase tracking-wider border-b border-[#E4E3DD] text-[8px]">
-                                              <th className="pb-1.5 pr-2">Name</th>
-                                              <th className="pb-1.5 pr-2">Phone</th>
-                                              <th className="pb-1.5 pr-2">Email</th>
-                                              <th className="pb-1.5 pr-2">Address</th>
-                                              <th className="pb-1.5 pr-2">Category</th>
-                                              <th className="pb-1.5 pr-2">Rating</th>
-                                              <th className="pb-1.5">Website</th>
-                                            </tr>
-                                          )}
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100 text-gray-700">
-                                          {leads.slice(0, 10).map((lead, idx) => {
-                                            const isInsta = job.current_provider.includes('instagram');
-                                            return isInsta ? (
-                                              <tr key={idx} className="hover:bg-gray-50">
-                                                <td className="py-2 pr-2 font-bold text-gray-800 max-w-[120px] truncate">{lead.name}</td>
-                                                <td className="py-2 pr-2 font-bold text-gray-600">{(lead as any).instagram_followers ?? '—'}</td>
-                                                <td className="py-2 pr-2 text-gray-500">{(lead as any).instagram_following ?? '—'}</td>
-                                                <td className="py-2 pr-2 font-bold text-pink-600">{(lead as any).instagram_reach ? `⚡ ${(lead as any).instagram_reach}` : '—'}</td>
-                                                <td className="py-2 pr-2 text-gray-500">{(lead as any).instagram_verified ? 'Yes' : 'No'}</td>
-                                                <td className="py-2 pr-2 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
-                                                <td className="py-2 pr-2 font-mono text-gray-500 text-[9px]">{lead.phone || '—'}</td>
-                                                <td className="py-2 pr-2 text-gray-400 max-w-[140px] truncate" title={(lead as any).instagram_bio || (lead as any).notes || ''}>{(lead as any).instagram_bio || (lead as any).notes || '—'}</td>
-                                                <td className="py-2 text-blue-600 max-w-[100px] truncate font-semibold">
-                                                  {lead.website
-                                                    ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
-                                                    : '—'}
-                                                </td>
-                                              </tr>
-                                            ) : (
-                                              <tr key={idx} className="hover:bg-gray-50">
-                                                <td className="py-2 pr-2 font-bold text-gray-800 max-w-[120px] truncate">{lead.name}</td>
-                                                <td className="py-2 pr-2 font-mono text-gray-500 text-[9px]">{lead.phone || '—'}</td>
-                                                <td className="py-2 pr-2 text-purple-700 max-w-[120px] truncate">{lead.email || '—'}</td>
-                                                <td className="py-2 pr-2 text-gray-500 max-w-[120px] truncate" title={lead.address || undefined}>{lead.address || '—'}</td>
-                                                <td className="py-2 pr-2 text-gray-500 max-w-[80px] truncate">{lead.category || '—'}</td>
-                                                <td className="py-2 pr-2 text-yellow-600 font-bold">{lead.rating ? `⭐ ${lead.rating}` : '—'}</td>
-                                                <td className="py-2 text-blue-600 max-w-[100px] truncate font-semibold">
-                                                  {lead.website
-                                                    ? <a href={lead.website} target="_blank" rel="noreferrer" className="underline">{lead.website.replace(/^https?:\/\//, '')}</a>
-                                                    : '—'}
-                                                </td>
-                                              </tr>
-                                            );
-                                          })}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                    {leads.length > 10 && (
-                                      <p className="text-[10px] text-gray-400 mt-3 italic text-center font-medium">
-                                        Showing first 10 of {leads.length} leads. View all of them on the <a href="/leads" className="text-purple-600 hover:underline font-bold">Leads page</a>.
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                              </>
-                            )
-                          })()}
-                        </div>
-
-                        {/* Logs Stream */}
-                        <div className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-4">
-                          <span className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">📟 Logs Stream</span>
-                          <div className="text-[10px] text-gray-600 font-mono space-y-1 max-h-[120px] overflow-y-auto">
-                            {job.logs && job.logs.length > 0 ? (
-                              [...job.logs].reverse().map((log, index) => (
-                                <p key={index} className="whitespace-pre-wrap">{log}</p>
-                              ))
-                            ) : (
-                              <p className="text-gray-400">No logs yet.</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold">{job.progress} / {job.max_leads}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
-          </div>
+          </Card>
         </div>
       </div>
     </div>

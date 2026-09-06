@@ -1,9 +1,18 @@
-// dashboard/src/app/instagram-analyzer/page.tsx
 'use client'
 
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { calculateInstagramStats, InstagramPost, InstagramProfile } from '@/utils/instagramStats'
+import { 
+  Button, 
+  Badge, 
+  Card, 
+  StatCard, 
+  HeroCard, 
+  SearchInput, 
+  Tabs 
+} from '@/components'
+import { Camera, Terminal, Shield, Sparkles, ExternalLink } from 'lucide-react'
 
 interface BioLink {
   text: string
@@ -28,111 +37,18 @@ export default function InstagramAnalyzerPage() {
   const [report, setReport] = useState<InstagramReport | null>(null)
   const [logs, setLogs] = useState<string[]>([])
 
-  // Controls States
   const [timeframe, setTimeframe] = useState<'all' | '1m' | '3m' | '6m' | '1y'>('all')
   const [scrapeHistory, setScrapeHistory] = useState(true)
   const [scrapeReels, setScrapeReels] = useState(true)
 
-  // Follower Bot Scan States
-  const [activeTab, setActiveTab] = useState<'engagement' | 'audience'>('engagement')
-  const [scanningBots, setScanningBots] = useState(false)
-  const [botResults, setBotResults] = useState<any[]>([])
-  const [botSummary, setBotSummary] = useState<any>(null)
-  const [botFilter, setBotFilter] = useState<'all' | 'likely_bot' | 'suspicious' | 'real'>('all')
-  const [botSearch, setBotSearch] = useState('')
-  const [botScanLimit, setBotScanLimit] = useState(30)
-  const [expandedUser, setExpandedUser] = useState<string | null>(null)
-  const [sessionError, setSessionError] = useState<string | null>(null)
-
-  async function loadExistingBotScan(user: string) {
-    try {
-      const res = await fetch(`/api/instagram-bot-scan/${user}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.success) {
-          setBotResults(data.results || [])
-          setBotSummary(data.summary || null)
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load existing bot scan:', e)
-    }
-  }
-
-  async function handleBotScan() {
-    if (!username.trim()) return
-    const cleanUser = username.trim().replace(/^@/, '')
-
-    setScanningBots(true)
-    setSessionError(null)
-    setLogs(['[System] Initializing Playwright browser instance for bot follower scan...'])
-    const toastId = toast.loading('Running Playwright follower scan. This takes about 1-2 minutes...')
-
-    // Poll logs
-    let pollCount = 0
-    const pollInterval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/instagram-logs')
-        if (res.ok) {
-          const data = await res.json()
-          if (data.logs) {
-            const igLogs = data.logs
-              .filter((log: LogEntry) => log.message.includes('[Instagram Analyzer]'))
-              .map((log: LogEntry) => {
-                const time = new Date(log.timestamp).toLocaleTimeString()
-                return `[${time}] ${log.message.replace('[Instagram Analyzer] ', '')}`
-              })
-            if (igLogs.length > 0) setLogs(igLogs)
-          }
-        }
-      } catch (err) {}
-      pollCount++
-      if (pollCount > 120) clearInterval(pollInterval)
-    }, 1000)
-
-    try {
-      const res = await fetch('/api/instagram-bot-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: cleanUser, limit: botScanLimit }),
-      })
-      clearInterval(pollInterval)
-      const data = await res.json()
-
-      if (res.ok && data.success) {
-        setSessionError(null)
-        toast.success(`Successfully audited ${data.count} followers!`, { id: toastId })
-        await loadExistingBotScan(cleanUser)
-      } else {
-        // Check for session-related errors
-        const errorCode = data.error || ''
-        if (errorCode === 'session_expired' || errorCode === 'auth_required' || errorCode === 'profile_fetch_failed') {
-          setSessionError(data.message || 'Instagram session cookie is expired. Please refresh it.')
-          toast.error('Session expired — see refresh guide below', { id: toastId })
-        } else {
-          const errorMsg = data.message || data.error || 'Scan failed'
-          throw new Error(errorMsg)
-        }
-      }
-    } catch (err: any) {
-      clearInterval(pollInterval)
-      toast.error(err.message || 'Error running scan', { id: toastId })
-      setLogs(prev => [...prev, `❌ Error: ${err.message}`])
-    } finally {
-      setScanningBots(false)
-    }
-  }
-  
   const logEndRef = useRef<HTMLDivElement | null>(null)
 
-  // Auto-scroll logs terminal
   useEffect(() => {
     if (logEndRef.current) {
       logEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [logs])
 
-  // Dynamic Client-Side Calculations offloads CPU loads from Backend!
   const analytics = useMemo(() => {
     if (!report) return null
     return calculateInstagramStats(
@@ -154,7 +70,6 @@ export default function InstagramAnalyzerPage() {
     setLogs(['[System] Initializing Instagram profile audit connection...'])
     const toastId = toast.loading('Running Instagram profile audit...')
 
-    // Polling function for active logs
     let pollCount = 0
     const pollInterval = setInterval(async () => {
       try {
@@ -168,21 +83,14 @@ export default function InstagramAnalyzerPage() {
                 const time = new Date(log.timestamp).toLocaleTimeString()
                 return `[${time}] ${log.message.replace('[Instagram Analyzer] ', '')}`
               })
-            
-            if (igLogs.length > 0) {
-              setLogs(igLogs)
-            }
+            if (igLogs.length > 0) setLogs(igLogs)
           }
         }
       } catch (err) {
-        console.error('Failed to poll active logs:', err)
+        console.error('Failed to poll logs:', err)
       }
-      
-      // Safety limit: stop polling after 45 seconds if request hangs
       pollCount++
-      if (pollCount > 45) {
-        clearInterval(pollInterval)
-      }
+      if (pollCount > 45) clearInterval(pollInterval)
     }, 1000)
 
     try {
@@ -201,35 +109,16 @@ export default function InstagramAnalyzerPage() {
       clearInterval(pollInterval)
 
       if (res.status === 404 || data.error === 'profile_not_found') {
-        toast.error('This Instagram username does not exist. Please check the spelling and try again.', { id: toastId })
+        toast.error('Instagram username does not exist.', { id: toastId })
         setLogs(prev => [...prev, `❌ Error: Profile @${username} does not exist.`])
         return
       }
 
       if (res.ok && data.report) {
         setReport(data.report)
-        // Load bot scan in background
-        loadExistingBotScan(username.trim().replace(/^@/, ''))
-        // Fetch logs one final time to capture completeness
-        const logsRes = await fetch('/api/instagram-logs')
-        if (logsRes.ok) {
-          const logsData = await logsRes.json()
-          if (logsData.logs) {
-            const igLogs = logsData.logs
-              .filter((log: LogEntry) => log.message.includes('[Instagram Analyzer]'))
-              .map((log: LogEntry) => {
-                const time = new Date(log.timestamp).toLocaleTimeString()
-                return `[${time}] ${log.message.replace('[Instagram Analyzer] ', '')}`
-              })
-            setLogs(igLogs)
-          }
-        }
-        toast.success('Instagram audit completed successfully!', { id: toastId })
+        toast.success('Instagram audit completed!', { id: toastId })
       } else {
-        const errorMsg = typeof data.error === 'object' && data.error !== null
-          ? (data.error.message || JSON.stringify(data.error))
-          : (data.error || 'Audit failed')
-        throw new Error(errorMsg)
+        throw new Error(data.error || 'Audit failed')
       }
     } catch (err: unknown) {
       clearInterval(pollInterval)
@@ -241,680 +130,126 @@ export default function InstagramAnalyzerPage() {
     }
   }
 
-  function getScoreColor(score: number) {
-    if (score >= 80) return 'text-[#3B4D3C] bg-[#D4E0CD] border-[#B8C8B0]'
-    if (score >= 50) return 'text-[#5C451F] bg-[#F9D99A] border-[#E8C584]'
-    return 'text-red-700 bg-red-50 border-red-200'
-  }
-
   return (
-    <div className="space-y-8 text-[#2D2D2D] select-none">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-black text-slate-800 tracking-tight">Instagram Engagement Profiler</h1>
-        <p className="mt-1 text-sm text-gray-500 font-medium">Audit profile stats, consistency parameters, engagement ratios, and opportunity signals.</p>
-      </div>
+    <div className="space-y-10 max-w-7xl mx-auto">
+      {/* Hero Header */}
+      <HeroCard
+        eyebrow="INSTAGRAM ANALYZER"
+        title="Social Media & Creator Profile Audit"
+        description="Audit follower metrics, engagement ratios, reel frequency, and lead signals."
+        variant="lavender"
+      />
 
-      {/* Input panel & Custom Controls */}
-      <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 max-w-2xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] space-y-5">
-        <form onSubmit={handleAudit} className="flex gap-4">
-          <span className="flex items-center text-gray-400 pl-4 bg-[#F4F3EF] border border-[#E4E3DD] border-r-0 rounded-l-xl text-sm font-bold">@</span>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="username (e.g. abpnewstv, basantjoshiii)"
-            required
-            className="flex-1 rounded-r-xl bg-[#F4F3EF] border border-[#E4E3DD] border-l-0 px-4 py-3 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500 placeholder-gray-400"
-          />
-          <button
+      {/* Audit Search Bar Card */}
+      <Card variant="page-alt" className="p-8 space-y-6">
+        <form onSubmit={handleAudit} className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <SearchInput
+              placeholder="Enter Instagram username (e.g. abpnewstv, basantjoshiii)"
+              value={username}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
+              icon={<span className="font-bold text-ink">@</span>}
+            />
+          </div>
+          <Button
             type="submit"
-            disabled={loading}
-            className="rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white px-6 py-3 transition-colors flex items-center gap-2 shadow-sm"
+            loading={loading}
+            variant="primary"
+            size="default"
+            iconType="arrow-right"
           >
-            {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-            {loading ? 'Analyzing...' : 'Run Audit'}
-          </button>
+            Run Audit
+          </Button>
         </form>
+      </Card>
 
-        {/* Diagnostic Parameters Toggles */}
-        <div className="pt-2 border-t border-[#E4E3DD]/60 grid gap-4 sm:grid-cols-3 text-xs">
-          {/* Timeframe Select */}
-          <div>
-            <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Scrape Timeframe</label>
-            <select
-              value={timeframe}
-              onChange={(e) => setTimeframe(e.target.value as typeof timeframe)}
-              className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500"
-            >
-              <option value="all">🔄 All Available Posts</option>
-              <option value="1m">📅 Last 30 Days</option>
-              <option value="3m">📅 Last 3 Months</option>
-              <option value="6m">📅 Last 6 Months</option>
-              <option value="1y">📅 Last 1 Year</option>
-            </select>
-          </div>
-
-          {/* Scrape History Switch */}
-          <div className="flex flex-col justify-end">
-            <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Analyze History</label>
-            <button
-              type="button"
-              onClick={() => setScrapeHistory(!scrapeHistory)}
-              className={`w-full rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all border text-center ${
-                scrapeHistory
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                  : 'bg-[#F4F3EF] border-[#E4E3DD] text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {scrapeHistory ? '✓ Scrape posts: ON' : '✗ Scrape posts: OFF'}
-            </button>
-          </div>
-
-          {/* Scrape Reels Switch */}
-          <div className="flex flex-col justify-end">
-            <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Scrape Reels</label>
-            <button
-              type="button"
-              onClick={() => setScrapeReels(!scrapeReels)}
-              className={`w-full rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all border text-center ${
-                scrapeReels
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                  : 'bg-[#F4F3EF] border-[#E4E3DD] text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {scrapeReels ? '✓ Scrape reels: ON' : '✗ Scrape reels: OFF'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Real-time Logger Console Terminal */}
+      {/* Dark Ink Live Execution Log Terminal */}
       {(loading || logs.length > 0) && (
-        <div className="rounded-2xl border border-[#E4E3DD] bg-white overflow-hidden max-w-2xl flex flex-col h-[200px] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-          <div className="bg-gray-50 px-4 py-3 border-b border-[#E4E3DD] flex items-center justify-between">
-            <span className="font-bold text-[10px] text-gray-400 uppercase tracking-wider">📡 Scraper Engine Console Logs</span>
-            {loading && (
-              <span className="text-[10px] text-purple-600 font-bold uppercase tracking-wider animate-pulse flex items-center gap-1.5 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                Live streaming...
-              </span>
-            )}
+        <Card variant="ink" className="p-8 space-y-4">
+          <div className="flex items-center justify-between border-b border-border-subtle/20 pb-4">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-5 h-5 text-lime" />
+              <h3 className="font-bold text-lg text-page font-display">Live Analysis Log</h3>
+            </div>
+            {loading && <Badge variant="lime">STREAMING</Badge>}
           </div>
-          <div className="flex-1 p-4 font-mono text-[10px] text-gray-600 overflow-y-auto space-y-1.5 bg-[#F4F3EF]/30">
+          <div className="font-mono text-xs text-text-onDarkMuted space-y-1.5 max-h-48 overflow-y-auto">
             {logs.map((log, index) => (
-              <div key={index} className="leading-relaxed break-all">
-                <span className={log.startsWith('❌') ? 'text-red-600 font-bold' : 'text-gray-650'}>{log}</span>
-              </div>
+              <p key={index} className="leading-relaxed">{log}</p>
             ))}
             <div ref={logEndRef} />
           </div>
-        </div>
-      )}
-      {report && (
-        <div className="flex gap-6 border-b border-[#E4E3DD] pb-px">
-          <button
-            onClick={() => setActiveTab('engagement')}
-            className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${
-              activeTab === 'engagement'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            📈 Profile Engagement
-          </button>
-          <button
-            onClick={() => setActiveTab('audience')}
-            className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${
-              activeTab === 'audience'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            🛡️ Follower Bot Scanner (Playwright)
-          </button>
-        </div>
+        </Card>
       )}
 
-      {/* Report results */}
-      {report && analytics && activeTab === 'engagement' && (
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Left panel: Info & Metrics */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-4 text-center shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-              <div className="space-y-1 flex flex-col items-center">
-                <div className="w-16 h-16 rounded-full bg-[#ECEAE4] flex items-center justify-center font-black text-xl text-gray-600 border border-[#E4E3DD]">
-                  {report.username.substring(0, 2).toUpperCase()}
-                </div>
-                <h3 className="text-xl font-black text-slate-800 mt-3 flex items-center justify-center gap-1.5">
+      {/* Results Report Card */}
+      {report && analytics && (
+        <div className="space-y-8 animate-fade-in">
+          {/* Stat Cards Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <StatCard
+              label="Followers"
+              value={report.followers.toLocaleString()}
+              variant="lavender"
+            />
+            <StatCard
+              label="Following"
+              value={report.following.toLocaleString()}
+              variant="cream"
+            />
+            <StatCard
+              label="Posts Count"
+              value={report.posts_count.toLocaleString()}
+              variant="sage"
+            />
+            <StatCard
+              label="Engagement Rate"
+              value={`${analytics.engagement_rate}%`}
+              variant="lavender"
+            />
+          </div>
+
+          {/* Profile Bio & Extracted Links */}
+          <Card variant="page-alt" className="p-8 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-lime text-ink flex items-center justify-center font-bold text-lg">
+                {report.username.substring(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <h3 className="font-bold text-xl text-ink font-display flex items-center gap-2">
                   @{report.username}
-                  {report.verified && (
-                    <span className="text-blue-500 font-normal text-sm" title="Verified Account">
-                      🛡️ Verified
-                    </span>
-                  )}
+                  {report.verified && <Badge variant="lime">VERIFIED</Badge>}
                 </h3>
-                <p className="text-xs text-gray-400 font-medium">{report.display_name}</p>
-              </div>
-
-              {report.bio && (
-                <p className="text-xs text-gray-655 italic px-2 bg-[#F4F3EF]/50 py-3.5 rounded-xl border border-gray-100/60 leading-relaxed">&quot;{report.bio}&quot;</p>
-              )}
-
-              {report.website && (
-                <a
-                  href={report.website}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-block text-xs text-blue-600 font-bold hover:underline max-w-[220px] truncate"
-                >
-                  🔗 {report.website.replace(/^https?:\/\//, '')}
-                </a>
-              )}
-
-              {report.bio_links && report.bio_links.length > 0 && (
-                <div className="space-y-2.5 mt-4 pt-4 border-t border-[#E4E3DD] text-left">
-                  <h4 className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Bio Links</h4>
-                  <div className="space-y-2">
-                    {report.bio_links.map((link, idx) => (
-                      <a
-                        key={idx}
-                        href={link.href}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] text-xs text-gray-700 font-bold hover:bg-[#ECEAE4] transition-all"
-                      >
-                        <span>🔗</span>
-                        <span className="truncate flex-1" title={link.href}>{link.text || link.href}</span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Score lists */}
-            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-5 space-y-4 text-xs shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-              <h4 className="font-bold text-gray-400 uppercase text-[9px] tracking-wider border-b border-[#E4E3DD] pb-2">Operational Scores</h4>
-              
-              <div className="flex justify-between items-center border-b border-[#E4E3DD]/60 pb-2">
-                <span className="text-gray-500 font-semibold">Health Index</span>
-                <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold ${getScoreColor(analytics.insights.health_score)}`}>{analytics.insights.health_score}</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-[#E4E3DD]/60 pb-2">
-                <span className="text-gray-500 font-semibold">Consistency</span>
-                <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold ${getScoreColor(analytics.insights.consistency_score)}`}>{analytics.insights.consistency_score}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500 font-semibold">Engagement Rate</span>
-                <span className="text-gray-800 font-black text-sm">{analytics.engagement_rate}%</span>
+                <p className="text-text-muted text-xs font-semibold">{report.display_name}</p>
               </div>
             </div>
-          </div>
 
-          {/* Right panel: Statistics */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-              <h3 className="font-bold text-gray-500 text-xs uppercase tracking-wider border-b border-[#E4E3DD] pb-3">📊 Profile Audience Statistics</h3>
-              
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="bg-[#D4E0CD] p-4.5 rounded-2xl">
-                  <span className="text-[10px] text-[#3B4D3C] uppercase font-bold tracking-wider block">Followers</span>
-                  <span className="text-2xl font-black text-[#2E3A2F] mt-1 block">{report.followers.toLocaleString()}</span>
-                </div>
-                <div className="bg-[#F9D99A] p-4.5 rounded-2xl">
-                  <span className="text-[10px] text-[#5C451F] uppercase font-bold tracking-wider block">Following</span>
-                  <span className="text-2xl font-black text-[#4A391D] mt-1 block">{report.following.toLocaleString()}</span>
-                </div>
-                <div className="bg-[#ECEAE4] p-4.5 rounded-2xl border border-[#E4E3DD]">
-                  <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider block">Posts</span>
-                  <span className="text-2xl font-black text-gray-800 mt-1 block">{report.posts_count.toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* Mathematical Report details */}
-              <div className="space-y-6 pt-2 border-t border-[#E4E3DD]">
-                <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider">📈 Client-Side Analytics ({analytics.timeframe === 'all' ? 'All Time' : `Last ${analytics.timeframe.toUpperCase()}`})</h4>
-                
-                {/* Stats Grid */}
-                <div className="grid gap-4 sm:grid-cols-3 text-xs">
-                  <div className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-4 space-y-1.5">
-                    <span className="text-gray-400 font-bold uppercase text-[9px] block">Engagement Averages</span>
-                    <p className="text-gray-800 font-bold">👍 Likes: <span className="font-black font-mono">{analytics.likes.average.toLocaleString()}</span></p>
-                    <p className="text-gray-800 font-bold">💬 Comments: <span className="font-black font-mono">{analytics.comments.average.toLocaleString()}</span></p>
-                  </div>
-
-                  <div className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-4 space-y-1.5">
-                    <span className="text-gray-400 font-bold uppercase text-[9px] block">Peak Metrics</span>
-                    <p className="text-gray-800 font-bold">🔥 Max Likes: <span className="font-black font-mono">{analytics.likes.peak.toLocaleString()}</span></p>
-                    <p className="text-gray-800 font-bold">🔥 Max Comments: <span className="font-black font-mono">{analytics.comments.peak.toLocaleString()}</span></p>
-                  </div>
-
-                  <div className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-4 space-y-1.5">
-                    <span className="text-gray-400 font-bold uppercase text-[9px] block">Posting Frequency</span>
-                    <p className="text-gray-800 font-bold">📅 Cadence: <span className="font-black font-mono">{analytics.posts_per_week}</span> posts/week</p>
-                    <p className="text-gray-800 font-bold">📊 Analyzed: <span className="font-black font-mono">{analytics.total_analyzed}</span> posts</p>
-                  </div>
-                </div>
-
-                {/* Reels vs Posts Split */}
-                <div className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] p-5 space-y-3.5 text-xs">
-                  <h5 className="font-bold text-gray-500 uppercase text-[9px] tracking-wider border-b border-[#E4E3DD]/60 pb-1.5">🎥 Reels vs 🖼️ Posts Comparison</h5>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <span className="text-gray-450 font-bold text-[9px] uppercase tracking-wider block">Standard Image/Carousel Posts</span>
-                      <p className="text-gray-800 font-semibold">Count: <span className="font-bold font-mono">{analytics.posts_vs_reels.posts.count}</span></p>
-                      <p className="text-gray-800 font-semibold">Avg Likes: <span className="font-bold font-mono">{analytics.posts_vs_reels.posts.avg_likes.toLocaleString()}</span></p>
-                      <p className="text-gray-800 font-semibold">Avg Comments: <span className="font-bold font-mono">{analytics.posts_vs_reels.posts.avg_comments.toLocaleString()}</span></p>
-                    </div>
-                    <div className="space-y-1.5 border-t sm:border-t-0 sm:border-l border-[#E4E3DD]/60 pt-3.5 sm:pt-0 sm:pl-4">
-                      <span className="text-gray-455 font-bold text-[9px] uppercase tracking-wider block">Reels / Video Content</span>
-                      <p className="text-gray-800 font-semibold">Count: <span className="font-bold font-mono">{analytics.posts_vs_reels.reels.count}</span></p>
-                      <p className="text-gray-800 font-semibold">Avg Likes: <span className="font-bold font-mono">{analytics.posts_vs_reels.reels.avg_likes.toLocaleString()}</span></p>
-                      <p className="text-gray-800 font-semibold">Avg Comments: <span className="font-bold font-mono">{analytics.posts_vs_reels.reels.avg_comments.toLocaleString()}</span></p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Peak engagement post */}
-                {analytics.peak_post && (
-                  <div className="rounded-xl border border-[#E4E3DD] p-4.5 bg-gray-50 space-y-3 text-xs leading-relaxed">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-gray-500 uppercase text-[9px] tracking-wider">🔥 Peak Engagement Post</span>
-                      <a href={analytics.peak_post.url} target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline">View Post &rarr;</a>
-                    </div>
-                    <p className="text-[10px] text-gray-600 line-clamp-2 italic leading-relaxed">&quot;{analytics.peak_post.caption || 'No caption'}&quot;</p>
-                    <div className="flex justify-between items-center text-[10px] text-gray-455 pt-2 border-t border-gray-100 font-bold uppercase tracking-wider">
-                      <span>👍 {analytics.peak_post.likes.toLocaleString()} Likes</span>
-                      <span>💬 {analytics.peak_post.comments.toLocaleString()} Comments</span>
-                      <span>📅 {new Date(analytics.peak_post.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Scraped Timeline Feed */}
-              {report.posts && report.posts.length > 0 && (
-                <div className="space-y-4 pt-2">
-                  <h3 className="font-bold text-gray-700 text-xs uppercase tracking-wider flex items-center justify-between">
-                    <span>📸 Scraped Timeline Feed ({report.posts.length})</span>
-                    <span className="text-[9px] text-gray-400 font-normal">Chronological</span>
-                  </h3>
-                  
-                  <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
-                    {report.posts.map((post) => (
-                      <a
-                        key={post.shortcode}
-                        href={post.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="group rounded-2xl border border-[#E4E3DD] bg-white overflow-hidden flex flex-col hover:border-gray-400 hover:scale-[1.02] transition-all duration-300 shadow-sm"
-                      >
-                        {/* Image Thumbnail */}
-                        <div className="relative aspect-square w-full bg-[#F4F3EF] flex items-center justify-center overflow-hidden border-b border-[#E4E3DD]">
-                          {post.thumbnail ? (
-                            <img
-                              src={post.thumbnail}
-                              alt={post.caption}
-                              className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <span className="text-gray-400 text-xs font-semibold">No Image</span>
-                          )}
-                          {/* Hover Stats */}
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-4 text-white text-xs font-bold transition-opacity duration-300">
-                            <span>❤️ {post.likes_count.toLocaleString()}</span>
-                            <span>💬 {post.comments_count.toLocaleString()}</span>
-                          </div>
-                          {/* Type Badge */}
-                          <span className="absolute top-3 right-3 px-2 py-0.5 rounded-lg bg-black/60 text-[9px] font-bold text-gray-200 uppercase tracking-wider">
-                            {post.type === 'reel' ? '🎥 Reel' : '🖼️ Post'}
-                          </span>
-                        </div>
-                        
-                        {/* Caption & Date */}
-                        <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                          <p className="text-[10px] text-gray-600 line-clamp-2 leading-relaxed font-medium" title={post.caption}>
-                            {post.caption}
-                          </p>
-                          
-                          <div className="space-y-2 pt-2 border-t border-gray-50">
-                            {/* Hashtags */}
-                            {post.hashtags && post.hashtags.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {post.hashtags.slice(0, 3).map((tag, idx) => (
-                                  <span key={idx} className="text-[9px] text-[#5C451F] font-bold font-mono">
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            
-                            <div className="flex justify-between items-center text-[9px] text-gray-400 font-semibold">
-                              <span>📅 {new Date(post.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bot scan results */}
-      {report && activeTab === 'audience' && (
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Left Panel: Summary & Scan Trigger */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Run scanner controls */}
-            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-              <h3 className="text-sm font-black text-slate-800">Follower Quality Audit</h3>
-              <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
-                Uses Playwright with your Instagram session cookie to scan followers and score each using 10 advanced bot detection rules.
+            {report.bio && (
+              <p className="text-sm text-text-body italic bg-page p-4 rounded-lg leading-relaxed">
+                &quot;{report.bio}&quot;
               </p>
+            )}
 
-              <div className="space-y-3 pt-2">
-                <div>
-                  <label className="block text-[9px] font-bold text-gray-400 mb-1.5 uppercase tracking-wider">Scan Limit</label>
-                  <select
-                    value={botScanLimit}
-                    onChange={(e) => setBotScanLimit(parseInt(e.target.value))}
-                    disabled={scanningBots}
-                    className="w-full rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2.5 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-indigo-500 disabled:opacity-50"
-                  >
-                    <option value={20}>20 Followers (Fast Scan)</option>
-                    <option value={30}>30 Followers (Recommended)</option>
-                    <option value={50}>50 Followers (Medium Scan)</option>
-                    <option value={100}>100 Followers (Deep Scan)</option>
-                  </select>
-                </div>
-
-                <button
-                  onClick={handleBotScan}
-                  disabled={scanningBots || loading}
-                  className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-45 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-wider text-white py-3.5 transition-colors flex items-center justify-center gap-2 shadow-sm"
-                >
-                  {scanningBots && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                  {scanningBots ? 'Scanning Followers...' : '🚀 Run Playwright Scan'}
-                </button>
-              </div>
-            </div>
-
-            {/* Session Expired Guide */}
-            {sessionError && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-red-600 text-lg">⚠️</span>
-                  <div>
-                    <h4 className="text-sm font-black text-red-700">Session Cookie Expired</h4>
-                    <p className="text-[11px] text-red-600 leading-relaxed mt-1">{sessionError}</p>
-                  </div>
-                </div>
-                <div className="border-t border-red-200 pt-3 space-y-2">
-                  <p className="text-[10px] font-bold text-red-700 uppercase tracking-wider">How to Refresh:</p>
-                  <ol className="space-y-1.5 text-[11px] text-red-700 leading-relaxed">
-                    <li className="flex gap-2"><span className="font-black shrink-0">1.</span> Open <strong>Instagram.com</strong> in Chrome and log in as <strong>smritifyp</strong></li>
-                    <li className="flex gap-2"><span className="font-black shrink-0">2.</span> Press <strong>F12</strong> → Application → Cookies → instagram.com</li>
-                    <li className="flex gap-2"><span className="font-black shrink-0">3.</span> Find the <code className="bg-red-100 px-1 rounded">sessionid</code> cookie and copy its <strong>Value</strong></li>
-                    <li className="flex gap-2"><span className="font-black shrink-0">4.</span> Go to <strong>Settings → Meta Config</strong> and paste the new value for <code className="bg-red-100 px-1 rounded">INSTAGRAM_SESSION_ID</code></li>
-                    <li className="flex gap-2"><span className="font-black shrink-0">5.</span> Come back and run the scan again</li>
-                  </ol>
+            {report.bio_links && report.bio_links.length > 0 && (
+              <div className="pt-4 space-y-2">
+                <span className="text-xs font-bold uppercase tracking-eyebrow text-text-muted">Bio Links</span>
+                <div className="flex flex-wrap gap-2">
+                  {report.bio_links.map((link, idx) => (
+                    <a
+                      key={idx}
+                      href={link.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-pill bg-page border border-border-subtle text-xs font-bold text-ink hover:bg-lime transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>{link.text || link.href}</span>
+                    </a>
+                  ))}
                 </div>
               </div>
             )}
-
-            {/* Quality index display */}
-            {botResults.length > 0 && (
-              <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-4 text-center shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)]">
-                <h4 className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Audience Quality Score</h4>
-                
-                {(() => {
-                  const score = Math.round(
-                    ((botSummary?.real || 0) + (botSummary?.probably_real || 0)) / Math.max(botSummary?.total || 1, 1) * 100
-                  )
-                  let scoreColor = 'text-red-650 bg-red-50 border-red-200'
-                  if (score >= 80) scoreColor = 'text-[#3B4D3C] bg-[#D4E0CD] border-[#B8C8B0]'
-                  else if (score >= 50) scoreColor = 'text-[#5C451F] bg-[#F9D99A] border-[#E8C584]'
-
-                  return (
-                    <div className="flex flex-col items-center space-y-3.5">
-                      <div className={`w-28 h-28 rounded-full border-4 flex flex-col items-center justify-center font-black ${scoreColor}`}>
-                        <span className="text-3xl font-mono">{score}%</span>
-                        <span className="text-[9px] uppercase tracking-wider font-bold opacity-85 mt-0.5">Quality</span>
-                      </div>
-                      <p className="text-[11px] text-gray-500 leading-normal font-medium px-2">
-                        {score >= 80 ? 'Excellent! Very low bot counts detected. Your followers are highly authentic.' : 
-                         score >= 50 ? 'Moderate audience quality. A visible portion of followers look suspicious or inactive.' : 
-                         'Low audience quality. Your profile shows a high density of potential bot or ghost followers.'}
-                      </p>
-                    </div>
-                  )
-                })()}
-
-                {/* Breakdown list */}
-                <div className="pt-4 border-t border-[#E4E3DD]/60 text-xs space-y-2 text-left font-bold text-gray-600">
-                  <div className="flex justify-between">
-                    <span>Likely Bots:</span>
-                    <span className="text-red-600">{botSummary?.likely_bot || 0}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Suspicious:</span>
-                    <span className="text-amber-600">{botSummary?.suspicious || 0}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Probably Real:</span>
-                    <span className="text-yellow-700">{botSummary?.probably_real || 0}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Authentic Real:</span>
-                    <span className="text-green-700">{botSummary?.real || 0}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Panel: Audit records list */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="rounded-2xl border border-[#E4E3DD] bg-white p-6 space-y-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.04)] flex flex-col min-h-[450px]">
-              
-              {/* Header and filters */}
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E4E3DD] pb-4">
-                <h3 className="font-bold text-slate-850 text-sm">Audited Followers ({botResults.length})</h3>
-                
-                {/* Search input */}
-                <input
-                  type="text"
-                  placeholder="Search audited followers..."
-                  value={botSearch}
-                  onChange={(e) => setBotSearch(e.target.value)}
-                  className="rounded-xl bg-[#F4F3EF] border border-[#E4E3DD] px-3.5 py-2 text-xs text-[#2D2D2D] font-bold focus:outline-none focus:border-gray-500 placeholder-gray-400 min-w-[200px]"
-                />
-              </div>
-
-              {botResults.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-3.5 bg-gray-50/50 rounded-2xl border border-[#E4E3DD]/40 border-dashed">
-                  <span className="text-3xl">🛡️</span>
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-slate-700 text-xs">No audited records found</h4>
-                    <p className="text-[11px] text-gray-500 max-w-sm">
-                      Followers scan has not been executed for @{username || report.username} yet. Click &quot;Run Playwright Scan&quot; to begin auditing followers.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Category filters */}
-                  <div className="flex flex-wrap gap-1.5 text-[10px]">
-                    <button
-                      onClick={() => setBotFilter('all')}
-                      className={`px-3 py-1.5 rounded-lg border font-bold uppercase tracking-wider transition-colors ${
-                        botFilter === 'all'
-                          ? 'bg-indigo-650 border-indigo-650 text-white shadow-sm'
-                          : 'bg-[#F4F3EF] border-[#E4E3DD] text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      All ({botResults.length})
-                    </button>
-                    <button
-                      onClick={() => setBotFilter('likely_bot')}
-                      className={`px-3 py-1.5 rounded-lg border font-bold uppercase tracking-wider transition-colors ${
-                        botFilter === 'likely_bot'
-                          ? 'bg-red-600 border-red-600 text-white'
-                          : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
-                      }`}
-                    >
-                      Bots ({botSummary?.likely_bot || 0})
-                    </button>
-                    <button
-                      onClick={() => setBotFilter('suspicious')}
-                      className={`px-3 py-1.5 rounded-lg border font-bold uppercase tracking-wider transition-colors ${
-                        botFilter === 'suspicious'
-                          ? 'bg-amber-600 border-amber-600 text-white'
-                          : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
-                      }`}
-                    >
-                      Suspicious ({botSummary?.suspicious || 0})
-                    </button>
-                    <button
-                      onClick={() => setBotFilter('real')}
-                      className={`px-3 py-1.5 rounded-lg border font-bold uppercase tracking-wider transition-colors ${
-                        botFilter === 'real'
-                          ? 'bg-green-700 border-green-700 text-white'
-                          : 'bg-green-50 border-green-200 text-green-800 hover:bg-green-100'
-                      }`}
-                    >
-                      Authentic ({ (botSummary?.real || 0) + (botSummary?.probably_real || 0) })
-                    </button>
-                  </div>
-
-                  {/* List Container */}
-                  <div className="space-y-3.5 max-h-[500px] overflow-y-auto pr-1">
-                    {botResults
-                      .filter(r => {
-                        const matchesSearch = r.follower_username.toLowerCase().includes(botSearch.toLowerCase()) || 
-                                             (r.display_name && r.display_name.toLowerCase().includes(botSearch.toLowerCase()));
-                        
-                        if (botFilter === 'all') return matchesSearch;
-                        if (botFilter === 'likely_bot') return r.verdict === 'likely_bot' && matchesSearch;
-                        if (botFilter === 'suspicious') return r.verdict === 'suspicious' && matchesSearch;
-                        if (botFilter === 'real') return (r.verdict === 'real' || r.verdict === 'probably_real') && matchesSearch;
-                        return matchesSearch;
-                      })
-                      .map((follower) => {
-                        const verdictColors: Record<string, string> = {
-                          likely_bot: 'text-red-700 bg-red-50 border-red-200',
-                          suspicious: 'text-amber-700 bg-amber-50 border-amber-200',
-                          probably_real: 'text-yellow-700 bg-yellow-50 border-yellow-200',
-                          real: 'text-[#3B4D3C] bg-[#D4E0CD] border-[#B8C8B0]',
-                        }
-                        
-                        const isExpanded = expandedUser === follower.follower_username;
-                        const signals = typeof follower.signals === 'string' ? JSON.parse(follower.signals) : (follower.signals || []);
-
-                        return (
-                          <div key={follower.follower_username} className="rounded-xl border border-[#E4E3DD] bg-white overflow-hidden shadow-sm transition-all hover:border-gray-300">
-                            {/* Profile details line */}
-                            <div className="p-4 flex items-center justify-between gap-4 text-xs font-bold">
-                              <div className="flex items-center gap-3">
-                                {follower.profile_pic ? (
-                                  <img
-                                    src={follower.profile_pic}
-                                    alt={follower.follower_username}
-                                    className="w-10 h-10 rounded-full object-cover border border-[#E4E3DD]"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                ) : (
-                                  <div className="w-10 h-10 rounded-full bg-gray-100 border border-[#E4E3DD] flex items-center justify-center text-gray-400 font-black text-sm uppercase">
-                                    {follower.follower_username.substring(0, 2)}
-                                  </div>
-                                )}
-                                <div>
-                                  <a
-                                    href={`https://www.instagram.com/${follower.follower_username}/`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-gray-800 hover:text-black hover:underline"
-                                  >
-                                    @{follower.follower_username}
-                                  </a>
-                                  <div className="text-[10px] text-gray-400 font-medium">{follower.display_name || follower.follower_username}</div>
-                                  <div className="text-[9px] text-gray-400 font-medium mt-1">
-                                    👥 {follower.followers_count.toLocaleString()} followers · {follower.following_count.toLocaleString()} following · 📸 {follower.posts_count} posts
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-3">
-                                <span className={`px-2.5 py-1 rounded-lg border text-[9px] uppercase tracking-wider font-black ${verdictColors[follower.verdict] || 'bg-gray-50 text-gray-600'}`}>
-                                  {follower.verdict.replace('_', ' ')}
-                                </span>
-                                
-                                <div className="text-right">
-                                  <span className="text-sm font-black font-mono text-gray-700">{follower.bot_score}%</span>
-                                  <div className="text-[8px] text-gray-400 uppercase tracking-wider">Bot Score</div>
-                                </div>
-
-                                <button
-                                  onClick={() => setExpandedUser(isExpanded ? null : follower.follower_username)}
-                                  className="p-1 rounded-lg border border-[#E4E3DD] hover:bg-gray-50 text-gray-500 font-normal transition-colors"
-                                  title="View audit details"
-                                >
-                                  {isExpanded ? '▲' : '▼'}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Bio & Audit description */}
-                            {follower.bio && (
-                              <div className="px-4 pb-3 text-[10px] text-gray-500 leading-normal border-t border-gray-50 pt-2 font-medium">
-                                <span className="font-bold text-gray-400">Bio:</span> &quot;{follower.bio}&quot;
-                              </div>
-                            )}
-
-                            {/* Detailed signals expanded panel */}
-                            {isExpanded && (
-                              <div className="bg-gray-50 p-4 border-t border-[#E4E3DD] space-y-3 text-[10px]">
-                                <h5 className="font-black text-gray-500 uppercase text-[9px] tracking-wider">Bot Signals Triggered ({signals.length})</h5>
-                                
-                                {signals.length === 0 ? (
-                                  <p className="text-gray-450 italic font-medium">No negative bot signatures triggered. Fully authentic follower behavior.</p>
-                                ) : (
-                                  <div className="grid gap-2 sm:grid-cols-2">
-                                    {signals.map((sig: any, sIdx: number) => {
-                                      const sevColors: Record<string, string> = {
-                                        high: 'text-red-700 bg-red-50 border-red-200',
-                                        medium: 'text-amber-700 bg-amber-50 border-amber-200',
-                                        low: 'text-gray-700 bg-gray-100 border-gray-200',
-                                      }
-                                      return (
-                                        <div key={sIdx} className="p-2.5 rounded-lg border border-gray-200/80 bg-white space-y-1.5 shadow-sm">
-                                          <div className="flex justify-between items-center">
-                                            <span className="font-black font-mono text-gray-750">{sig.rule.toUpperCase().replace(/_/g, ' ')}</span>
-                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border ${sevColors[sig.severity]}`}>
-                                              +{sig.score}
-                                            </span>
-                                          </div>
-                                          <p className="text-[9px] text-gray-500 leading-normal font-medium">{sig.description}</p>
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          </Card>
         </div>
       )}
     </div>

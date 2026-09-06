@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
-import { Button, Card, Input } from '@/components'
+import { Button, Input, Card } from '@/components'
 import { Eye, EyeOff, Lock } from 'lucide-react'
 
 export default function LoginPage() {
@@ -31,69 +31,63 @@ export default function LoginPage() {
 
       if (res.ok && data.success) {
         toast.success('Access granted. Redirecting...')
-        router.push('/')
+        router.push('/dashboard')
         router.refresh()
       } else {
-        const errorMsg = typeof data.error === 'object' ? (data.error?.message || 'Authentication failed.') : (data.error || 'Authentication failed. Incorrect password.')
-        toast.error(errorMsg)
+        toast.error(typeof data.error === 'object' ? data.error?.message : (data.error || 'Authentication failed.'))
       }
     } catch {
-      toast.error('Unable to reach the authentication service.')
+      toast.error('Unable to reach authentication service.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#080c14] flex items-center justify-center relative overflow-hidden font-sans select-none p-4">
-      <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: '#1c1c1e', color: '#f3f4f6', border: '1px solid #2d2d30' } }} />
+    <div className="min-h-screen bg-page text-ink flex items-center justify-center p-6 select-none font-body">
+      <Toaster position="top-right" />
 
-      {/* Decorative gradient background glows */}
-      <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-blue-600/10 blur-[140px]" />
-      <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-indigo-600/10 blur-[140px]" />
-
-      <div className="w-full max-w-md px-4 z-10 animate-fade-in">
-        {/* Stratnent Logo Banner */}
-        <div className="flex flex-col items-center mb-8">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.jpg"
-            alt="Stratnent logo"
-            className="w-16 h-16 rounded-2xl object-cover shadow-2xl border border-blue-500/20 transform hover:scale-105 transition-transform duration-300"
-          />
-          <h1 className="text-2xl font-bold text-white tracking-tight mt-4 flex items-center gap-2">
-            <span>Stratnent</span>
-            <span className="text-xs uppercase bg-blue-950/60 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded font-mono font-normal">ADMIN</span>
+      <div className="w-full max-w-[440px] animate-fade-in">
+        {/* Logo Banner Lockup */}
+        <div className="flex flex-col items-center mb-8 text-center">
+          <div className="w-14 h-14 rounded-sm bg-lime text-ink flex items-center justify-center font-extrabold text-2xl tracking-tight shadow-sm mb-4">
+            L
+          </div>
+          <h1 className="text-3xl font-extrabold text-ink font-display tracking-tight flex items-center gap-2 justify-center">
+            <span>Stratnent AI</span>
+            <span className="text-[10px] uppercase bg-ink text-lime px-2 py-0.5 rounded-pill font-mono">PRO</span>
           </h1>
-          <p className="text-zinc-400 text-xs mt-1 uppercase tracking-wider font-semibold">Marketing Automation &amp; CRM Portal</p>
+          <p className="text-text-muted text-xs uppercase tracking-button font-bold mt-1">Lead Gen &amp; Social Automation Portal</p>
         </div>
 
         {/* Login Card */}
-        <Card className="p-8 shadow-2xl relative border-blue-500/20 bg-slate-950/80 backdrop-blur-xl">
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-80" />
-          
-          <div className="flex items-center gap-2.5 mb-2">
-            <Lock className="w-4 h-4 text-blue-400" />
-            <h2 className="text-lg font-bold text-white tracking-tight">Security Verification</h2>
+        <Card variant="page-alt" className="rounded-xl p-8 lg:p-10 border-none shadow-none">
+          <div className="flex items-center gap-2 mb-2">
+            <Lock className="w-4 h-4 text-ink" />
+            <h2 className="text-xl font-bold text-ink font-display">Security Verification</h2>
           </div>
-          <p className="text-zinc-400 text-xs mb-6">Enter the security credential configured in your environment to unlock full admin access.</p>
+          <p className="text-text-muted text-xs mb-6 font-medium leading-relaxed">
+            Enter the admin password configured in your environment to unlock the platform.
+          </p>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label className="block text-zinc-400 text-[10px] font-bold uppercase tracking-wider mb-2">Access Key / Password</label>
+              <label className="block text-text-muted text-[11px] font-bold uppercase tracking-eyebrow mb-2">
+                Access Key / Password
+              </label>
               <div className="relative">
                 <Input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="pr-12 font-mono text-sm"
+                  className="w-full h-12 rounded-pill bg-page border-none px-5 text-sm text-ink font-mono focus:ring-2 focus:ring-lime pr-12"
                   disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white focus:outline-none transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-ink transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -104,10 +98,11 @@ export default function LoginPage() {
               type="submit"
               loading={loading}
               variant="primary"
-              size="large"
-              className="w-full font-bold uppercase tracking-wider text-xs shadow-lg shadow-blue-500/20"
+              size="lg"
+              className="w-full"
+              iconType="arrow-right"
             >
-              Authenticate &amp; Unlock
+              Enter Dashboard
             </Button>
           </form>
         </Card>
